@@ -1,0 +1,21 @@
+# L'orario scolastico per la sezione Personale: lo avvia Claude con l'orario letto dalla foto.
+name: Orario scolastico
+on:
+  workflow_dispatch:
+    inputs:
+      orario:
+        description: "JSON con persona, ore e lezioni (vedi scripts/scuola.py)"
+        required: true
+concurrency: { group: scuola, cancel-in-progress: false }
+jobs:
+  metti:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: scripts/requisiti.txt }
+      - run: pip install -r scripts/requisiti.txt
+      - run: python scripts/scuola.py
+        env:
+          FIREBASE_CHIAVE: ${{ secrets.FIREBASE_CHIAVE }}

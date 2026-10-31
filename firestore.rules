@@ -85,6 +85,24 @@ service cloud.firestore {
       allow update: if membro() && request.resource.data.by == resource.data.by && ok();
     }
 
+    // Sezione Personale, Scuola: l'orario lo scrive solo il programma "Orario scolastico"; tutti lo leggono (va nel calendario).
+    match /scuola/{persona} {
+      allow read: if membro();
+      allow write: if false;
+    }
+    // Le note di scuola (interrogazioni, verifiche, compiti…): ognuno scrive e cambia solo le sue.
+    match /compiti/{id} {
+      function ok() { return request.resource.data.per == io() && request.resource.data.by == io()
+        && request.resource.data.m is string && request.resource.data.m.size() <= 60
+        && request.resource.data.d is string && request.resource.data.d.size() == 10
+        && request.resource.data.tipo in ['interrogazione', 'verifica', 'compito', 'portare', 'altro']
+        && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 200; }
+      allow read: if membro();
+      allow create: if membro() && ok();
+      allow update: if membro() && resource.data.per == io() && ok();
+      allow delete: if membro() && resource.data.per == io();
+    }
+
     // Una risposta per persona: ognuno scrive solo la sua.
     match /cena/{giorno} {
       allow read: if membro();
