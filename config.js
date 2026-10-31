@@ -11,5 +11,5 @@ self.CONFIG = {
     appId: "1:501473696556:web:527d55262a09fb2e49aa89"
   },
   // Cloud Messaging > Certificati push web > coppia di chiavi (la parte pubblica).
-  vapidKey: ""
+  vapidKey: "BIBxdnL0yov8eWhkfQWEx7qL2G5AKkB3fClh85zRP8II4XRzXuy6q4N4ZYzaEMB0GTkJtyZhAgApVArrcl8VhM8"
 };
