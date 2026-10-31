@@ -529,3 +529,28 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .ph.up img{opacity:.55;filter:saturate(.7)}
 .ph.up .upb{text-decoration:none;position:absolute;left:8px;right:8px;bottom:8px;height:5px;border-radius:999px;background:rgb(255 255 255 / .35);overflow:hidden}
 .ph.up .upb::after{content:"";position:absolute;inset:0;background:#fff;transform-origin:left;transform:scaleX(var(--p,0));transition:transform .4s var(--ease)}
+
+/* Ricette di famiglia (scheda Spesa): due colonne di piatti, la ricetta nel foglio dal basso */
+.ricette{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ric{display:grid;text-align:left;background:var(--panel);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);min-width:0}
+.ric .rcov{position:relative;display:block;aspect-ratio:4/3;background:color-mix(in srgb,var(--acc) 14%,var(--soft));overflow:hidden}
+.ric .rcov img{width:100%;height:100%;object-fit:cover;display:block}
+.ric .rinfo{display:grid;gap:2px;padding:10px 12px 12px;min-width:0}
+.ric .rinfo b{font-weight:600;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ric .rinfo small{color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rfoto{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:16px;margin-bottom:10px;display:block}
+.ingr{display:grid;gap:2px;margin:6px 0 12px}
+.ig{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:6px 2px;text-align:left;color:var(--fg);border-top:1px solid var(--line)}
+.ig:first-child{border-top:0}
+.ig.on .box{background:var(--ok);border-color:var(--ok)}
+.ig.on .box svg{stroke-dashoffset:0}
+.ig:not(.on)>span:last-child{color:var(--muted)}
+.ig.gia{opacity:.6}
+.ig small{color:var(--muted);font-size:12px;margin-left:4px}
+.come{white-space:pre-line;line-height:1.5;margin:6px 0 14px;overflow-wrap:anywhere}
+.ricaz{display:grid;gap:8px;justify-items:center;margin-top:8px}
+.ricaz .btn{width:100%}
+.rfotoin{display:flex;align-items:center;gap:12px;padding:8px;border-radius:14px;background:var(--panel);box-shadow:0 0 0 1px var(--line);cursor:pointer}
+.rfotoin img,.rfotoin .noimg{position:static;flex:none;width:64px;height:64px;border-radius:12px;object-fit:cover;font-size:28px;background:color-mix(in srgb,var(--acc) 14%,var(--soft))}
+.rfotoin>span:last-child{font-weight:600;color:var(--acc)}
+#ricSpesa{width:100%}

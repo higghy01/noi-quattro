@@ -24,7 +24,7 @@
 
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
-  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [] };
+  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [] };
   let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = LS.get('noi4-bacheca', 'proposte') === 'regali' ? 'regali' : 'proposte';
   const seen = new Set(); let fresh = null; let avviato = false;
 
@@ -976,14 +976,60 @@
     if (new Date(ms).toDateString() === ieri.toDateString()) return 'ieri';
     return new Date(ms).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
   }
+  /* Ricette di famiglia (Sasha, 31/10/2026): una pagina aperta a tutti, con foto, ingredienti e preparazione;
+     un tocco e gli ingredienti scelti vanno nella lista della spesa (quelli già in lista non si doppiano). */
+  let segSpesa = LS.get('noi4-spesa', 'lista') === 'ricette' ? 'ricette' : 'lista', ricAperta = null, ricHo = {};
+  const ingredienti = (r) => (r.ingr || []).filter(x => typeof x === 'string' && x.trim()).slice(0, 60);
+  const ricEmoji = (t) => /pizza/i.test(t) ? '🍕' : /torta|dolce|biscott|tiramis|crostata/i.test(t) ? '🍰' : /pasta|spaghett|lasagn|gnocch|risott/i.test(t) ? '🍝' : /zuppa|minestr|brodo/i.test(t) ? '🍲' : /insalat|verdur/i.test(t) ? '🥗' : /carne|pollo|arrost|polpett/i.test(t) ? '🍗' : /pesce|salmone|tonno/i.test(t) ? '🐟' : '🍳';
+  function rRicette() {
+    const l = [...S.ricette].sort((a, b) => (a.t || '').localeCompare(b.t || '', 'it'));
+    return `<div class="ricette${ri(1)}">${l.map((r, i) => `<button class="ric tap${r.id === fresh ? ' pop' : ''}" data-ric="${r.id}" style="--i:${Math.min(i, 8)}">
+        <span class="rcov">${r.foto ? `<img src="${esc(r.foto)}" alt="" loading="lazy" decoding="async">` : `<span class="noimg">${ricEmoji(r.t || '')}</span>`}</span>
+        <span class="rinfo"><b>${esc(r.t)}</b><small>${ingredienti(r).length} ingredienti${r.by ? ` · di ${r.by === S.me ? 'te' : esc(P(r.by).nome)}` : ''}</small></span></button>`).join('')}</div>
+      ${l.length ? '' : '<div class="empty big"><b>🍳</b><span>Ancora nessuna ricetta. Tocca + per scrivere i piatti di casa: foto, ingredienti e come si fa. Poi con un tocco gli ingredienti vanno nella spesa.</span></div>'}`;
+  }
+  function sheetRicetta(id, aggiorna) {
+    const r = S.ricette.find(x => x.id === id); if (!r) { if (aggiorna) { ricAperta = null; } return; }
+    if (aggiorna && !document.querySelector(`#sheetIn [data-ricv="${id}"]`)) return;
+    ricAperta = id;
+    const ing = ingredienti(r), ho = ricHo[id] || {};
+    const inLista = new Set(S.spesa.filter(x => !x.done).map(x => chiave(x.x)));
+    const scelti = ing.filter((x, i) => !ho[i] && !inLista.has(chiave(x))).length;
+    const html = `<div data-ricv="${id}">${r.foto ? `<img class="rfoto" src="${esc(r.foto)}" alt="">` : ''}<h3>${ricEmoji(r.t || '')} ${esc(r.t)}</h3>
+      ${r.porz ? `<div class="empty">Per ${esc(r.porz)}</div>` : ''}
+      <div class="sec">Ingredienti</div>
+      <div class="hint">Togli quelli che avete già in casa: gli altri vanno nella spesa.</div>
+      <div class="ingr">${ing.map((x, i) => { const gia = inLista.has(chiave(x)); return `<button type="button" class="ig tap${ho[i] || gia ? '' : ' on'}${gia ? ' gia' : ''}" data-ing="${i}" data-ric-id="${id}"${gia ? ' disabled' : ''}><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>${esc(x)}${gia ? ' <small>già in lista</small>' : ''}</span></button>`; }).join('') || '<div class="empty">Nessun ingrediente scritto.</div>'}</div>
+      <button class="btn tap" id="ricSpesa" data-ric-id="${id}"${scelti ? '' : ' disabled'}>🛒 ${scelti ? `Metti ${scelti === 1 ? '1 ingrediente' : scelti + ' ingredienti'} nella spesa` : 'Tutto già in lista'}</button>
+      ${r.come ? `<div class="sec">Come si fa</div><div class="come">${esc(r.come)}</div>` : ''}
+      <div class="ricaz"><button type="button" class="btn ghost tap" data-ricmod="${id}">Modifica</button><button type="button" class="link tap" data-ricdel="${id}">Elimina la ricetta</button></div></div>`;
+    if (aggiorna) { $('#sheetIn').innerHTML = `<div class="grab"></div>` + html; return; }
+    openSheet(html);
+  }
+  function sheetNuovaRicetta(id) {
+    const r = (id && S.ricette.find(x => x.id === id)) || {};
+    ricAperta = null; riFile = null;
+    openSheet(`<h3>${r.id ? 'Modifica la ricetta' : 'Una ricetta di casa'}</h3><form class="stack" id="fRi"${r.id ? ` data-id="${r.id}"` : ''}>
+      <label class="rfotoin tap">${r.foto ? `<img src="${esc(r.foto)}" alt="" id="riPrev">` : '<span id="riPrev" class="noimg">📷</span>'}<span>${r.foto ? 'Cambia la foto' : 'Aggiungi una foto del piatto'}</span><input type="file" id="riFoto" accept="image/*" hidden></label>
+      <label>Nome del piatto<input id="riT" required maxlength="60" value="${esc(r.t || '')}" placeholder="Es. Lasagne della nonna"></label>
+      <label>Per quante persone (facoltativo)<input id="riP" maxlength="20" value="${esc(r.porz || '')}" placeholder="Es. 4 persone"></label>
+      <label>Ingredienti, uno per riga<textarea id="riI" rows="7" maxlength="3000" placeholder="500 g di farina&#10;3 uova&#10;Latte">${esc(ingredienti(r).join('\n'))}</textarea></label>
+      <label>Come si fa (facoltativo)<textarea id="riC" rows="5" maxlength="4000" placeholder="I passaggi, i trucchi di casa…">${esc(r.come || '')}</textarea></label>
+      <button class="btn tap">${r.id ? 'Salva' : 'Salva la ricetta'}</button></form>`, () => { if (!r.id) setTimeout(() => $('#riT').focus(), 380); });
+  }
+  let riFile = null;
   function rSpesa() {
+    if (segSpesa === 'ricette') {
+      $('#p-spesa').innerHTML = `<div class="stack"><div class="seg${ri(0)}" style="--n:2;--k:1"><i class="spill"></i><button class="tap" data-segspesa="lista">Lista 🛒</button><button class="tap on" data-segspesa="ricette">Ricette 🍳</button></div>${rRicette()}</div>`;
+      return;
+    }
     const ord = (a, b) => (b.creato || 0) - (a.creato || 0);
     const todo = S.spesa.filter(x => !x.done).sort(ord), done = S.spesa.filter(x => x.done).sort(ord);
     const chi = (id) => id === S.me ? 'te' : esc(P(id).nome);
     const sotto = x => x.done && x.presoDa ? `preso da ${chi(x.presoDa)}${x.preso ? ' · ' + fa(x.preso) : ''}` : `aggiunto da ${chi(x.by)}${x.creato ? ' · ' + fa(x.creato) : ''}`;
     const row = x => `<button class="item tap${x.done ? ' done' : ''}${x.id === fresh ? ' pop' : ''}" data-item="${x.id}" style="--pc:${col(x.done && x.presoDa ? x.presoDa : x.by)}"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><span class="nm">${esc(x.x)}</span><small>${sotto(x)}</small></span><span class="who">${S.persone[x.done && x.presoDa ? x.presoDa : x.by] ? avt(x.done && x.presoDa ? x.presoDa : x.by) : ''}</span></button>`;
     const keep = $('#itemTx') ? $('#itemTx').value : '';
-    $('#p-spesa').innerHTML = `<div class="stack">
+    $('#p-spesa').innerHTML = `<div class="stack"><div class="seg${ri(0)}" style="--n:2;--k:0"><i class="spill"></i><button class="tap on" data-segspesa="lista">Lista 🛒</button><button class="tap" data-segspesa="ricette">Ricette 🍳</button></div>
      <form class="add${ri(0)}" id="addItem"><input id="itemTx" placeholder="Cosa serve?" autocomplete="off" aria-label="Cosa serve" enterkeyhint="done"><button class="btn tap">Aggiungi</button></form>
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🛒</i>Da prendere</span> <small>${todo.length}</small></h2><div>${todo.map(row).join('') || '<div class="empty">Niente da prendere.</div>'}</div></div>
      ${done.length ? `<div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">✅</i>Già nel carrello</span> <button class="link tap" id="clear">Togli</button></h2><div>${done.map(row).join('')}</div></div>` : ''}
@@ -1010,8 +1056,8 @@
     if (visAperto()) rViewer();
     fresh = null;
     if (a === 'itemTx' && $('#itemTx')) $('#itemTx').focus();
-    $('#fab').hidden = page === 'spesa';
-    $('#fab').setAttribute('aria-label', page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : 'Nuova proposta') : page === 'viaggi' ? 'Nuovo ricordo' : 'Nuovo impegno');
+    $('#fab').hidden = page === 'spesa' && segSpesa !== 'ricette';
+    $('#fab').setAttribute('aria-label', page === 'spesa' && segSpesa === 'ricette' ? 'Nuova ricetta' : page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : 'Nuova proposta') : page === 'viaggi' ? 'Nuovo ricordo' : 'Nuovo impegno');
   }
   function banner() {
     const b = $('#banner');
@@ -1413,6 +1459,26 @@
     const d = t.dataset;
     if (t.classList.contains('tab')) return go(d.p);
     if (t.id === 'albumVai') return caricaAlbum();
+    if (d.segspesa) { if (segSpesa === d.segspesa) return; segSpesa = d.segspesa; LS.set('noi4-spesa', segSpesa); return render(); }
+    if (d.ric) { ricHo[d.ric] = {}; return sheetRicetta(d.ric); }
+    if (d.ing != null && d.ricId) { const h = ricHo[d.ricId] = ricHo[d.ricId] || {}; h[d.ing] = !h[d.ing]; return sheetRicetta(d.ricId, true); }
+    if (t.id === 'ricSpesa') {
+      const r = S.ricette.find(x => x.id === d.ricId); if (!r) return;
+      const ho = ricHo[r.id] || {}, inLista = new Set(S.spesa.filter(x => !x.done).map(x => chiave(x.x)));
+      const da = [...new Set(ingredienti(r).filter((x, i) => !ho[i] && !inLista.has(chiave(x))).map(x => x.trim().slice(0, 80)))];
+      if (!da.length) return;
+      try { await DATI.molti('spesa', da.map((x, i) => ({ x, by: S.me, done: false, creato: Date.now() + i, ricetta: r.t.slice(0, 60) }))); }
+      catch (er) { return sbaglio(er); }
+      closeSheet(); ricAperta = null; segSpesa = 'lista'; LS.set('noi4-spesa', segSpesa); render(); setTimeout(() => festa(document.querySelector('#p-spesa .card')), 60);
+      return toast(`${da.length === 1 ? '1 ingrediente' : da.length + ' ingredienti'} nella spesa 🛒`);
+    }
+    if (d.ricmod) return sheetNuovaRicetta(d.ricmod);
+    if (d.ricdel) {
+      if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.style.color = 'var(--bad)'; t.textContent = 'Tocca ancora per eliminarla'; return; }
+      const r = S.ricette.find(x => x.id === d.ricdel); closeSheet(); ricAperta = null;
+      try { await DATI.elimina('ricette', d.ricdel); if (r && r.fotoPath) DATI.eliminaFile(r.fotoPath); } catch (er) { return sbaglio(er); }
+      return toast('Ricetta eliminata');
+    }
     if (t.id === 'legoOn') {
       t.hidden = true; $('#legoBox').hidden = false; $('#legoQ').focus(); risLego();
       try { await catalogoLego(); risLego(); } catch (er) { $('#legoRis').innerHTML = '<div class="empty">Il catalogo LEGO non si apre: serve internet. Riprova tra poco.</div>'; }
@@ -1428,6 +1494,7 @@
     }
     if (t.id === 'legoVia') { const f = $('#fRe'); delete f.dataset.lego; $('#legoSel').innerHTML = ''; $('#legoOn').textContent = '🧱 Cerca un set LEGO'; return; }
     if (d.go) return go(d.go);
+    if (t.id === 'fab' && page === 'spesa' && segSpesa === 'ricette') return sheetNuovaRicetta();
     if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : sheetProposta('cena')) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
     if (d.filtror) { filtroR = d.filtror; return rViaggi(); }
     if (d.tipo) { t.parentElement.querySelectorAll('.tp').forEach(b => b.classList.toggle('on', b === t)); return; }
@@ -1657,6 +1724,10 @@
     if (t.id === 'icsFile' && t.files[0]) importaIcs(t.files[0]);
     if (t.id === 'orarioFile' && t.files[0]) importaOrario(t.files[0]);
     if (t.id === 'fotoIn' && t.files.length) caricaFoto(t.files);
+    if (t.id === 'riFoto' && t.files[0]) {
+      riFile = t.files[0]; const pv = $('#riPrev'); const u = URL.createObjectURL(riFile);
+      if (pv) pv.outerHTML = `<img src="${u}" alt="" id="riPrev">`;
+    }
     if (t.id === 'autoIn' && t.files.length) { const fs = [...t.files]; t.value = ''; preparaAlbum(fs); }
     if (t.id === 'avIn' && t.files[0]) caricaAvatar(t.files[0]);
   });
@@ -1749,6 +1820,24 @@
         else { fresh = rid(); await DATI.imposta('sorprese', per, { idee: { [fresh]: Object.assign({ x, n, by: S.me, creato: Date.now() }, extra) } }); }
         render(); toast(per === S.me ? 'Aggiunto alla tua lista 🎁' : 'Idea salvata: resta un segreto 🤫');
       } catch (er) { sbaglio(er); }
+    } else if (f.id === 'fRi') {
+      const t = $('#riT').value.trim().slice(0, 60); if (!t) return;
+      const v = { t, porz: $('#riP').value.trim().slice(0, 20), ingr: $('#riI').value.split('\n').map(x => x.replace(/^[\s•\-*·]+/, '').trim()).filter(Boolean).map(x => x.slice(0, 80)).slice(0, 60), come: $('#riC').value.trim().slice(0, 4000) };
+      const file = riFile; riFile = null; const id0 = f.dataset.id;
+      closeSheet();
+      try {
+        const id = id0 || await DATI.aggiungi('ricette', Object.assign(v, { by: S.me, creato: Date.now() }));
+        if (id0) await DATI.aggiorna('ricette', id0, v);
+        if (file) {
+          toast('Carico la foto…');
+          const { im, u } = await apriImmagine(file); const p = await rimpicciolisci(im, 1400, 0.85); URL.revokeObjectURL(u);
+          const vecchio = (S.ricette.find(x => x.id === id) || {}).fotoPath;
+          const up = await DATI.carica(`ricette/${id}/${rid()}.jpg`, p.blob, S.me);
+          await DATI.aggiorna('ricette', id, { foto: up.url, fotoPath: up.path });
+          if (vecchio) DATI.eliminaFile(vecchio);
+        }
+        fresh = id; render(); toast(id0 ? 'Ricetta aggiornata' : 'Ricetta salvata 🍳');
+      } catch (er) { sbaglio(er); }
     } else if (f.id === 'addItem') {
       const v = $('#itemTx').value.trim(); if (!v) return; $('#itemTx').value = '';
       try { fresh = await DATI.aggiungi('spesa', { x: v.slice(0, 80), by: S.me, done: false, creato: Date.now() }); render(); } catch (er) { sbaglio(er); }
@@ -1800,7 +1889,7 @@
     if (stopCena) { stopCena(); stopCena = null; }
     if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
     for (const k in stopSorp) { stopSorp[k](); delete stopSorp[k]; }
-    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [] });
+    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [] });
     seen.clear();
   }
   DATI.avvia((persona, errore) => {
@@ -1812,6 +1901,7 @@
       if (DATI.iscriviDiNuovo) DATI.iscriviDiNuovo();
       a(DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); render(); }));
       a(DATI.ascolta('regali', l => { S.regali = l; render(); }));
+      a(DATI.ascolta('ricette', l => { S.ricette = l; render(); if (ricAperta) sheetRicetta(ricAperta, true); }));
       a(DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); }));
       a(DATI.ascolta('viaggi', l => { S.viaggi = l; render(); }));
       a(DATI.ascolta('foto', l => { S.foto = l; render(); }));

@@ -104,6 +104,8 @@
     if (!db.regali) regaliEsempio(db);
     if (!db.privati) calEsempio(db);
     if (!db.viaggi || !Object.values(db.viaggi).some(v => v.tipo)) viaggiEsempio(db);
+    if (!db.ricette) db.ricette = { [uid()]: { t: 'Lasagne della nonna', porz: '6 persone', by: 'p2', creato: Date.now(), ingr: ['Sfoglia per lasagne', '500 g di ragù', '1 l di besciamella', 'Parmigiano', 'Mozzarella'], come: 'Un velo di besciamella, poi sfoglia, ragù, besciamella e parmigiano. Ripetere per 4 strati.\nForno a 180° per 40 minuti.' },
+      [uid()]: { t: 'Tiramisù', porz: '8 persone', by: 'p3', creato: Date.now(), ingr: ['Savoiardi', '500 g di mascarpone', '4 uova', 'Zucchero', 'Caffè', 'Cacao amaro'], come: '' } };
     // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
     const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };
     const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} subs.forEach(s => s()); };
