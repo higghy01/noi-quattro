@@ -2,7 +2,7 @@
 
 Legge il segreto FAMIGLIA di GitHub, per esempio:
   [{"id": "p1", "nome": "...", "colore": "blu", "email": "..."}, ...]
-Colori possibili: blu, rosa, ambra, verde, viola, corallo.
+Colori possibili: rosso, blu, verde, grigio, rosa, ambra, viola, corallo.
 Crea l'account di ognuno (senza password: la sceglie dall'app con "Prima volta?"),
 la scheda in "persone" (nome, colore, preferenze) e il permesso in "membri".
 Non stampa mai email o nomi.
