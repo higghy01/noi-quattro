@@ -104,13 +104,23 @@ def impegni(cal, persona, visibile):
         inizio = ora(ev.get("DTSTART").dt)
         fine = ora(ev.get("DTEND").dt) if ev.get("DTEND") else None
         tutto = not isinstance(inizio, dt.datetime)
+        # Impegni di più giorni: "fino" è l'ultimo giorno compreso (la fine nei calendari è esclusa:
+        # tutto il giorno dal 3 al 7 finisce l'8; un orario che finisce a mezzanotte appartiene al giorno prima).
+        g0 = inizio if tutto else inizio.date()
+        if fine is None:
+            g1 = g0
+        elif isinstance(fine, dt.datetime):
+            g1 = (fine - dt.timedelta(microseconds=1)).date() if fine.time() == dt.time(0) else fine.date()
+        else:
+            g1 = fine - dt.timedelta(days=1)
         uid = f"{persona}|{ev.get('UID')}|{inizio}"
         titolo = str(ev.get("SUMMARY", "Impegno"))[:80]
         luogo = str(ev.get("LOCATION", ""))[:200]
         vis = visibile(titolo)
         yield "cal-" + hashlib.sha1(uid.encode()).hexdigest()[:20], {
             "t": titolo if vis else "Occupato",
-            "d": (inizio if tutto else inizio.date()).isoformat(),
+            "d": g0.isoformat(),
+            "fino": g1.isoformat() if g1 > g0 else "",
             "h": "" if tutto else inizio.strftime("%H:%M"),
             "fine": "" if tutto or not isinstance(fine, dt.datetime) or fine == inizio else fine.strftime("%H:%M"),
             "who": [persona],
@@ -165,8 +175,10 @@ def main():
                 b.set(col.document(i), v, merge=True) if op == "set" else b.delete(col.document(i))
             b.commit()
         # I titoli veri degli impegni nascosti: solo nella parte privata (si sostituisce l'elenco intero).
+        # Quelli degli impegni importati da file (non iniziano con "cal-") li gestisce l'app: restano.
+        da_file = {k: v for k, v in (privati.get(persona, {}).get("dettagli") or {}).items() if not k.startswith("cal-")}
         if letti == len(link) and (dettagli or privati.get(persona, {}).get("dettagli")):
-            db.collection("privati").document(persona).set({"dettagli": dettagli}, merge=["dettagli"])
+            db.collection("privati").document(persona).set({"dettagli": {**da_file, **dettagli}}, merge=["dettagli"])
         elif dettagli:
             vecchi_det = privati.get(persona, {}).get("dettagli") or {}
             db.collection("privati").document(persona).set({"dettagli": {**vecchi_det, **dettagli}}, merge=["dettagli"])

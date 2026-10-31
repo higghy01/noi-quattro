@@ -1,0 +1,22 @@
+# GitHub spegne da solo i programmi automatici (calendari, notifiche) se il repository resta 60 giorni senza modifiche.
+# Una volta al mese questo programma scrive la data in un piccolo file: basta a tenerli accesi.
+name: Tieni accesi i programmi
+on:
+  schedule:
+    - cron: "17 4 1 * *"
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  sveglia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u +"%Y-%m-%d" > .github/vivo.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/vivo.txt
+          git commit -m "Tieni accesi i programmi automatici" || exit 0
+          git push

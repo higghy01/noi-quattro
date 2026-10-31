@@ -28,7 +28,6 @@ def main():
     domani = (ora.date() + dt.timedelta(days=1)).isoformat()
     stato_ref = db.collection("sistema").document("notifiche")
     stato = (stato_ref.get().to_dict() or {})
-    ultimo = stato.get("ultimo", int((ora - dt.timedelta(minutes=15)).timestamp() * 1000))
     inviati = {k: v for k, v in (stato.get("inviati") or {}).items() if v >= (ora.date() - dt.timedelta(days=2)).isoformat()}
 
     persone = {d.id: d.to_dict() for d in db.collection("persone").stream()}
@@ -36,6 +35,18 @@ def main():
     for d in db.collection("token").stream():
         token.setdefault(d.to_dict().get("persona"), []).append(d.id)
     impegni = [dict(d.to_dict(), id=d.id) for d in db.collection("impegni").stream()]
+    # Titoli veri degli impegni nascosti ("Occupato"): solo per il loro proprietario.
+    dettagli = {d.id: (d.to_dict() or {}).get("dettagli") or {} for d in db.collection("privati").stream()}
+
+    def titolo_per(e, p):
+        """Il titolo che vede la persona p: il proprietario di un impegno nascosto vede quello vero."""
+        if e.get("nascosto") and e.get("creatoDa") == p:
+            vero = dettagli.get(p, {}).get(e["id"]) or {}
+            return vero.get("t") or e.get("t", ""), vero.get("n") or ""
+        return e.get("t", ""), e.get("n") or ""
+    # "Nuovo" = arrivato nell'ultimo giorno; cosa è già stato avvisato lo ricorda "inviati".
+    # Così arriva anche l'avviso di un impegno salvato senza rete e caricato più tardi.
+    recente = int((ora - dt.timedelta(days=1)).timestamp() * 1000)
 
     vuole = lambda p, tipo: (persone.get(p, {}).get("notifiche") or {}).get(tipo, True)
     ora_di = lambda p, k, solita: int((persone.get(p, {}).get("notifiche") or {}).get(k) or solita)
@@ -48,31 +59,41 @@ def main():
         da_mandare.append((p, titolo, testo))
         inviati[chiave] = oggi
 
-    # Promemoria: impegni che iniziano tra 45 e 75 minuti.
-    for e in impegni:
-        if not e.get("h") or not capita(e, oggi):
-            continue
-        inizio = dt.datetime.fromisoformat(f"{oggi}T{e['h']}").replace(tzinfo=ROMA)
-        if dt.timedelta(minutes=45) <= inizio - ora <= dt.timedelta(minutes=75):
-            for p in e.get("who", []):
-                manda(p, "promemoria", f"Tra poco: {e['t']}", f"Alle {e['h']}" + (f" · {e['n']}" if e.get("n") else ""), f"prom|{e['id']}|{oggi}|{p}")
+    # Promemoria: impegni che iniziano tra 30 e 80 minuti (anche subito dopo mezzanotte, guardando domani).
+    for giorno in (oggi, domani):
+        for e in impegni:
+            if not e.get("h") or not capita(e, giorno):
+                continue
+            if (e.get("fino") or "") > e.get("d", "") and giorno != e.get("d"):
+                continue  # impegno di più giorni: il promemoria solo il primo giorno
+            inizio = dt.datetime.fromisoformat(f"{giorno}T{e['h']}").replace(tzinfo=ROMA)
+            if dt.timedelta(minutes=30) <= inizio - ora <= dt.timedelta(minutes=80):  # largo: GitHub a volte salta un giro
+                for p in e.get("who", []):
+                    t, luogo = titolo_per(e, p)
+                    manda(p, "promemoria", f"Tra poco: {t}", f"Alle {e['h']}" + (f" · {luogo}" if luogo else ""), f"prom|{e['id']}|{giorno}|{p}")
 
-    # Nuovi impegni con altre persone dentro.
+    # Nuovi impegni con altre persone dentro, e persone aggiunte dopo a un impegno che c'era già.
     for e in impegni:
-        if e.get("fonte") == "app" and e.get("creato", 0) > ultimo:
-            quando = dt.date.fromisoformat(e["d"]).strftime("%d/%m") + (f" alle {e['h']}" if e.get("h") else "")
-            for p in e.get("who", []):
-                if p != e.get("creatoDa"):
-                    manda(p, "nuovi", f"{nome(e.get('creatoDa'))} ti ha aggiunto", f"{e['t']} · {quando}", f"nuovo|{e['id']}|{p}")
+        if e.get("fonte") != "app":
+            continue
+        quando = dt.date.fromisoformat(e["d"]).strftime("%d/%m") + (f" alle {e['h']}" if e.get("h") else "")
+        nuovo = e.get("creato", 0) > recente
+        aggiunti = (e.get("aggiunti") or []) if e.get("modificato", 0) > recente else []
+        chi = e.get("modificatoDa") or e.get("creatoDa")
+        for p in e.get("who", []):
+            if nuovo and p != e.get("creatoDa"):
+                manda(p, "nuovi", f"{nome(e.get('creatoDa'))} ti ha aggiunto", f"{e['t']} · {quando}", f"nuovo|{e['id']}|{p}")
+            elif p in aggiunti and p != chi:
+                manda(p, "nuovi", f"{nome(chi)} ti ha aggiunto", f"{e['t']} · {quando}", f"nuovo|{e['id']}|{p}")
 
     # Riepilogo serale: ognuno all'ora che ha scelto (di solito le 21).
     serale = [p for p in persone if ora.hour == ora_di(p, "oraRiepilogo", 21)]
     if serale:
         lista = sorted((e for e in impegni if capita(e, domani)), key=lambda e: e.get("h") or "")
         if lista:
-            righe = [f"{e['h'] or 'tutto il giorno'} {e['t']}" for e in lista[:4]]
-            testo = " · ".join(righe) + (f" e altri {len(lista) - 4}" if len(lista) > 4 else "")
             for p in serale:
+                righe = [f"{e['h'] or 'tutto il giorno'} {titolo_per(e, p)[0]}" for e in lista[:4]]
+                testo = " · ".join(righe) + (f" e altri {len(lista) - 4}" if len(lista) > 4 else "")
                 manda(p, "riepilogo", f"Domani: {len(lista)} impegni in famiglia", testo, f"riep|{oggi}|{p}")
 
     # Cena: ognuno all'ora che ha scelto (di solito le 17).
@@ -84,7 +105,7 @@ def main():
                 manda(p, "cena", "A cena stasera?", "Rispondi con un tocco nella scheda Oggi.", f"cena|{oggi}|{p}")
 
     # Note nuove in evidenza.
-    for d in db.collection("note").where("creato", ">", ultimo).stream():
+    for d in db.collection("note").where("creato", ">", recente).stream():
         n = d.to_dict()
         if n.get("pin"):
             for p in persone:

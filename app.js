@@ -59,7 +59,8 @@
     if (mos) return { vis: true, perche: `Automatico: contiene «${mos}».` };
     return { vis: rg.gen !== 'occupato', perche: 'Automatico: segue la regola generale.' };
   }
-  const mioCal = (e) => e.fonte === 'calendario:' + S.me;
+  // I miei impegni che arrivano da un calendario (collegato o importato da file): per questi decido cosa vedono gli altri.
+  const mioCal = (e) => e.fonte === 'calendario:' + S.me || e.fonte === 'import:' + S.me;
   // I miei impegni nascosti: io vedo il titolo vero (sta nella mia parte privata), gli altri "Occupato".
   function mappaImpegni() {
     const det = S.priv.dettagli || {};
@@ -99,14 +100,22 @@
     return oggi.length ? { t: 'Impegni di oggi finiti', c: 'Finito per oggi', k: 'lib' } : { t: 'Oggi niente in programma', c: 'Giornata libera', k: 'lib' };
   }
 
+  // Ultimo giorno del mese di 'AAAA-MM-GG' (28, 29, 30 o 31).
+  const fineMese = (d) => new Date(+d.slice(0, 4), +d.slice(5, 7), 0).getDate();
+  // Stesso numero di giorno; se quel mese è più corto (31 → aprile, 29 febbraio → anni normali), l'ultimo giorno del mese.
+  const stessoGiorno = (d, g) => { const n = +g, m = fineMese(d); return +d.slice(8) === Math.min(n, m); };
   function capita(e, d) {
-    if (!e.ripeti) return e.d === d;
+    // Impegni di più giorni (es. ferie dal 3 al 7): "fino" è l'ultimo giorno, compreso.
+    if (!e.ripeti) return e.fino && e.fino > e.d ? d >= e.d && d <= e.fino : e.d === d;
     if (d < e.d) return false;
     if (e.ripeti === 'settimanale') return new Date(d + 'T12:00:00').getDay() === new Date(e.d + 'T12:00:00').getDay();
-    if (e.ripeti === 'mensile') return d.slice(8) === e.d.slice(8);
-    if (e.ripeti === 'annuale') return d.slice(5) === e.d.slice(5);
+    if (e.ripeti === 'mensile') return stessoGiorno(d, e.d.slice(8));
+    if (e.ripeti === 'annuale') return d.slice(5, 7) === e.d.slice(5, 7) && stessoGiorno(d, e.d.slice(8));
     return false;
   }
+  const piuGiorni = (e) => !e.ripeti && e.fino && e.fino > e.d;
+  // "dal 3 al 7 nov" per gli impegni di più giorni.
+  const durataGiorni = (e) => `dal ${fmt(e.d, { day: 'numeric', month: e.d.slice(0, 7) === e.fino.slice(0, 7) ? undefined : 'short' })} al ${fmt(e.fino, { day: 'numeric', month: 'short' })}`;
   const delGiorno = (d, f) => S.impegni.filter(e => capita(e, d) && (!f || f(e))).sort((a, b) => (a.h || '').localeCompare(b.h || ''));
 
   function chips(who) {
@@ -118,7 +127,7 @@
     if (!list.length) return `<div class="empty">${vuoto || 'Nessun impegno. Tocca + per aggiungerne uno.'}</div>`;
     return list.map(e => `<button class="ev tap${e.id === fresh ? ' pop' : ''}" data-ev="${e.id}">
       <div class="h">${e.h ? esc(e.h) : '<small>tutto il giorno</small>'}${e.h && e.fine ? `<small>${esc(e.fine)}</small>` : ''}</div>
-      <div><div class="t">${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
+      <div><div class="t">${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${piuGiorni(e) ? `<div class="n">🗓️ ${durataGiorni(e)}</div>` : ''}${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
   }
 
   /* ---------- Fluidità ----------
@@ -287,13 +296,17 @@
   function ricordo(cls) {
     const conFoto = S.foto.filter(f => f.prev);
     if (!conFoto.length) return '';
-    const oggi = new Date(), md = (d) => (d.getMonth() * 31) + d.getDate();
-    const vicini = conFoto.filter(f => { const d = new Date(f.quando || 0); return d.getFullYear() < oggi.getFullYear() && Math.abs(md(d) - md(oggi)) <= 3; });
+    // Anniversario più vicino (anche a cavallo di Capodanno: una foto del 30 dicembre vale il 2 gennaio).
+    const oggi = new Date(); oggi.setHours(12, 0, 0, 0);
+    const anniv = (f) => { const d = new Date(f.quando || 0);
+      return [-1, 0, 1].map(k => { const y = oggi.getFullYear() + k, a = new Date(y, d.getMonth(), d.getDate(), 12); return { anni: y - d.getFullYear(), giorni: Math.abs(Math.round((a - oggi) / 864e5)) }; })
+        .filter(x => x.anni >= 1).sort((a, b) => a.giorni - b.giorni)[0]; };
+    const vicini = conFoto.filter(f => { const x = anniv(f); return x && x.giorni <= 3; });
     const pool = vicini.length ? vicini : conFoto;
     const seme = [...T].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
     const f = [...pool].sort((a, b) => (a.id < b.id ? -1 : 1))[seme % pool.length];
     const v = S.viaggi.find(x => x.id === f.v); if (!v) return '';
-    const anni = oggi.getFullYear() - new Date(f.quando || 0).getFullYear();
+    const anni = vicini.length ? anniv(f).anni : 0;
     const titolo = vicini.length ? (anni === 1 ? 'Un anno fa' : `${anni} anni fa`) : 'Un ricordo';
     return `<button class="card memo tap${cls}" data-viaggio="${v.id}" data-apri-foto="${f.id}"><img src="${esc(f.prev)}" alt="" loading="lazy" decoding="async"><span class="mtx"><small>${titolo}</small><b>${esc(v.t)}</b></span></button>`;
   }
@@ -706,6 +719,7 @@
     openSheet(`<h3>${e.id ? 'Modifica impegno' : 'Nuovo impegno'}</h3><form class="stack" id="fEv" data-id="${e.id || ''}">
      <label>Cosa<input id="evT" required maxlength="80" value="${esc(e.t)}" placeholder="Es. visita, partita, compleanno"></label>
      <div class="row2"><label>Giorno<input id="evD" type="date" value="${esc(e.d)}" required></label><label>Si ripete<select id="evR">${Object.entries(RIPETI).map(([k, v]) => `<option value="${k}"${(e.ripeti || '') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label></div>
+     <label>Fino al giorno (facoltativo, per più giorni)<input id="evFino" type="date" value="${esc(e.fino || '')}"></label>
      <label class="sw">Tutto il giorno<input type="checkbox" id="evAll"${e.h ? '' : ' checked'}></label>
      <div class="row2" id="evOre"${e.h ? '' : ' hidden'}><label>Dalle<input id="evH" type="time" value="${esc(e.h || '18:00')}"></label><label>Alle (facoltativo)<input id="evF" type="time" value="${esc(e.fine || '')}"></label></div>
      <label>Chi c'è</label>${pickHtml(e.who || [S.me])}
@@ -716,7 +730,7 @@
   function sheetDettaglio(e) {
     const fonte = e.fonte && e.fonte.startsWith('calendario:') ? `Dal calendario di ${esc(P(e.fonte.slice(11)).nome)}` : e.fonte && e.fonte.startsWith('import:') ? `Importato da ${esc(P(e.fonte.slice(7)).nome)}` : `Aggiunto da ${esc(P(e.creatoDa).nome)}`;
     openSheet(`<h3>${esc(e.t)}</h3>
-      <div>${fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })}${e.h ? ` · ${esc(e.h)}${e.fine ? '–' + esc(e.fine) : ''}` : ' · tutto il giorno'}${e.ripeti ? ` · ${RIPETI[e.ripeti].toLowerCase()}` : ''}</div>
+      <div>${piuGiorni(e) ? `Dal ${fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })} al ${fmt(e.fino, { weekday: 'long', day: 'numeric', month: 'long' })}` : fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })}${e.h ? ` · ${esc(e.h)}${e.fine ? '–' + esc(e.fine) : ''}` : ' · tutto il giorno'}${e.ripeti ? ` · ${RIPETI[e.ripeti].toLowerCase()}` : ''}</div>
       ${e.n ? `<div class="muted">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div><div class="src">${fonte}</div>
       ${e.fonte === 'import:' + S.me || !(e.fonte || '').startsWith('import:') ? `<div class="vis" data-mze="${e.id}"><label>Come ci andate</label>${mezziHtml(e.mezzo || '', 'data-mzd')}</div>` : ''}
       ${mioCal(e) ? `<div class="vis" data-vise="${e.id}"><label>Gli altri vedono</label>${segHtml('vis', [['mostra', '👁️ Tutto'], ['nascondi', '🔒 Solo occupato']], e.privato ? 'nascondi' : 'mostra')}
@@ -765,7 +779,7 @@
       `Torna qui, tocca <b>Incolla</b> e poi <b>Collega</b>.`]
   };
   const NOTA_PASSI = {
-    iphone: `Hai più calendari? Ripeti per ognuno e metti un link per riga. Se non vedi "Calendario pubblico", quel calendario non è di iCloud: dillo a Sasha.`,
+    iphone: `Hai più calendari? Ripeti per ognuno e metti un link per riga. Se non vedi "Calendario pubblico", quel calendario non è di iCloud: chiedi aiuto in famiglia.`,
     google: `Quell'indirizzo è segreto: non darlo a nessuno. Qui lo vedi solo tu.`
   };
   const passiHtml = (g) => PASSI[g].map(x => `<li>${x}</li>`).join('');
@@ -894,6 +908,14 @@
   }
 
   /* ---------- Import del calendario (.ics) ---------- */
+  // Ultimo giorno (compreso) di un impegno che dura più giorni, altrimenti ''. La fine dei calendari è "esclusa":
+  // un impegno di tutto il giorno dal 3 al 7 finisce il giorno 8, uno che finisce a mezzanotte appartiene al giorno prima.
+  function ultimoGiorno(s, end, tuttoIlGiorno) {
+    if (!end) return '';
+    const e = new Date(end.getTime() - (tuttoIlGiorno || (end.getHours() === 0 && end.getMinutes() === 0) ? 1 : 0));
+    const f = iso(e), d = iso(s);
+    return f > d ? f : '';
+  }
   async function importaIcs(file) {
     if (!window.ICAL) return toast('Serve internet per leggere il file. Riprova.');
     toast('Leggo il calendario…');
@@ -901,28 +923,39 @@
       const comp = new ICAL.Component(ICAL.parse(await file.text()));
       const da = new Date(); da.setHours(0, 0, 0, 0);
       const a = addDays(da, 366);
-      const out = [];
+      const out = [], det = [];
       const hhmm = (d) => d.toTimeString().slice(0, 5);
+      // Stesse regole del calendario collegato: scelte a mano, parole automatiche, regola generale.
+      const rg = regole();
       const push = (ev, start, end) => {
-        const s = start.toJSDate(); if (s < da || s > a || out.length >= 800) return;
-        const all = start.isDate;
-        const occ = P(S.me).privacy === 'occupato';
-        out.push({ t: occ ? 'Occupato' : (ev.summary || 'Impegno').slice(0, 80), d: iso(s), h: all ? '' : hhmm(s), fine: !all && end ? hhmm(end.toJSDate()) : '',
-          who: [S.me], n: occ ? '' : (ev.location || '').slice(0, 200), ripeti: '', fonte: 'import:' + S.me, creatoDa: S.me, creato: Date.now() });
+        const s = start.toJSDate(), e = end ? end.toJSDate() : null;
+        if ((e && e > s ? e : s) < da || s > a || out.length >= 800) return; // entrano anche quelli iniziati prima e ancora in corso
+        const all = start.isDate, titolo = (ev.summary || 'Impegno').slice(0, 80), luogo = (ev.location || '').slice(0, 200);
+        const vis = regolaCal(titolo, rg).vis;
+        out.push({ t: vis ? titolo : 'Occupato', d: iso(s), fino: ultimoGiorno(s, e, all), h: all ? '' : hhmm(s), fine: !all && e ? hhmm(e) : '',
+          who: [S.me], n: vis ? luogo : '', ripeti: '', fonte: 'import:' + S.me, creatoDa: S.me, creato: Date.now(), nascosto: !vis });
+        det.push(vis ? null : { t: titolo, n: luogo }); // il titolo vero resta nella mia parte privata
       };
-      for (const v of comp.getAllSubcomponents('vevent')) {
-        const ev = new ICAL.Event(v);
-        if (ev.isRecurrenceException()) continue;
+      // Le ripetizioni spostate (es. una lezione spostata una volta) si legano al loro impegno, così cadono nel giorno giusto.
+      const eventi = comp.getAllSubcomponents('vevent').map(v => new ICAL.Event(v));
+      const principali = {};
+      eventi.forEach(ev => { if (!ev.isRecurrenceException()) principali[ev.uid] = ev; });
+      eventi.forEach(ev => { if (ev.isRecurrenceException()) { const m = principali[ev.uid]; if (m) m.relateException(ev); else push(ev, ev.startDate, ev.endDate); } });
+      for (const ev of Object.values(principali)) {
         if (!ev.isRecurring()) { push(ev, ev.startDate, ev.endDate); continue; }
+        // Si contano tutte le ripetizioni, anche quelle passate: un impegno settimanale di 10 anni ne ha più di 500.
         const it = ev.iterator(); let next, n = 0;
-        while ((next = it.next()) && n++ < 400) {
+        while ((next = it.next()) && n++ < 50000 && out.length < 800) {
           if (next.toJSDate() > a) break;
           const o = ev.getOccurrenceDetails(next); push(o.item, o.startDate, o.endDate);
         }
       }
       const vecchi = S.impegni.filter(e => e.fonte === 'import:' + S.me);
       for (const e of vecchi) await DATI.elimina('impegni', e.id);
-      await DATI.molti('impegni', out);
+      const ids = await DATI.molti('impegni', out);
+      const dettagli = {};
+      (ids || []).forEach((id, i) => { if (det[i]) dettagli[id] = det[i]; });
+      if (Object.keys(dettagli).length) await DATI.imposta('privati', S.me, { dettagli });
       closeSheet(); render(); toast(out.length ? `Importati ${out.length} impegni` : 'Nel file non ci sono impegni nei prossimi 12 mesi');
     } catch (e) { console.error(e); toast('Il file non sembra un calendario .ics valido.'); }
   }
@@ -945,7 +978,7 @@
       const f = S.foto.find(x => x.id === d.cuore); if (!f) return;
       const on = !(f.cuori || {})[S.me];
       if (on) { t.classList.add('on'); festa(t); }
-      return DATI.aggiorna('foto', f.id, { cuori: Object.assign({}, f.cuori, { [S.me]: on }) }).catch(sbaglio);
+      return DATI.aggiorna('foto', f.id, { ['cuori.' + S.me]: on }).catch(sbaglio); // solo il mio cuore: due cuori insieme non si cancellano
     }
     if (d.salva) { const f = S.foto.find(x => x.id === d.salva); return f && salvaFoto(f); }
     if (d.cop) { const f = S.foto.find(x => x.id === d.cop); if (!f) return; await DATI.aggiorna('viaggi', f.v, { cop: f.id }).catch(sbaglio); return toast('Copertina cambiata 🖼️'); }
@@ -1116,7 +1149,7 @@
     if (f.id === 'fLogin') {
       $('#lgErr').textContent = '';
       try { await DATI.login($('#lgEmail').value, $('#lgPass').value); }
-      catch (e) { $('#lgErr').textContent = 'Email o password non corrette.'; }
+      catch (e) { $('#lgErr').textContent = DATI.modo === 'senza-rete' ? e.message : 'Email o password non corrette.'; }
     } else if (f.id === 'fMz') {
       const n = $('#mzN').value.trim(); if (!n) return toast('Scrivi il nome del mezzo');
       const m = { e: mzTipo, n: n.charAt(0).toUpperCase() + n.slice(1) };
@@ -1138,10 +1171,21 @@
       const all = $('#evAll').checked;
       const mzOn = f.querySelector('.mz.on');
       const e = { t: $('#evT').value.trim(), d: $('#evD').value, h: all ? '' : $('#evH').value, fine: all ? '' : $('#evF').value, who, n: $('#evN').value.trim(), ripeti: $('#evR').value, mezzo: mzOn ? mzOn.dataset.mzf : '' };
+      const fino = $('#evFino').value; e.fino = fino && fino > e.d && !e.ripeti ? fino : '';
       closeSheet();
       if (page === 'cal') { selDay = e.d; weekStart = inizioSettimana(new Date(e.d + 'T12:00:00')); }
       try {
-        if (f.dataset.id) { await DATI.aggiorna('impegni', f.dataset.id, e); toast('Impegno aggiornato'); }
+        if (f.dataset.id) {
+          // Un mio impegno importato: le regole su cosa vedono gli altri valgono anche dopo una modifica.
+          const prima = S.impegni.find(x => x.id === f.dataset.id);
+          if (prima && mioCal(prima) && !regolaCal(e.t, regole()).vis) {
+            await DATI.imposta('privati', S.me, { dettagli: { [f.dataset.id]: { t: e.t, n: e.n } } });
+            Object.assign(e, { t: 'Occupato', n: '', nascosto: true });
+          } else if (prima && mioCal(prima)) e.nascosto = false;
+          // Chi è stato aggiunto adesso riceve l'avviso "ti ha aggiunto" (lo manda il programma delle notifiche).
+          if (prima && prima.fonte === 'app') Object.assign(e, { aggiunti: who.filter(p => !(prima.who || []).includes(p)), modificato: Date.now(), modificatoDa: S.me });
+          await DATI.aggiorna('impegni', f.dataset.id, e); toast('Impegno aggiornato');
+        }
         else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('Impegno salvato: lo vedono tutti'); }
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'fNo') {
@@ -1204,19 +1248,33 @@
     stopPriv = DATI.ascoltaDoc('privati', S.me, d => { S.priv = d; mappaImpegni(); render(); }) || null;
   }
   function ascoltaCena() { if (stopCena) stopCena(); stopCena = DATI.ascoltaDoc('cena', T, c => { S.cena = c; render(); }); }
+  // All'uscita si staccano tutti i collegamenti ai dati (con l'accesso chiuso si fermerebbero da soli e non ripartirebbero):
+  // al prossimo accesso, anche di un'altra persona sullo stesso telefono, ripartono da capo.
+  const stopDati = [];
+  function fermaTutto() {
+    if (!avviato) return;
+    avviato = false;
+    stopDati.splice(0).forEach(f => { try { f(); } catch (e) {} });
+    if (stopCena) { stopCena(); stopCena = null; }
+    if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
+    for (const k in stopSorp) { stopSorp[k](); delete stopSorp[k]; }
+    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], note: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [] });
+    seen.clear();
+  }
   DATI.avvia((persona, errore) => {
-    if (!persona) { $('#app').hidden = true; $('#login').hidden = false; $('#lgErr').textContent = errore || ''; return; }
+    if (!persona) { fermaTutto(); $('#app').hidden = true; $('#login').hidden = false; $('#lgErr').textContent = errore || ''; return; }
     S.me = persona; $('#login').hidden = true; $('#app').hidden = false; ascoltaPriv();
     if (!avviato) {
       avviato = true;
-      DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); render(); });
-      DATI.ascolta('regali', l => { S.regali = l; render(); });
-      DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); });
-      DATI.ascolta('viaggi', l => { S.viaggi = l; render(); });
-      DATI.ascolta('foto', l => { S.foto = l; render(); });
-      DATI.ascolta('impegni', l => { S.impRaw = l; mappaImpegni(); render(); });
-      DATI.ascolta('note', l => { S.note = l; render(); });
-      DATI.ascolta('spesa', l => { S.spesa = l; render(); });
+      const a = (x) => { if (typeof x === 'function') stopDati.push(x); };
+      a(DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); render(); }));
+      a(DATI.ascolta('regali', l => { S.regali = l; render(); }));
+      a(DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); }));
+      a(DATI.ascolta('viaggi', l => { S.viaggi = l; render(); }));
+      a(DATI.ascolta('foto', l => { S.foto = l; render(); }));
+      a(DATI.ascolta('impegni', l => { S.impRaw = l; mappaImpegni(); render(); }));
+      a(DATI.ascolta('note', l => { S.note = l; render(); }));
+      a(DATI.ascolta('spesa', l => { S.spesa = l; render(); }));
       ascoltaCena();
       const ap = LS.get('noi4-apertura', 'oggi'); if (ap !== 'oggi' && R[ap]) go(ap);
     } else { ascoltaSorprese(); render(); }
