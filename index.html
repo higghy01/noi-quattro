@@ -17,7 +17,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650&display=swap">
 <link rel="stylesheet" href="stile.css">
-<script>try{var t=localStorage.getItem('noi4-tema');if(t==='chiaro'||t==='scuro')document.documentElement.dataset.theme=t==='chiaro'?'light':'dark'}catch(e){}</script>
+<script>/* Tema scelto a mano: si applica prima di disegnare, anche alla barra in alto */
+try{var t=localStorage.getItem('noi4-tema'),r=document.documentElement;r.dataset.page='oggi';
+if(t==='chiaro'||t==='scuro'){r.dataset.theme=t==='chiaro'?'light':'dark';var c=t==='chiaro'?'#F5F4F8':'#111016';
+document.querySelectorAll('meta[name=theme-color]').forEach(function(m){m.dataset.media=m.getAttribute('media')||'';m.removeAttribute('media');m.content=c})}}catch(e){}</script>
 </head>
 <body>
 <!-- Accesso -->
@@ -38,6 +41,7 @@
 
 <!-- App -->
 <div id="app" hidden>
+  <div class="aura" aria-hidden="true"></div>
   <div class="wrap">
     <header class="head">
       <div>
