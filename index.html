@@ -66,7 +66,7 @@ document.querySelectorAll('meta[name=theme-color]').forEach(function(m){m.datase
       <button class="tab on tap" data-p="oggi"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Oggi</button>
       <button class="tab tap" data-p="cal"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Impegni</button>
       <button class="tab tap" data-p="note"><svg viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg>Bacheca</button>
-      <button class="tab tap" data-p="viaggi"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>Viaggi</button>
+      <button class="tab tap" data-p="viaggi"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>Ricordi</button>
       <button class="tab tap" data-p="spesa"><svg viewBox="0 0 24 24"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 8H6"/><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/></svg>Spesa</button>
     </div>
   </nav>
@@ -74,8 +74,8 @@ document.querySelectorAll('meta[name=theme-color]').forEach(function(m){m.datase
 
 <!-- Impostazioni: schermata intera che entra da destra -->
 <section class="screen" id="imp" aria-label="Impostazioni"><div class="in" id="impIn"></div></section>
-<!-- Un viaggio con le sue foto -->
-<section class="screen" id="trip" aria-label="Viaggio"><div class="in" id="tripIn"></div></section>
+<!-- Un ricordo con le sue foto e i suoi video -->
+<section class="screen" id="trip" aria-label="Ricordo"><div class="in" id="tripIn"></div></section>
 <!-- Foto a tutto schermo -->
 <div class="viewer" id="viewer" role="dialog" aria-label="Foto"><div class="vtrack" id="vtrack"></div>
   <div class="vtop"><button class="vx tap" data-vchiudi aria-label="Chiudi">✕</button><span id="vcount"></span></div>

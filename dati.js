@@ -55,11 +55,14 @@
     function viaggiEsempio(o) {
       o.viaggi = {}; o.foto = {};
       const giorno = (s) => new Date(s + 'T12:00:00').getTime();
-      [['Mare in Puglia', 'Polignano a Mare', '2026-08-08', '2026-08-16', ['p1', 'p2', 'p3', 'p4'], [['#2D9CDB', '#7FDBDA', '🌊'], ['#F2994A', '#F2C94C', '🌅'], ['#56CCF2', '#2F80ED', '🏖️'], ['#27AE60', '#6FCF97', '🫒'], ['#EB5757', '#F2994A', '🍉'], ['#9B51E0', '#56CCF2', '🌙']]],
+      [['Natale tutti insieme', 'A casa', '2025-12-25', '', ['p1', 'p2', 'p3', 'p4'], [['#C0392B', '#E74C3C', '🎄'], ['#27AE60', '#F1C40F', '🎁'], ['#8E44AD', '#E74C3C', '🍾']], 'feste'],
+       ['Pizza del sabato', 'Da Gino', '2026-10-24', '', ['p1', 'p3', 'p4'], [['#E67E22', '#F1C40F', '🍕'], ['#D35400', '#F39C12', '🥂']], 'pranzo'],
+       ['Al cinema', 'Multisala', '2026-09-12', '', ['p2', 'p3'], [['#2C3E50', '#8E44AD', '🎬'], ['#34495E', '#E74C3C', '🍿']], 'cinema'],
+       ['Mare in Puglia', 'Polignano a Mare', '2026-08-08', '2026-08-16', ['p1', 'p2', 'p3', 'p4'], [['#2D9CDB', '#7FDBDA', '🌊'], ['#F2994A', '#F2C94C', '🌅'], ['#56CCF2', '#2F80ED', '🏖️'], ['#27AE60', '#6FCF97', '🫒'], ['#EB5757', '#F2994A', '🍉'], ['#9B51E0', '#56CCF2', '🌙']]],
        ['Neve a Livigno', 'Livigno', '2026-01-03', '2026-01-06', ['p1', 'p3', 'p4'], [['#A0C4FF', '#E0F0FF', '⛷️'], ['#6C8EBF', '#BDD5F2', '🏔️'], ['#D4A373', '#FAEDCD', '☕'], ['#5E60CE', '#A0C4FF', '❄️']]],
        ['Weekend a Parigi', 'Parigi', '2025-04-25', '2025-04-28', ['p2', 'p3'], [['#E5989B', '#FFCDB2', '🗼'], ['#B5838D', '#FFB4A2', '🥐'], ['#6D6875', '#E5989B', '🎨']]]]
-        .forEach(([t, dove, da, a, who, foto], k) => {
-          const v = uid(); o.viaggi[v] = { t, dove, da, a, who, creatoDa: who[0], creato: Date.now() - k * 1000 };
+        .forEach(([t, dove, da, a, who, foto, tipo], k) => {
+          const v = uid(); o.viaggi[v] = { t, dove, da, a, who, tipo: tipo || 'viaggio', creatoDa: who[0], creato: Date.now() - k * 1000 };
           foto.forEach(([c1, c2, em], i) => {
             const f = uid(), url = finta(c1, c2, em, i % 3 === 1 ? 900 : 1200, i % 3 === 1 ? 1200 : 900);
             o.foto[f] = { v, by: who[i % who.length], url, prev: url, quando: giorno(da) + i * 3600e3 * 7, creato: Date.now(), cuori: i === 0 ? { p2: true, p3: true } : {} };
@@ -70,7 +73,7 @@
     try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
     if (!db || !db.persone) db = esempio();
     if (!db.regali) regaliEsempio(db);
-    if (!db.viaggi) viaggiEsempio(db);
+    if (!db.viaggi || !Object.values(db.viaggi).some(v => v.tipo)) viaggiEsempio(db);
     // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
     const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };
     const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} subs.forEach(s => s()); };
@@ -138,9 +141,13 @@
       },
       // Spazio foto (Firebase Storage): ogni file porta con sé chi l'ha caricato.
       fotoPronte: () => !!firebase.storage,
-      async carica(path, blob, by) {
+      // Carica il file così com'è (foto e video originali); "avanti" riceve quanto è stato caricato (0-1).
+      async carica(path, blob, by, avanti) {
         const ref = firebase.storage().ref(path);
-        await ref.put(blob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000', customMetadata: { by } });
+        const tipo = blob.type || (/\.(mov|mp4)$/i.test(path) ? 'video/mp4' : 'image/jpeg');
+        const task = ref.put(blob, { contentType: tipo, cacheControl: 'public,max-age=31536000', customMetadata: { by } });
+        if (avanti) task.on('state_changed', s => avanti(s.bytesTransferred));
+        await task;
         return { url: await ref.getDownloadURL(), path };
       },
       eliminaFile: (path) => path ? firebase.storage().ref(path).delete().catch(() => {}) : Promise.resolve(),

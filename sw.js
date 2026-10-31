@@ -1,6 +1,6 @@
 // Noi quattro - service worker: app usabile offline + notifiche (Firebase Cloud Messaging).
 // A ogni pubblicazione alzare VERSIONE, altrimenti i telefoni restano sulla copia vecchia.
-const VERSIONE = 'noi4-v9';
+const VERSIONE = 'noi4-v10';
 const LIBRERIE = ['www.gstatic.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 const FILE = ['./', 'index.html', 'stile.css', 'app.js', 'dati.js', 'config.js', 'manifest.json', 'icona-180.png', 'icona-512.png'];
 

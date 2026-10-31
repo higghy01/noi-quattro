@@ -5,11 +5,12 @@ service firebase.storage {
   match /b/{bucket}/o {
     function io() { return request.auth != null ? request.auth.token.get('persona', '') : ''; }
 
-    // foto/<viaggio>/<nome>.jpg : le vedono solo i 4; ognuno carica e toglie solo le sue.
+    // foto/<ricordo>/<nome> : le vedono solo i 4; ognuno carica e toglie solo le sue.
     match /foto/{viaggio}/{nome} {
       allow read: if io() != '';
+      // Foto e video originali, fino a 2 GB l'uno.
       allow create: if io() != '' && request.resource.metadata.by == io()
-        && request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+        && request.resource.size < 2 * 1024 * 1024 * 1024 && request.resource.contentType.matches('(image|video)/.*');
       allow delete: if io() != '' && resource.metadata.by == io();
     }
 
