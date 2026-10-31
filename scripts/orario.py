@@ -28,6 +28,8 @@ def main():
         raise SystemExit("Mancano persona o giorni")
     for d in (da, a, *giorni):
         dt.date.fromisoformat(d)  # data non valida = errore
+    if giorni:  # un turno fuori dall'intervallo "da/a" allarga l'intervallo: così la volta dopo viene sostituito
+        da, a = min(da, giorni[0]), max(a, giorni[-1])
     db = database()
     if not db.collection("persone").document(persona).get().exists:
         raise SystemExit("Persona sconosciuta")
@@ -41,7 +43,8 @@ def main():
         h, fine = str(t.get("h", "")), str(t.get("fine", ""))
         if h and not ORA.match(h) or fine and not ORA.match(fine):
             raise SystemExit("Ora non valida")
-        b.set(col.document(f"orario-{persona}-{t['d']}-{h.replace(':', '') or 'gg'}"), {
+        # Il nome del documento tiene conto anche della fine: due turni senza ora nello stesso giorno non si sovrascrivono.
+        b.set(col.document(f"orario-{persona}-{t['d']}-{h.replace(':', '') or 'gg'}{fine.replace(':', '')}-{turni.index(t)}"), {
             "t": str(t.get("t") or "Al lavoro")[:80], "d": t["d"], "fino": "", "h": h, "fine": fine,
             "who": [persona], "n": str(t.get("n") or "")[:200], "ripeti": "",
             "fonte": f"orario:{persona}", "creatoDa": persona, "creato": adesso,

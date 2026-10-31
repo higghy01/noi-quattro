@@ -59,7 +59,10 @@ service cloud.firestore {
             && request.resource.data.voti.diff(resource.data.voti).affectedKeys().hasOnly([io()])
             && request.resource.data.opzioni.diff(resource.data.opzioni).changedKeys().size() == 0
             && request.resource.data.opzioni.diff(resource.data.opzioni).removedKeys().size() == 0
-            && request.resource.data.opzioni.size() <= 30));
+            && request.resource.data.opzioni.size() <= 30
+            // Una proposta decisa non si vota più, e le idee si aggiungono una alla volta.
+            && resource.data.get('chiusa', false) != true
+            && request.resource.data.opzioni.diff(resource.data.opzioni).addedKeys().size() <= 1));
       allow delete: if membro() && resource.data.by == io();
     }
 

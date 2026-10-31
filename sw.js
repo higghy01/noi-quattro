@@ -1,6 +1,6 @@
 // Noi quattro - service worker: app usabile offline + notifiche (Firebase Cloud Messaging).
 // A ogni pubblicazione alzare VERSIONE, altrimenti i telefoni restano sulla copia vecchia.
-const VERSIONE = 'noi4-v25';
+const VERSIONE = 'noi4-v26';
 // Le librerie esterne hanno la versione nell'indirizzo: stanno in una copia a parte che NON si cancella a ogni
 // aggiornamento, così l'app si apre anche senza rete subito dopo una nuova versione.
 const CACHE_LIB = 'noi4-librerie';

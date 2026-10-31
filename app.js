@@ -120,11 +120,15 @@
   // Due impegni della stessa persona che si accavallano nello stesso giorno (senza orario non contano).
   // Un impegno senza fine dura un'ora; uno che finisce "prima" di iniziare (turno 22-6) arriva a mezzanotte.
   const minuti = (h) => +h.slice(0, 2) * 60 + +h.slice(3, 5);
-  const intervallo = (e) => { const a = minuti(e.h), b = e.fine ? minuti(e.fine) : a + 60; return [a, b > a ? b : 24 * 60]; };
+  // Impegno di più giorni con orario: il primo giorno dall'ora d'inizio, in mezzo tutto il giorno, l'ultimo fino all'ora di fine.
+  const intervallo = (e, d) => {
+    if (piuGiorni(e)) return [d === e.d ? minuti(e.h) : 0, d === e.fino && e.fine ? minuti(e.fine) : 24 * 60];
+    const a = minuti(e.h), b = e.fine ? minuti(e.fine) : a + 60; return [a, b > a ? b : 24 * 60];
+  };
   function accavallati(e, d, chi) {
     if (!e.h) return [];
-    const [a1, b1] = intervallo(e);
-    return delGiorno(d, x => x.id !== e.id && x.h && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x); return a1 < b2 && a2 < b1; });
+    const [a1, b1] = intervallo(e, d);
+    return delGiorno(d, x => x.id !== e.id && x.h && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
   }
   // Impegni importanti: con tutta la famiglia, segnati con la stella, o con parole da grande occasione.
   const PAROLE_IMP = ['matrimonio', 'laurea', 'battesimo', 'comunione', 'cresima', 'funerale', 'viaggio', 'partenza', 'volo', 'trasloco', 'esame', 'concerto', 'vacanza', 'ferie', 'natale', 'capodanno', 'pasqua'];
@@ -285,10 +289,10 @@
       ${p.chiusa ? '' : `<form class="addop" data-prop="${p.id}"><input maxlength="60" placeholder="+ Aggiungi un'idea" enterkeyhint="done" aria-label="Nuova idea"><button class="tap" aria-label="Aggiungi l'idea">＋</button></form>`}
       <div class="pf"><small>${votanti} su ${ids.length} ${votanti === 1 ? 'ha votato' : 'hanno votato'}${p.chiusa || !ops.length ? '' : ' · puoi sceglierne più di una'}</small><span class="pfa">${az}</span></div></div>`;
   }
-  // Scheda Oggi: le proposte che aspettano il mio voto e quelle decise nelle ultime ore.
+  // Scheda Oggi: le proposte (delle ultime 2 settimane) che aspettano il mio voto e quelle decise nelle ultime ore.
   function propOggi(cls) {
     const ieri = Date.now() - 20 * 36e5;
-    const da = S.proposte.filter(p => !p.chiusa && !haVotato(p, S.me) && (opzioniDi(p).length || p.by !== S.me)).sort((a, b) => (b.creato || 0) - (a.creato || 0));
+    const da = S.proposte.filter(p => !p.chiusa && (p.creato || 0) > Date.now() - 14 * 864e5 && !haVotato(p, S.me) && (opzioniDi(p).length || p.by !== S.me)).sort((a, b) => (b.creato || 0) - (a.creato || 0));
     const dec = S.proposte.filter(p => p.chiusa && (p.decisa || 0) > ieri);
     if (!da.length && !dec.length) return '';
     return `<button class="card tap${cls}" data-vaiprop="1"><h2><span class="ttl"><i class="ic">🗳️</i>Proposte</span> <small>${da.length ? `${da.length} da votare ›` : 'vedi ›'}</small></h2>
@@ -444,14 +448,14 @@
   let selFoto = null; // null = non sto scegliendo; altrimenti l'insieme delle foto scelte da salvare
   const tripAperto = () => $('#trip').classList.contains('on');
   function openTrip(id) {
-    tripId = id; tripHtml = ''; selFoto = null;
+    tripId = id; tripHtml = ''; selFoto = null; gruppi = null; statoSalva = null;
     if (!tripAperto()) history.pushState({ schermo: 'viaggio' }, '');
     rTrip(); $('#trip').scrollTop = 0; $('#trip').classList.add('on'); $('#fab').classList.add('via');
     setTimeout(() => riparaAnteprime(fotoDi(id)), 900);
   }
   function closeTrip(daIndietro) {
     if (!tripAperto()) return;
-    selFoto = null; $('#trip').classList.remove('on'); if (!impAperto() && !persAperto()) $('#fab').classList.remove('via');
+    selFoto = null; gruppi = null; statoSalva = null; $('#trip').classList.remove('on'); if (!impAperto() && !persAperto()) $('#fab').classList.remove('via');
     if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
   }
   function rTrip() {
@@ -471,7 +475,8 @@
   function barraSel(fs) {
     const scelte = fs.filter(f => selFoto.has(f.id)), peso = scelte.reduce((n, f) => n + (f.size || 0), 0);
     return `<div class="selbar" id="selBar"><button class="tap" id="selTutte">${scelte.length === fs.length ? 'Nessuna' : 'Tutte'}</button>
-      <button class="btn tap" id="selSalva"${scelte.length ? '' : ' disabled'}>${scelte.length ? `Salva ${scelte.length}${peso ? ' · ' + mb(peso) : ''}` : 'Tocca le foto'}</button></div>`;
+      ${statoSalva ? `<button class="btn tap" id="selSalva"${statoSalva.attesa ? ' disabled' : ''}>${statoSalva.testo}</button>`
+        : `<button class="btn tap" id="selSalva"${scelte.length ? '' : ' disabled'}>${scelte.length ? `Salva ${scelte.length}${peso ? ' · ' + mb(peso) : ''}` : 'Tocca le foto'}</button>`}</div>`;
   }
   function aggiornaSel() {
     const fs = fotoDi(tripId);
@@ -495,15 +500,17 @@
     gruppi.pronti = files;
     setSalva(gruppi.lista.length > 1 ? `📲 Apri Salva (gruppo ${gruppi.i + 1} di ${gruppi.lista.length})` : '📲 Apri Salva', false);
   }
-  function setSalva(testo, attesa) { const b = $('#selSalva'); if (b) { b.textContent = testo; b.disabled = attesa; } }
+  // Lo stato del tasto resta anche se la pagina si ridisegna (un cuore, una foto nuova): così non si può toccare due volte.
+  let statoSalva = null;
+  function setSalva(testo, attesa) { statoSalva = testo == null ? null : { testo, attesa }; const b = $('#selSalva'); if (b && statoSalva) { b.textContent = testo; b.disabled = attesa; } }
   async function salvaScelte() {
     const fs = fotoDi(tripId).filter(f => selFoto.has(f.id)); if (!fs.length) return;
     if (gruppi && gruppi.pronti) {
       try { await navigator.share({ files: gruppi.pronti }); }
       catch (e) { if (e && e.name === 'AbortError') return; if (e && e.name === 'NotAllowedError') return toast('Tocca di nuovo per salvare'); toast('Non sono riuscito ad aprire Salva'); return; }
       gruppi.i++; gruppi.pronti = null;
-      if (gruppi.i >= gruppi.lista.length) { gruppi = null; selFoto = null; tripHtml = ''; rTrip(); return toast('Salvate in galleria 🎉'); }
-      return preparaGruppo().catch(() => { gruppi = null; toast('Una foto non si è scaricata. Riprova.'); aggiornaSel(); });
+      if (gruppi.i >= gruppi.lista.length) { gruppi = null; setSalva(null); selFoto = null; tripHtml = ''; rTrip(); return toast('Salvate in galleria 🎉'); }
+      return preparaGruppo().catch(() => { gruppi = null; setSalva(null); toast('Una foto non si è scaricata. Riprova.'); aggiornaSel(); });
     }
     const prova = new File([new Blob(['x'], { type: 'image/jpeg' })], 'x.jpg', { type: 'image/jpeg' });
     if (iPhone && navigator.canShare && navigator.canShare({ files: [prova] })) {
@@ -511,9 +518,10 @@
       for (const f of fs) { if (cur.length && (cur.length >= 20 || peso + (f.size || 0) > 300 * 1048576)) { lista.push(cur); cur = []; peso = 0; } cur.push(f); peso += f.size || 0; }
       lista.push(cur);
       gruppi = { lista, i: 0, pronti: null, tot: fs.length };
-      return preparaGruppo().catch(() => { gruppi = null; toast('Una foto non si è scaricata. Riprova.'); aggiornaSel(); });
+      return preparaGruppo().catch(() => { gruppi = null; setSalva(null); toast('Una foto non si è scaricata. Riprova.'); aggiornaSel(); });
     }
     // Samsung e computer: un file alla volta nei Download.
+    let falliti = 0;
     for (let k = 0; k < fs.length; k++) {
       const f = fs[k]; setSalva(`Scarico ${k + 1} di ${fs.length}…`, true);
       try {
@@ -521,9 +529,11 @@
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = f.nome || (f.video ? `ricordo-${k + 1}.mp4` : `ricordo-${k + 1}.jpg`);
         document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
         await new Promise(r => setTimeout(r, 400));
-      } catch (e) { toast('Una foto non si è scaricata'); }
+      } catch (e) { falliti++; }
     }
-    selFoto = null; tripHtml = ''; rTrip(); toast(`Fatto: ${fs.length} ${fs.length === 1 ? 'file' : 'file'} nella Galleria, album Download`);
+    setSalva(null); selFoto = null; tripHtml = ''; rTrip();
+    const ok = fs.length - falliti;
+    toast(!falliti ? `Fatto: ${ok} file nella Galleria, album Download` : ok ? `${ok} file nella Galleria, ${falliti} non scaricati: riprova con quelli` : 'Non sono riuscito a scaricarli. Riprova.');
   }
   // I file che si stanno caricando: la copia sul telefono con una barretta che si riempie.
   const upTiles = () => carico && carico.items ? carico.items.map(it => `<span id="up-${it.k}" class="ph up" data-up="${it.k}" style="--p:${it.pct}">${it.url ? `<img src="${it.url}" alt="">` : `<span class="noimg">${it.video ? '🎞️' : '🖼️'}</span>`}<u class="upb"></u></span>`).join('') : '';
@@ -659,7 +669,8 @@
     const totB = list.reduce((a, f) => a + f.size, 0) || 1, fatti = {};
     const items = list.map((file, k) => {
       const video = /^video\//.test(file.type) || /\.(mov|mp4)$/i.test(file.name);
-      return { k, file, video, url: !video && MOSTRABILI.test(file.type) ? URL.createObjectURL(file) : '', pct: 0 };
+      // La copia sul telefono solo per le prime 9: con 60 foto a piena risoluzione l'iPhone finirebbe la memoria.
+      return { k, file, video, url: k < 9 && !video && MOSTRABILI.test(file.type) ? URL.createObjectURL(file) : '', pct: 0 };
     });
     carico = { fatte: 0, tot: list.length, pct: 0, items }; rTrip();
     const avanti = () => {
@@ -673,6 +684,9 @@
       const segna = (b) => { fatti[it.k] = b; it.pct = b / (file.size || 1); const t = document.querySelector(`#tripIn [data-up="${it.k}"]`); if (t) t.style.setProperty('--p', it.pct); avanti(); };
       // L'originale parte subito (è la parte lunga); intanto si prepara l'anteprima.
       const orig = DATI.modo === 'prova' ? Promise.resolve({ url: '', path: '' }) : DATI.carica(`foto/${v}/${id}.${ext}`, file, S.me, segna);
+      // Se qualcosa va storto dopo la partenza, si tolgono i file già caricati (niente file "orfani" che occupano spazio).
+      const caricati = [];
+      try {
       let anteprima = {}, vista = null;
       if (video) anteprima = await fotogramma(file);
       else {
@@ -687,8 +701,8 @@
       const doc = { v, by: S.me, video, nome: (file.name || `ricordo.${ext}`).slice(0, 80), tipoFile: file.type || '', size: file.size, w: anteprima.W || 0, h: anteprima.H || 0, quando, creato: Date.now(), cuori: {} };
       if (video && anteprima.durata) doc.durata = Math.round(anteprima.durata);
       const [p, d] = await Promise.all([
-        anteprima.blob ? DATI.carica(`foto/${v}/${id}_p.jpg`, anteprima.blob, S.me) : null,
-        vista ? DATI.carica(`foto/${v}/${id}_v.jpg`, vista.blob, S.me) : null]);
+        anteprima.blob ? DATI.carica(`foto/${v}/${id}_p.jpg`, anteprima.blob, S.me).then(r => (caricati.push(r.path), r)) : null,
+        vista ? DATI.carica(`foto/${v}/${id}_v.jpg`, vista.blob, S.me).then(r => (caricati.push(r.path), r)) : null]);
       if (p) { doc.prev = p.url; doc.pathP = p.path; if (!video || anteprima.buona) doc.prevOk = true; }
       if (d) { doc.disp = d.url; doc.pathD = d.path; }
       const a = await orig;
@@ -700,6 +714,10 @@
       fresh = await DATI.aggiungi('foto', doc);
       if (it.url) setTimeout(() => URL.revokeObjectURL(it.url), 4000);
       ok++;
+      } catch (e) {
+        orig.then(a => DATI.eliminaFile(a.path)).catch(() => {}); caricati.forEach(x => DATI.eliminaFile(x));
+        throw e;
+      }
     };
     const coda = [...items];
     const lavora = async () => {
@@ -1215,6 +1233,11 @@
       }
       if (!out.length) return toast('Nel file non ci sono turni');
       const giorni = out.map(x => x.d).sort(), da = giorni[0], a = giorni[giorni.length - 1];
+      // Un orario è al massimo qualche settimana di turni: un file più grande è quasi certamente il calendario personale,
+      // che qui entrerebbe con i titoli veri per tutti. Si ferma e si indica il tasto giusto.
+      const vecchio = iso(addDays(TODAY, -7));
+      if (out.length > 62 || (new Date(a + 'T12:00:00') - new Date(da + 'T12:00:00')) / 864e5 > 62 || a < vecchio || comp.getAllSubcomponents('vevent').some(v => v.hasProperty('rrule')))
+        return toast('Questo non sembra un orario di lavoro: per un calendario usa "Importa un file del calendario".');
       const vecchi = S.impegni.filter(x => x.fonte === 'orario:' + S.me && x.d >= da && x.d <= a);
       for (const x of vecchi) await DATI.elimina('impegni', x.id);
       await DATI.molti('impegni', out);
@@ -1235,7 +1258,7 @@
     if (d.viaggio) { openTrip(d.viaggio); if (d.apriFoto) setTimeout(() => openViewer(d.apriFoto), 300); return; }
     if (t.id === 'tripBack') return closeTrip();
     if (d.modviaggio) return sheetViaggio(S.viaggi.find(x => x.id === d.modviaggio));
-    if (t.id === 'selOn') { selFoto = selFoto ? null : new Set(); gruppi = null; tripHtml = ''; return rTrip(); }
+    if (t.id === 'selOn') { selFoto = selFoto ? null : new Set(); gruppi = null; statoSalva = null; tripHtml = ''; return rTrip(); }
     if (t.id === 'selTutte') { const fs = fotoDi(tripId); selFoto = selFoto.size === fs.length ? new Set() : new Set(fs.map(f => f.id)); gruppi = null; return aggiornaSel(); }
     if (t.id === 'selSalva') return salvaScelte();
     if (d.foto && selFoto) { selFoto.has(d.foto) ? selFoto.delete(d.foto) : selFoto.add(d.foto); gruppi = null; if (navigator.vibrate) navigator.vibrate(6); return aggiornaSel(); }
