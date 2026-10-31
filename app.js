@@ -24,7 +24,7 @@
 
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
-  const S = { me: null, persone: {}, impegni: [], note: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {} };
+  const S = { me: null, persone: {}, impegni: [], note: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [] };
   let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = LS.get('noi4-bacheca', 'note');
   const seen = new Set(); let fresh = null; let avviato = false;
 
@@ -32,6 +32,8 @@
   const P = (id) => S.persone[id] || { nome: '?', colore: 'viola' };
   const col = (id) => COLORI[P(id).colore] || 'var(--acc)';
   const ini = (id) => (P(id).nome || '?')[0].toUpperCase();
+  // Il "pallino" di una persona: la sua foto se l'ha messa, altrimenti l'iniziale.
+  const avt = (id) => P(id).foto ? `<img class="fimg" src="${esc(P(id).foto)}" alt="" decoding="async">` : ini(id);
   const IDS = () => Object.keys(S.persone).sort((a, b) => (P(a).ordine || 0) - (P(b).ordine || 0));
   const vista = () => page === 'note' ? 'note-' + seg : page;
   const ri = (i) => seen.has(vista()) ? '' : ` rise" style="--i:${Math.min(i, 6)}`;
@@ -76,6 +78,14 @@
     return cambi.length;
   }
 
+  /* Come ci si va: i mezzi di famiglia (famiglia/mezzi nel database, si scrivono dalle Impostazioni:
+     nel codice pubblico niente nomi) più quelli di tutti. */
+  const TIPI_MEZZO = [['🚗', 'Macchina'], ['🛵', 'Motorino'], ['🏍️', 'Moto'], ['🚐', 'Furgone']];
+  const MEZZI_BASE = [['🚶', 'A piedi'], ['🚌', 'Bus'], ['🚇', 'Metro'], ['🚆', 'Treno'], ['🚋', 'Tram'], ['🚲', 'Bici'], ['🚕', 'Taxi'], ['✈️', 'Aereo']];
+  let mzTipo = '🚗';
+  const mezziTutti = () => [...S.mezzi.map(m => m.e + ' ' + m.n), ...MEZZI_BASE.map(([e, n]) => e + ' ' + n)];
+  const mezziHtml = (sel, attr) => `<div class="mezzi">${mezziTutti().map(m => `<button type="button" class="mz tap${m === sel ? ' on' : ''}" ${attr}="${esc(m)}">${esc(m)}</button>`).join('')}</div>`;
+
   const oraAdesso = () => new Date().toTimeString().slice(0, 5);
   function statoOra(id) {
     const ora = oraAdesso(), oggi = delGiorno(T, e => (e.who || []).includes(id));
@@ -107,8 +117,37 @@
     if (!list.length) return `<div class="empty">${vuoto || 'Nessun impegno. Tocca + per aggiungerne uno.'}</div>`;
     return list.map(e => `<button class="ev tap${e.id === fresh ? ' pop' : ''}" data-ev="${e.id}">
       <div class="h">${e.h ? esc(e.h) : '<small>tutto il giorno</small>'}${e.h && e.fine ? `<small>${esc(e.fine)}</small>` : ''}</div>
-      <div><div class="t">${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
+      <div><div class="t">${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
   }
+
+  /* ---------- Fluidità ----------
+     Ogni dato nuovo ridisegna la pagina: invece di rifare tutto (immagini che lampeggiano, animazioni interrotte,
+     tocchi persi) si cambiano solo le parti diverse, con morphdom. Le entrate ("rise") non si interrompono a metà
+     e alla fine si tolgono, così non ripartono quando si torna sulla scheda. */
+  function fluido(sel) {
+    const el = document.querySelector(sel); if (!el || el._fluido) return; el._fluido = 1;
+    const desc = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    Object.defineProperty(el, 'innerHTML', {
+      get() { return desc.get.call(this); },
+      set(html) {
+        if (html === this._h) return;
+        const primo = this._h == null; this._h = html;
+        if (primo || !window.morphdom) return desc.set.call(this, html);
+        window.morphdom(this, '<div>' + html + '</div>', {
+          childrenOnly: true,
+          onBeforeElUpdated(da, a) {
+            if (da.isEqualNode(a)) return false;
+            if ((da.tagName === 'INPUT' || da.tagName === 'TEXTAREA') && da === document.activeElement) return false;
+            for (const c of ['rise', 'pop']) if (da.classList.contains(c) && !a.classList.contains(c)) a.classList.add(c);
+            return true;
+          }
+        });
+      }
+    });
+  }
+  ['#p-oggi', '#p-cal', '#noteBody', '#p-viaggi', '#p-spesa', '#impIn', '#persIn'].forEach(fluido);
+  // A fine entrata la classe si toglie: così non riparte quando si torna sulla scheda.
+  document.addEventListener('animationend', (ev) => { const t = ev.target; if (t.classList && /^fm-(rise|pop)$/.test(ev.animationName)) t.classList.remove('rise', 'pop'); });
 
   /* ---------- Pagine ---------- */
   function rOggi() {
@@ -118,11 +157,10 @@
     const ids = IDS();
     const yes = ids.filter(i => S.cena[i] === 'si').length;
     $('#p-oggi').innerHTML = `<div class="stack">
-     <div class="card${ri(0)}"><h2><span class="ttl"><i class="ic">🍽️</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
-       <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = S.cena[i] || '?'; return `<button class="cv tap" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${ini(i)}</span><span class="nm">${esc(P(i).nome)}</span></button>`; }).join('')}</div>
+     <div class="card${ri(0)}"><div class="fl">${ids.map(i => { const st = statoOra(i); return `<button class="pr tap" data-persona="${i}" style="--pc:${col(i)}"><span class="pa">${avt(i)}</span><span class="pt"><b>${esc(P(i).nome)}${i === S.me ? ' <small>(tu)</small>' : ''}</b><small class="st-${st.k}">${esc(st.t)}</small></span><span class="chev">›</span></button>`; }).join('')}</div></div>
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🍽️</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
+       <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = S.cena[i] || '?'; return `<button class="cv tap" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${esc(P(i).nome)}</span></button>`; }).join('')}</div>
        <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.</div></div>
-     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">👋</i>La famiglia adesso</span></h2>
-       <div class="fl">${ids.map(i => { const st = statoOra(i); return `<button class="pr tap" data-persona="${i}" style="--pc:${col(i)}"><span class="pa">${ini(i)}</span><span class="pt"><b>${esc(P(i).nome)}${i === S.me ? ' <small>(tu)</small>' : ''}</b><small class="st-${st.k}">${esc(st.t)}</small></span><span class="chev">›</span></button>`; }).join('')}</div></div>
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.')}</div>
      <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.')}</div>
      ${ricordo(ri(3))}
@@ -177,16 +215,22 @@
         const chi = mio ? '' : presi[r.id];
         const link = /^https?:\/\//i.test(r.n || '');
         const nota = r.n ? (link ? `<a class="glink" href="${esc(r.n)}" target="_blank" rel="noopener">Apri il link ›</a>` : `<div class="n">${esc(r.n)}</div>`) : '';
-        const tag = r.idea ? `<div class="n">🤫 Idea segreta di ${r.by === S.me ? 'te' : esc(P(r.by).nome)}</div>` : '';
+        const tag = r.idea ? `<div class="n">🤫 Idea di ${r.by === S.me ? 'te' : esc(P(r.by).nome)}: siete d'accordo?</div>` : '';
         let az = '';
-        if (mio) az = `<button class="gx tap" data-delreg="${r.id}" aria-label="Togli dalla lista">✕</button>`;
+        if (r.idea) {
+          const voti = r.voti || {}, si = Object.keys(voti).filter(k => voti[k] === 'si' && S.persone[k] && k !== r.by), no = Object.keys(voti).filter(k => voti[k] === 'no' && S.persone[k] && k !== r.by);
+          const mioV = r.by === S.me ? 'si' : voti[S.me];
+          const chiV = (l) => l.map(k => `<i style="--pc:${col(k)}">${avt(k)}</i>`).join('');
+          az = r.by === S.me ? `<span class="voti"><span class="vt si on">👍 ${si.length + 1}</span><span class="vt">👎 ${no.length}</span></span>`
+            : `<span class="voti"><button class="vt tap${mioV === 'si' ? ' on si' : ''}" data-voto="si" data-idea="${r.id}" data-per="${p}" aria-label="D'accordo">👍 ${si.length + 1}</button><button class="vt tap${mioV === 'no' ? ' on no' : ''}" data-voto="no" data-idea="${r.id}" data-per="${p}" aria-label="Non d'accordo">👎 ${no.length}</button></span>`;
+        } else if (mio) az = `<button class="gx tap" data-delreg="${r.id}" aria-label="Togli dalla lista">✕</button>`;
         else if (chi && chi !== S.me) az = `<span class="preso">🎁 Lo prende ${esc(P(chi).nome)}</span>`;
         else az = `<button class="prendo tap${chi === S.me ? ' on' : ''}" data-prendo="${r.id}" data-per="${p}">${chi === S.me ? '✓ Lo prendo io' : 'Lo prendo io'}</button>`;
         const via = r.idea && r.by === S.me ? `<button class="gx tap" data-delidea="${r.id}" data-per="${p}" aria-label="Togli l'idea">✕</button>` : '';
-        return `<div class="gi${r.id === fresh ? ' pop' : ''}${chi ? ' taken' : ''}"><div class="gt"><div class="t">${esc(r.x)}</div>${nota}${tag}</div><div class="ga">${az}${via}</div></div>`;
+        return `<div class="gi${r.idea ? ' idea' : ''}${r.id === fresh ? ' pop' : ''}${chi ? ' taken' : ''}"><div class="gt"><div class="t">${esc(r.x)}</div>${nota}${tag}</div><div class="ga">${az}${via}</div></div>`;
       };
       return `<div class="card gift${seen.has(vista()) ? '' : ' rise'}" style="--pc:${col(p)};--i:${Math.min(i, 6)}">
-        <h2><span class="gh"><span class="gav">${ini(p)}</span>${mio ? 'La mia lista' : 'Per ' + esc(P(p).nome)}</span><small>${mio ? tutti.length : `${presiN} su ${tutti.length} presi`}</small></h2>
+        <h2><span class="gh"><span class="gav">${avt(p)}</span>${mio ? 'La mia lista' : 'Per ' + esc(P(p).nome)}</span><small>${mio ? tutti.length : `${presiN} su ${tutti.length} presi`}</small></h2>
         ${tutti.length ? `<div>${tutti.map(riga).join('')}</div>` : `<div class="empty">${mio ? 'Scrivi cosa ti piacerebbe ricevere: un libro, una felpa, un\'esperienza.' : 'Non ha ancora scritto niente. Puoi lasciare un\'idea segreta.'}</div>`}
         ${mio ? `<div class="hint">🤫 Gli altri segnano cosa ti regalano, ma tu non lo vedi: resta una sorpresa.</div>` : ''}
         <button class="link tap" data-addreg="${p}">${mio ? '+ Aggiungi un desiderio' : `+ Idea segreta per ${esc(P(p).nome)}`}</button></div>`;
@@ -213,7 +257,7 @@
     return `${fmt(v.da, { day: 'numeric', month: 'short' })} – ${fmt(v.a, { day: 'numeric', month: 'short', year: 'numeric' })}`;
   }
   const copertina = (v) => S.foto.find(f => f.id === v.cop && f.v === v.id && f.prev) || fotoDi(v.id).find(f => f.prev);
-  const avs = (who) => `<span class="avs">${(who || []).filter(p => S.persone[p]).map(p => `<i style="--pc:${col(p)}">${ini(p)}</i>`).join('')}</span>`;
+  const avs = (who) => `<span class="avs">${(who || []).filter(p => S.persone[p]).map(p => `<i style="--pc:${col(p)}">${avt(p)}</i>`).join('')}</span>`;
   function rViaggi() {
     const tutti = [...S.viaggi].sort((a, b) => (b.da || '').localeCompare(a.da || ''));
     const conta = (k) => tutti.filter(v => tipoDi(v) === k).length;
@@ -281,7 +325,7 @@
     $('#persIn').style.setProperty('--pc', col(id)); // il colore della persona (non nello stile degli elementi animati: ne hanno già uno)
     $('#persIn').innerHTML = `
      <div class="imp-top"><button class="back tap" id="persBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Indietro</button></div>
-     <div class="phero${sr(0)}"><span class="pav">${ini(id)}</span><div><h1>${esc(p.nome)}${mio ? ' <small>(tu)</small>' : ''}</h1>
+     <div class="phero${sr(0)}"><span class="pav">${avt(id)}</span><div><h1>${esc(p.nome)}${mio ? ' <small>(tu)</small>' : ''}</h1>
        <div class="riass">${pezzi.map(x => `<span>${esc(x)}</span>`).join('')}</div></div></div>
      <div class="sec${sr(1)}">Prossimi impegni</div>
      <div class="card${sr(1)}">${per.length ? per.slice(0, 5).map(([d, l]) => `<div class="pg"><small>${d === T ? 'Oggi' : d === dom ? 'Domani' : fmt(d, { weekday: 'long', day: 'numeric', month: 'short' })}</small>${evList(l)}</div>`).join('') : '<div class="empty">Niente nei prossimi 14 giorni.</div>'}</div>
@@ -333,6 +377,27 @@
      <button class="btn tap">${v.id ? 'Salva' : 'Crea il ricordo'}</button>
      ${v.id && v.creatoDa === S.me ? (altrui ? '<div class="empty">Si può eliminare solo quando dentro ci sono soltanto le tue foto e i tuoi video.</div>' : `<button type="button" class="btn bad tap" data-delviaggio="${v.id}">Elimina il ricordo${fs.length ? ` e i ${fs.length} file` : ''}</button>`) : ''}
     </form>`, () => { if (!v.id) setTimeout(() => $('#viT').focus(), 380); });
+  }
+
+  // Foto profilo: ritaglio quadrato 512 px (piccola, si carica subito), nello spazio foto in profili/<persona>/.
+  async function caricaAvatar(file) {
+    if (!DATI.fotoPronte()) return toast('Lo spazio delle foto non è ancora pronto.');
+    let im;
+    try { im = await apriImmagine(file); } catch (e) { return toast('Questa foto non si apre: provane un\'altra (JPEG o PNG).'); }
+    toast('Carico la foto…');
+    try {
+      const w = im.im.naturalWidth, h = im.im.naturalHeight, lato = Math.min(w, h), c = document.createElement('canvas');
+      c.width = c.height = Math.min(512, lato);
+      const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+      x.drawImage(im.im, (w - lato) / 2, (h - lato) / 2, lato, lato, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(im.u);
+      const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', .86));
+      const old = P(S.me).fotoPath, path = `profili/${S.me}/${rid()}.jpg`;
+      const r = await DATI.carica(path, blob, S.me);
+      await DATI.imposta('persone', S.me, { foto: r.url, fotoPath: path });
+      if (old && old !== path) DATI.eliminaFile(old);
+      toast('Foto messa: la vedono tutti');
+    } catch (e) { console.error(e); toast('Non sono riuscito a caricarla. Riprova tra poco.'); }
   }
 
   /* Caricare foto e video: il file ORIGINALE va nello spazio foto così com'è (qualità piena);
@@ -539,7 +604,7 @@
     if (nuovoGiorno) { TODAY = new Date(); TODAY.setHours(12, 0, 0, 0); T = iso(TODAY); ascoltaCena(); }
     document.documentElement.style.setProperty('--me', col(S.me));
     $('#hello').innerHTML = `${saluto()}, <span>${esc(P(S.me).nome)}</span>`;
-    $('#meBtn').innerHTML = ini(S.me) + GEAR;
+    $('#meBtn').innerHTML = avt(S.me) + GEAR;
     $('#today').textContent = TODAY.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
     banner();
     const a = document.activeElement && document.activeElement.id;
@@ -616,7 +681,7 @@
       y0 = null;
     });
   })();
-  const pickHtml = (sel) => `<div class="pick">${IDS().map(i => `<button type="button" class="pk tap${sel.includes(i) ? ' on' : ''}" data-pk="${i}" style="--pc:${col(i)}"><i>${ini(i)}</i>${esc(P(i).nome)}</button>`).join('')}</div>`;
+  const pickHtml = (sel) => `<div class="pick">${IDS().map(i => `<button type="button" class="pk tap${sel.includes(i) ? ' on' : ''}" data-pk="${i}" style="--pc:${col(i)}"><i>${avt(i)}</i>${esc(P(i).nome)}</button>`).join('')}</div>`;
 
   function sheetEvento(e) {
     e = e || { t: '', d: page === 'cal' ? selDay : T, h: '18:00', fine: '', who: [S.me], n: '', ripeti: '' };
@@ -626,6 +691,7 @@
      <label class="sw">Tutto il giorno<input type="checkbox" id="evAll"${e.h ? '' : ' checked'}></label>
      <div class="row2" id="evOre"${e.h ? '' : ' hidden'}><label>Dalle<input id="evH" type="time" value="${esc(e.h || '18:00')}"></label><label>Alle (facoltativo)<input id="evF" type="time" value="${esc(e.fine || '')}"></label></div>
      <label>Chi c'è</label>${pickHtml(e.who || [S.me])}
+     <label>Come ci andate (facoltativo)</label>${mezziHtml(e.mezzo || '', 'data-mzf')}
      <label>Nota<input id="evN" maxlength="200" value="${esc(e.n)}" placeholder="Facoltativa"></label>
      <button class="btn tap">${e.id ? 'Salva le modifiche' : 'Salva impegno'}</button></form>`, () => { if (!e.id) setTimeout(() => $('#evT').focus(), 380); });
   }
@@ -634,6 +700,7 @@
     openSheet(`<h3>${esc(e.t)}</h3>
       <div>${fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })}${e.h ? ` · ${esc(e.h)}${e.fine ? '–' + esc(e.fine) : ''}` : ' · tutto il giorno'}${e.ripeti ? ` · ${RIPETI[e.ripeti].toLowerCase()}` : ''}</div>
       ${e.n ? `<div class="muted">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div><div class="src">${fonte}</div>
+      ${e.fonte === 'import:' + S.me || !(e.fonte || '').startsWith('import:') ? `<div class="vis" data-mze="${e.id}"><label>Come ci andate</label>${mezziHtml(e.mezzo || '', 'data-mzd')}</div>` : ''}
       ${mioCal(e) ? `<div class="vis" data-vise="${e.id}"><label>Gli altri vedono</label>${segHtml('vis', [['mostra', '👁️ Tutto'], ['nascondi', '🔒 Solo occupato']], e.privato ? 'nascondi' : 'mostra')}
         <div class="empty" id="visPerche">${regolaCal(e.t, regole()).perche} La scelta vale anche per gli altri impegni «${esc(e.t)}».</div></div>` : ''}
       ${modificabile(e) ? `<div class="row2"><button class="btn ghost tap" data-modifica="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">Elimina</button></div>` : `<div class="empty">Si cambia dal calendario di chi l'ha scritto.</div>`}`);
@@ -735,8 +802,9 @@
     $('#impIn').innerHTML = `
      <div class="imp-top"><button class="back tap" id="impBack" aria-label="Indietro"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Indietro</button></div>
      <h1 class="hello${sr(0)}">Impostazioni</h1>
-     <div class="card prof${impNuova ? ' rise' : ''}" style="--pc:${col(S.me)};--i:1"><span class="pav">${ini(S.me)}</span><div><b>${esc(me.nome)}</b><div class="muted">Il tuo colore in famiglia: ${NOMI_COLORI[me.colore] || 'viola'}</div></div>
-       <div class="fam">${IDS().map(i => `<button class="tap" data-persona="${i}" aria-label="${esc(P(i).nome)}"><i style="--pc:${col(i)}">${ini(i)}</i></button>`).join('')}</div></div>
+     <div class="card prof${impNuova ? ' rise' : ''}" style="--pc:${col(S.me)};--i:1"><label class="pav pfoto tap" aria-label="Cambia la foto">${avt(S.me)}<span class="cam">📷</span><input type="file" id="avIn" accept="image/*" hidden></label><div><b>${esc(me.nome)}</b><div class="muted">Il tuo colore in famiglia: ${NOMI_COLORI[me.colore] || 'viola'}</div>
+       <div class="muted">${me.foto ? 'Tocca la foto per cambiarla · <button class="link tap" id="avVia">Togli</button>' : 'Tocca il cerchio per mettere una tua foto'}</div></div>
+       <div class="fam">${IDS().map(i => `<button class="tap" data-persona="${i}" aria-label="${esc(P(i).nome)}"><i style="--pc:${col(i)}">${avt(i)}</i></button>`).join('')}</div></div>
 
      <div class="sec${sr(2)}">Notifiche</div>
      <div class="card${sr(2)}">
@@ -748,6 +816,11 @@
      <div class="sec${sr(3)}">Aspetto</div>
      <div class="card${sr(3)}">${segHtml('tema', [['auto', 'Automatico'], ['chiaro', 'Chiaro ☀️'], ['scuro', 'Scuro 🌙']], tema)}
        <div class="empty">Automatico segue il telefono. Vale solo su questo telefono.</div></div>
+
+     <div class="sec${sr(4)}">I nostri mezzi</div>
+     <div class="card${sr(4)}"><div class="parole">${S.mezzi.map((m, i) => `<button type="button" class="pw tap" data-togmz="${i}">${esc(m.e)} ${esc(m.n)} <b>✕</b></button>`).join('') || '<span class="empty">Ancora nessuno: aggiungete le vostre macchine e i motorini.</span>'}</div>
+       <form class="addm" id="fMz">${segHtml('mzt', TIPI_MEZZO.map(([e, n]) => [e, `<span class="mze" title="${n}">${e}</span>`]), mzTipo)}<div class="addp"><input id="mzN" maxlength="30" placeholder="Es. Macchina di…"><button class="btn tap" aria-label="Aggiungi">+</button></div></form>
+       <div class="empty">Negli impegni si sceglie come ci si va: questi mezzi, più a piedi, bus, metro, treno…</div></div>
 
      <div class="sec${sr(4)}">All'apertura</div>
      <div class="card${sr(4)}">${segHtml('apri', SCHEDE.map(x => [x, NOMI_SCHEDE[x]]), apri)}
@@ -871,6 +944,30 @@
     }
     if (t.id === 'meBtn') return openImp();
     if (t.id === 'calLink') return sheetCal();
+    if (d.voto) {
+      const idea = ((S.sorprese[d.per] || {}).idee || {})[d.idea] || {}, prima = (idea.voti || {})[S.me];
+      const v = prima === d.voto ? '' : d.voto;
+      if (v === 'si') festa(t);
+      return DATI.imposta('sorprese', d.per, { idee: { [d.idea]: { voti: { [S.me]: v } } } }).catch(sbaglio);
+    }
+    if (d.mzf != null) { const on = !t.classList.contains('on'); t.parentElement.querySelectorAll('.mz').forEach(b => b.classList.remove('on')); t.classList.toggle('on', on); return; }
+    if (d.mzd != null) {
+      const id = t.closest('[data-mze]').dataset.mze, on = !t.classList.contains('on');
+      t.parentElement.querySelectorAll('.mz').forEach(b => b.classList.remove('on')); t.classList.toggle('on', on);
+      return DATI.aggiorna('impegni', id, { mezzo: on ? d.mzd : '' }).then(() => toast(on ? 'Mezzo segnato' : 'Mezzo tolto')).catch(sbaglio);
+    }
+    if (d.mzt) { mzTipo = d.mzt; segSet(t.parentElement, TIPI_MEZZO.findIndex(([e]) => e === d.mzt)); return; }
+    if (d.togmz != null) {
+      if (!t.dataset.sicuro) { t.dataset.sicuro = 1; t.innerHTML = 'Tocca ancora per togliere'; return; }
+      const l = S.mezzi.filter((_, i) => i !== +d.togmz);
+      return DATI.imposta('famiglia', 'mezzi', { lista: l }).catch(sbaglio);
+    }
+    if (t.id === 'avVia') {
+      const old = P(S.me).fotoPath;
+      await DATI.imposta('persone', S.me, { foto: '', fotoPath: '' }).catch(sbaglio);
+      if (old) DATI.eliminaFile(old);
+      return toast('Foto tolta');
+    }
     if (d.persona) return openPersona(d.persona);
     if (t.id === 'persBack') return closePersona();
     if (d.listareg) {
@@ -994,6 +1091,7 @@
     if (t.dataset && t.dataset.pref) { const k = t.dataset.pref, v = t.checked; setTimeout(() => DATI.imposta('persone', S.me, { notifiche: Object.assign({}, P(S.me).notifiche, { [k]: v }) }).catch(sbaglio), 320); }
     if (t.id === 'icsFile' && t.files[0]) importaIcs(t.files[0]);
     if (t.id === 'fotoIn' && t.files.length) caricaFoto(t.files);
+    if (t.id === 'avIn' && t.files[0]) caricaAvatar(t.files[0]);
   });
   document.addEventListener('submit', async (ev) => {
     ev.preventDefault(); const f = ev.target;
@@ -1001,6 +1099,11 @@
       $('#lgErr').textContent = '';
       try { await DATI.login($('#lgEmail').value, $('#lgPass').value); }
       catch (e) { $('#lgErr').textContent = 'Email o password non corrette.'; }
+    } else if (f.id === 'fMz') {
+      const n = $('#mzN').value.trim(); if (!n) return toast('Scrivi il nome del mezzo');
+      const m = { e: mzTipo, n: n.charAt(0).toUpperCase() + n.slice(1) };
+      if (S.mezzi.some(x => x.e === m.e && x.n.toLowerCase() === m.n.toLowerCase())) return toast('C\'è già');
+      try { await DATI.imposta('famiglia', 'mezzi', { lista: [...S.mezzi, m] }); $('#mzN') && ($('#mzN').value = ''); toast(`${m.e} ${m.n} aggiunto`); } catch (er) { sbaglio(er); }
     } else if (f.classList.contains('addp')) {
       const w = chiave(f.querySelector('input').value), k = f.dataset.lista; if (!w) return;
       const pr = S.priv.parole || PAROLE0, altra = k === 'nascondi' ? 'mostra' : 'nascondi';
@@ -1015,7 +1118,8 @@
     } else if (f.id === 'fEv') {
       const who = [...f.querySelectorAll('.pk.on')].map(b => b.dataset.pk); if (!who.length) return toast('Scegli almeno una persona');
       const all = $('#evAll').checked;
-      const e = { t: $('#evT').value.trim(), d: $('#evD').value, h: all ? '' : $('#evH').value, fine: all ? '' : $('#evF').value, who, n: $('#evN').value.trim(), ripeti: $('#evR').value };
+      const mzOn = f.querySelector('.mz.on');
+      const e = { t: $('#evT').value.trim(), d: $('#evD').value, h: all ? '' : $('#evH').value, fine: all ? '' : $('#evF').value, who, n: $('#evN').value.trim(), ripeti: $('#evR').value, mezzo: mzOn ? mzOn.dataset.mzf : '' };
       closeSheet();
       if (page === 'cal') { selDay = e.d; weekStart = inizioSettimana(new Date(e.d + 'T12:00:00')); }
       try {
@@ -1089,6 +1193,7 @@
       avviato = true;
       DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); render(); });
       DATI.ascolta('regali', l => { S.regali = l; render(); });
+      DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); });
       DATI.ascolta('viaggi', l => { S.viaggi = l; render(); });
       DATI.ascolta('foto', l => { S.foto = l; render(); });
       DATI.ascolta('impegni', l => { S.impRaw = l; mappaImpegni(); render(); });
