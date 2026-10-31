@@ -1249,7 +1249,8 @@
   // Ogni materia il suo colore, sempre lo stesso (in ordine di come appare nell'orario).
   function coloriMat(s) {
     const m = [...new Set([...(s.orario || [])].sort((a, b) => a.g - b.g || a.o - b.o).map(x => x.m))];
-    return Object.fromEntries(m.map((x, i) => [x, `hsl(${Math.round(210 + i * 360 / Math.max(1, m.length)) % 360} 62% 56%)`]));
+    // Mai il rosso (è il colore di Sasha): le tinte girano tra l'arancio (28) e il magenta (335), partendo dal blu.
+    return Object.fromEntries(m.map((x, i) => [x, `hsl(${28 + Math.round(182 + i * 307 / Math.max(1, m.length)) % 307} 62% 56%)`]));
   }
   // Cosa vede una persona nella sua sezione: la sua scuola, o la copia di quella di qualcun altro.
   function moduli(id) {
