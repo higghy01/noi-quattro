@@ -99,23 +99,6 @@ def main():
                 testo = " · ".join(righe) + (f" e altri {len(lista) - 4}" if len(lista) > 4 else "")
                 manda(p, "riepilogo", f"Domani: {len(lista)} impegni in famiglia", testo, f"riep|{oggi}|{p}")
 
-    # Cena: ognuno all'ora che ha scelto (di solito le 17).
-    pomeriggio = [p for p in persone if ora.hour == ora_di(p, "oraCena", 17)]
-    if pomeriggio:
-        cena = (db.collection("cena").document(oggi).get().to_dict() or {})
-        for p in pomeriggio:
-            if cena.get(p) not in ("si", "no"):
-                manda(p, "cena", "A cena stasera?", "Rispondi con un tocco nella scheda Oggi.", f"cena|{oggi}|{p}")
-
-    # Note nuove in evidenza.
-    for d in db.collection("note").where("creato", ">", recente).stream():
-        n = d.to_dict()
-        if n.get("pin"):
-            for p in persone:
-                if p != n.get("by"):
-                    manda(p, "note", f"Nota di {nome(n.get('by'))}", n.get("x", "")[:120], f"nota|{d.id}|{p}")
-
-    # Due impegni della stessa persona alla stessa ora (oggi, domani, dopodomani: "inviati" ricorda per 2 giorni).
     def minuti(h):
         return int(h[:2]) * 60 + int(h[3:5])
 
@@ -128,6 +111,45 @@ def main():
         a = minuti(e["h"])
         b = minuti(e["fine"]) if e.get("fine") else a + 60
         return a, (b if b > a else 24 * 60)
+    # Cena automatica (stessa regola dell'app, app.js fuoriCena): chi è impegnato tra le 20 e le 21 non è a cena.
+    # Un turno di lavoro dura fino all'arrivo a casa (fine + il tempo di strada scelto, di base 20 minuti).
+    # Non contano gli impegni con tutta la famiglia né quelli di tutto il giorno.
+    def fuori_cena(p):
+        cena0, cena1 = 20 * 60, 21 * 60
+        strada = persone.get(p, {}).get("strada")
+        strada = strada if strada in (0, 10, 20, 30, 45) else 20
+        for e in impegni:
+            who = e.get("who") or []
+            if p not in who or not e.get("h") or not capita(e, oggi):
+                continue
+            if e.get("fonte") == f"orario:{p}":
+                if e.get("fine") and e["fine"] > e["h"] and minuti(e["fine"]) + strada > cena0 and minuti(e["h"]) < cena1:
+                    return True
+                continue
+            if str(e.get("fonte", "")).startswith("orario:") or (len(who) >= len(persone) > 1):
+                continue
+            a, b = intervallo(e, oggi)
+            if a < cena1 and b > cena0:
+                return True
+        return False
+
+    # Cena: ognuno all'ora che ha scelto (di solito le 17). Chi risulta già fuori (turno o impegno a cena) non serve chiederlo.
+    pomeriggio = [p for p in persone if ora.hour == ora_di(p, "oraCena", 17)]
+    if pomeriggio:
+        cena = (db.collection("cena").document(oggi).get().to_dict() or {})
+        for p in pomeriggio:
+            if cena.get(p) not in ("si", "no") and not fuori_cena(p):
+                manda(p, "cena", "A cena stasera?", "Rispondi con un tocco nella scheda Oggi.", f"cena|{oggi}|{p}")
+
+    # Note nuove in evidenza.
+    for d in db.collection("note").where("creato", ">", recente).stream():
+        n = d.to_dict()
+        if n.get("pin"):
+            for p in persone:
+                if p != n.get("by"):
+                    manda(p, "note", f"Nota di {nome(n.get('by'))}", n.get("x", "")[:120], f"nota|{d.id}|{p}")
+
+    # Due impegni della stessa persona alla stessa ora (oggi, domani, dopodomani: "inviati" ricorda per 2 giorni).
     for k in range(3):
         giorno = (ora.date() + dt.timedelta(days=k)).isoformat()
         del_giorno = [e for e in impegni if e.get("h") and capita(e, giorno)]

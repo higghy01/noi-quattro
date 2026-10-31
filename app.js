@@ -97,16 +97,48 @@
   const mezziHtml = (sel, attr) => `<div class="mezzi">${mezziTutti().map(m => `<button type="button" class="mz tap${m === sel ? ' on' : ''}" ${attr}="${esc(m)}">${esc(m)}</button>`).join('')}</div>`;
 
   const oraAdesso = () => new Date().toTimeString().slice(0, 5);
+  /* Turni di lavoro e cena automatica (Sasha, 31/10/2026): dall'orario di lavoro si sa a che ora uno torna a casa,
+     e chi è impegnato all'ora di cena risulta "fuori" da solo, senza scrivere niente. Il sì/no toccato a mano vince.
+     Il tempo per tornare a casa lo sceglie ognuno nelle Impostazioni (di base 20 minuti). */
+  const CENA = [20 * 60, 21 * 60]; // l'ora di cena: chi è impegnato in questa fascia non c'è
+  const STRADE = [0, 10, 20, 30, 45];
+  const strada = (id) => { const v = (P(id) || {}).strada; return STRADE.includes(v) ? v : 20; };
+  const hm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const eTurno = (e) => /^orario:/.test(e.fonte || '');
+  // L'ultimo turno di lavoro del giorno (con l'ora di fine) e l'ora in cui si arriva a casa.
+  function rientro(id, d) {
+    const t = delGiorno(d || T, e => eTurno(e) && e.fonte === 'orario:' + id && e.h && e.fine && e.fine > e.h).pop();
+    if (!t) return null;
+    const m = minuti(t.fine) + strada(id);
+    return { turno: t, m, ora: hm(Math.min(m, 24 * 60 - 1)) };
+  }
+  // Perché uno non è a cena stasera (o null): un turno che finisce tardi, o un impegno all'ora di cena.
+  // Non contano gli impegni con tutta la famiglia (es. "Cena tutti insieme") né quelli di tutto il giorno.
+  function fuoriCena(id, d) {
+    d = d || T;
+    const r = rientro(id, d);
+    if (r && r.m > CENA[0] && minuti(r.turno.h) < CENA[1]) return { perche: `al lavoro, a casa verso le ${r.ora}` };
+    const tutti = IDS().length;
+    const e = delGiorno(d, x => !eTurno(x) && x.h && (x.who || []).includes(id) && !((x.who || []).length >= tutti && tutti > 1))
+      .find(x => { const [a, b] = intervallo(x, d); return a < CENA[1] && b > CENA[0]; });
+    return e ? { perche: `alle ${e.h} ${e.t}` } : null;
+  }
+  // Il sì/no per la cena: quello toccato a mano, altrimenti "no" da solo se è impegnato all'ora di cena.
+  const cenaDi = (id) => S.cena[id] === 'si' || S.cena[id] === 'no' ? { v: S.cena[id] } : fuoriCena(id) ? { v: 'no', auto: fuoriCena(id) } : { v: '?' };
   function statoOra(id) {
     const ora = oraAdesso(), oggi = delGiorno(T, e => (e.who || []).includes(id));
     const ades = oggi.find(e => e.h && e.h <= ora && e.fine && e.fine > ora);
     // t = frase intera (pagina della persona), c = versione corta (sotto il cerchio in Oggi)
+    const r = rientro(id);
+    if (ades && r && ades.id === r.turno.id) return { t: `Al lavoro fino alle ${ades.fine}, a casa verso le ${r.ora}`, c: `Lavoro, 🏠 ${r.ora}`, k: 'occ' };
     if (ades) return { t: `Ora: ${ades.t}, fino alle ${ades.fine}`, c: `Ora · ${ades.t}`, k: 'occ' };
+    if (r && r.turno.fine <= ora && hm(r.m) > ora && r.m < 24 * 60) return { t: `Sta tornando dal lavoro, a casa verso le ${r.ora}`, c: `In arrivo · ${r.ora}`, k: 'dopo' };
     const pros = oggi.find(e => e.h && e.h > ora);
+    if (pros && r && pros.id === r.turno.id) return { t: `Alle ${pros.h} al lavoro, a casa verso le ${r.ora}`, c: `${pros.h} · lavoro`, k: 'dopo' };
     if (pros) return { t: `Alle ${pros.h}: ${pros.t}`, c: `${pros.h} · ${pros.t}`, k: 'dopo' };
     const tutto = oggi.find(e => !e.h);
     if (tutto) return { t: `Oggi: ${tutto.t}`, c: tutto.t, k: 'dopo' };
-    const cena = S.cena[id] === 'si' ? 'A cena 🍝' : S.cena[id] === 'no' ? 'Fuori a cena' : null;
+    const cv = cenaDi(id).v, cena = cv === 'si' ? 'A cena 🍝' : cv === 'no' ? 'Fuori a cena' : null;
     return oggi.length ? { t: 'Impegni di oggi finiti', c: cena || 'Finito per oggi', k: 'lib' } : { t: 'Oggi niente in programma', c: cena || 'Giornata libera', k: 'lib' };
   }
 
@@ -167,7 +199,7 @@
     if (!list.length) return `<div class="empty">${vuoto || 'Nessun impegno. Tocca + per aggiungerne uno.'}</div>`;
     return list.map(e => `<button class="ev tap${e.id === fresh ? ' pop' : ''}" data-ev="${e.id}">
       <div class="h">${e.h ? esc(e.h) : '<small>tutto il<br>giorno</small>'}${e.h && e.fine ? `<small>${esc(e.fine)}</small>` : ''}</div>
-      <div><div class="t">${e.imp ? '⭐ ' : ''}${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${piuGiorni(e) ? `<div class="n">🗓️ ${durataGiorni(e)}</div>` : ''}${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}${giorno && (e.who || []).includes(S.me) ? accavallati(e, giorno, S.me).slice(0, 1).map(x => `<div class="acc">⚠️ Alla stessa ora hai «${esc(x.t)}»</div>`).join('') : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
+      <div><div class="t">${e.imp ? '⭐ ' : ''}${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${piuGiorni(e) ? `<div class="n">🗓️ ${durataGiorni(e)}</div>` : ''}${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${eTurno(e) && e.h && e.fine && e.fine > e.h ? `<div class="n">🏠 A casa verso le ${hm(Math.min(minuti(e.fine) + strada((e.who || [])[0]), 24 * 60 - 1))}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}${giorno && (e.who || []).includes(S.me) ? accavallati(e, giorno, S.me).slice(0, 1).map(x => `<div class="acc">⚠️ Alla stessa ora hai «${esc(x.t)}»</div>`).join('') : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
   }
 
   /* ---------- Fluidità ----------
@@ -210,11 +242,16 @@
     const left = S.spesa.filter(x => !x.done).length;
     const ids = IDS();
     const yes = ids.filter(i => S.cena[i] === 'si').length;
+    const cene = Object.fromEntries(ids.map(i => [i, cenaDi(i)]));
+    const perche = ids.filter(i => cene[i].auto).map(i => `<span style="--pc:${col(i)}">🌙 <b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b> · ${esc(cene[i].auto.perche)}</span>`);
+    const adesso = minuti(oraAdesso());
+    const rientri = ids.filter(i => !cene[i].auto && rientro(i) && rientro(i).m > adesso).map(i => `<span style="--pc:${col(i)}">🏠 <b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b> · a casa verso le ${rientro(i).ora}</span>`);
     $('#p-oggi').innerHTML = `<div class="stack">
      <div class="storie${ri(0)}" role="list">${ids.map((i, k) => { const st = statoOra(i); return `<button class="st tap" role="listitem" data-persona="${i}" style="--pc:${col(i)};--k:${k}" aria-label="${esc(P(i).nome)}: ${esc(st.t)}"><span class="ring ${st.k}"><span>${avt(i)}</span></span><b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b><small>${esc(st.c)}</small></button>`; }).join('')}</div>
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🍽️</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
-       <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = S.cena[i] || '?'; return `<button class="cv tap" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${i === S.me ? 'Tu' : esc(P(i).nome)}</span></button>`; }).join('')}</div>
-       <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.</div></div>
+       <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = cene[i].v; return `<button class="cv tap${cene[i].auto ? ' auto' : ''}" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}${cene[i].auto ? ', ' + esc(cene[i].auto.perche) : ''}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${i === S.me ? 'Tu' : esc(P(i).nome)}</span></button>`; }).join('')}</div>
+       ${perche.length || rientri.length ? `<div class="perche">${perche.join('')}${rientri.join('')}</div>` : ''}
+       <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.${perche.length ? ' Chi è impegnato all\'ora di cena risulta fuori da solo.' : ''}</div></div>
      ${propOggi(ri(1))}
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.', T)}</div>
      <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.', tom)}</div>
@@ -432,7 +469,8 @@
     const c = S.cena[id];
     const pezzi = [statoOra(id).t,
       sett === 0 ? 'Settimana tranquilla' : sett >= 6 ? `Settimana piena: ${sett} impegni` : `${sett} ${sett === 1 ? 'impegno' : 'impegni'} in 7 giorni`,
-      c === 'si' ? 'Stasera a cena 🍝' : c === 'no' ? 'Stasera non a cena' : 'Per la cena non ha ancora risposto'];
+      c === 'si' ? 'Stasera a cena 🍝' : c === 'no' ? 'Stasera non a cena' : fuoriCena(id) ? `Stasera non a cena · ${fuoriCena(id).perche}`
+        : rientro(id) ? `A casa verso le ${rientro(id).ora}, in tempo per cena` : 'Per la cena non ha ancora risposto'];
     const prop = S.proposte.filter(p => p.by === id).sort((a, b) => (b.creato || 0) - (a.creato || 0)).slice(0, 3);
     const desideri = S.regali.filter(r => r.per === id).sort((a, b) => (b.creato || 0) - (a.creato || 0));
     const ricordi = S.viaggi.filter(v => suoi(v)).sort((a, b) => (b.da || '').localeCompare(a.da || ''));
@@ -1132,6 +1170,9 @@
        <button class="btn ghost tap" id="paroleBtn">Parole automatiche e scelte</button>
        <div class="empty">Oppure, una volta sola:</div>
        <label class="btn ghost tap filebtn">Importa un file del calendario (.ics)<input type="file" id="icsFile" accept=".ics,text/calendar" hidden></label>
+      <label>Dal lavoro a casa ci metto</label>
+       ${segHtml('strada', STRADE.map(m => [String(m), m ? m + ' min' : 'Subito']), String(strada(S.me)))}
+       <div class="empty">Serve per dire alla famiglia a che ora torni e se ci sei a cena.</div>
       <label class="btn ghost tap filebtn">💼 Importa l'orario di lavoro (.ics)<input type="file" id="orarioFile" accept=".ics,text/calendar" hidden></label>
       <div class="empty">L'orario cambia solo i turni dei giorni che contiene: il resto dei tuoi impegni non si tocca.</div>
        <div class="empty">Entrano i tuoi impegni dei prossimi 12 mesi. Se lo rifai, quelli importati prima vengono sostituiti.</div>
@@ -1349,6 +1390,12 @@
       $('#visPerche') && ($('#visPerche').textContent = `L'hai scelto tu. Vale anche per gli altri impegni «${e.t}».`);
       return toast(d.vis === 'mostra' ? 'Gli altri lo vedranno per intero' : 'Gli altri vedranno solo "Occupato"');
     }
+    if (d.strada != null && t.closest('.seg')) {
+      const m = +d.strada; segSet(t.parentElement, STRADE.indexOf(m));
+      S.persone[S.me] = Object.assign({}, P(S.me), { strada: m }); render();
+      try { await DATI.imposta('persone', S.me, { strada: m }); } catch (er) { return sbaglio(er); }
+      return toast(m ? `Ok: ${m} minuti dal lavoro a casa` : 'Ok: a casa appena finisci');
+    }
     if (d.privg) {
       segSet(t.parentElement, d.privg === 'occupato' ? 1 : 0);
       S.persone[S.me] = Object.assign({}, P(S.me), { privacy: d.privg });
@@ -1418,7 +1465,7 @@
     if (d.pk) return t.classList.toggle('on');
     if (d.cena) {
       if (d.cena !== S.me) return openPersona(d.cena);
-      const o = ['si', 'no', '?']; const v = o[(o.indexOf(S.cena[S.me] || '?') + 1) % 3];
+      const o = ['si', 'no', '?']; const v = o[(o.indexOf(S.cena[S.me] || '?') + 1) % 3]; // dal "fuori" automatico si passa a sì, poi no, poi di nuovo automatico
       S.cena[S.me] = v; rOggi(); const n = document.querySelector(`[data-cena="${S.me}"]`); n && n.classList.add('bump');
       if (v === 'si' && IDS().every(i => S.cena[i] === 'si')) { festa(n); toast('Stasera tutti a tavola! 🍝'); }
       return DATI.imposta('cena', T, { [S.me]: v }).catch(sbaglio);
