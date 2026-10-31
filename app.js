@@ -38,6 +38,56 @@
   const saluto = () => { const h = new Date().getHours(); return h < 5 ? 'Buonanotte' : h < 13 ? 'Buongiorno' : h < 18 ? 'Buon pomeriggio' : 'Buonasera'; };
   const modificabile = (e) => e.fonte === 'app' || e.fonte === 'import:' + S.me;
 
+  /* Cosa vedono gli altri dei MIEI impegni del calendario: prima le scelte fatte a mano (per titolo),
+     poi le parole automatiche (prima quelle da nascondere), poi la regola generale.
+     Le stesse regole le applica il programma su GitHub (scripts/sincronizza_calendari.py): tenerle uguali. */
+  const PAROLE0 = {
+    nascondi: ['medico', 'dottor', 'dentista', 'visita', 'analisi', 'esami', 'prelievo', 'ospedale', 'terapia', 'psicolog', 'fisioterap', 'banca', 'avvocato', 'notaio', 'commercialista', 'colloquio', 'privato'],
+    mostra: ['cena', 'pranzo', 'colazione', 'aperitivo', 'compleanno', 'famiglia', 'festa', 'natale', 'pasqua', 'vacanza', 'viaggio', 'ferie']
+  };
+  const chiave = (t) => String(t || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  const reParola = (w) => new RegExp('(^|[^\\p{L}\\p{N}])' + chiave(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u');
+  const regole = (x) => Object.assign({ scelte: S.priv.scelte || {}, parole: S.priv.parole || PAROLE0, gen: P(S.me).privacy === 'occupato' ? 'occupato' : 'tutto' }, x || {});
+  function regolaCal(t, rg) {
+    const k = chiave(t);
+    if (rg.scelte[k]) return { vis: rg.scelte[k] === 'mostra', perche: 'L\'hai scelto tu.' };
+    const nas = (rg.parole.nascondi || []).find(w => w && reParola(w).test(k));
+    if (nas) return { vis: false, perche: `Automatico: contiene «${nas}».` };
+    const mos = (rg.parole.mostra || []).find(w => w && reParola(w).test(k));
+    if (mos) return { vis: true, perche: `Automatico: contiene «${mos}».` };
+    return { vis: rg.gen !== 'occupato', perche: 'Automatico: segue la regola generale.' };
+  }
+  const mioCal = (e) => e.fonte === 'calendario:' + S.me;
+  // I miei impegni nascosti: io vedo il titolo vero (sta nella mia parte privata), gli altri "Occupato".
+  function mappaImpegni() {
+    const det = S.priv.dettagli || {};
+    S.impegni = (S.impRaw || []).map(e => e.nascosto && mioCal(e) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e);
+  }
+  // Applica subito le regole ai miei impegni (senza aspettare il programma della mezz'ora).
+  async function applicaRegole(rg) {
+    rg = regole(rg); const det = {}, cambi = [];
+    for (const x of S.impegni.filter(mioCal)) {
+      const vis = regolaCal(x.t, rg).vis;
+      if (!vis && !x.privato) { det[x.id] = { t: x.t, n: x.n || '' }; cambi.push([x.id, { t: 'Occupato', n: '', nascosto: true }]); }
+      else if (vis && x.privato && x.svelabile) cambi.push([x.id, { t: x.t, n: x.n || '', nascosto: false }]);
+    }
+    if (Object.keys(det).length) await DATI.imposta('privati', S.me, { dettagli: det });
+    await Promise.all(cambi.map(([id, v]) => DATI.aggiorna('impegni', id, v)));
+    return cambi.length;
+  }
+
+  const oraAdesso = () => new Date().toTimeString().slice(0, 5);
+  function statoOra(id) {
+    const ora = oraAdesso(), oggi = delGiorno(T, e => (e.who || []).includes(id));
+    const ades = oggi.find(e => e.h && e.h <= ora && e.fine && e.fine > ora);
+    if (ades) return { t: `Ora: ${ades.t}, fino alle ${ades.fine}`, k: 'occ' };
+    const pros = oggi.find(e => e.h && e.h > ora);
+    if (pros) return { t: `Alle ${pros.h}: ${pros.t}`, k: 'dopo' };
+    const tutto = oggi.find(e => !e.h);
+    if (tutto) return { t: `Oggi: ${tutto.t}`, k: 'dopo' };
+    return { t: oggi.length ? 'Impegni di oggi finiti' : 'Oggi niente in programma', k: 'lib' };
+  }
+
   function capita(e, d) {
     if (!e.ripeti) return e.d === d;
     if (d < e.d) return false;
@@ -57,7 +107,7 @@
     if (!list.length) return `<div class="empty">${vuoto || 'Nessun impegno. Tocca + per aggiungerne uno.'}</div>`;
     return list.map(e => `<button class="ev tap${e.id === fresh ? ' pop' : ''}" data-ev="${e.id}">
       <div class="h">${e.h ? esc(e.h) : '<small>tutto il giorno</small>'}${e.h && e.fine ? `<small>${esc(e.fine)}</small>` : ''}</div>
-      <div><div class="t">${esc(e.t)}</div>${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
+      <div><div class="t">${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
   }
 
   /* ---------- Pagine ---------- */
@@ -70,7 +120,9 @@
     $('#p-oggi').innerHTML = `<div class="stack">
      <div class="card${ri(0)}"><h2><span class="ttl"><i class="ic">🍽️</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
        <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = S.cena[i] || '?'; return `<button class="cv tap" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${ini(i)}</span><span class="nm">${esc(P(i).nome)}</span></button>`; }).join('')}</div>
-       <div class="empty">Tocca il tuo cerchio: sì, no, non so.</div></div>
+       <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.</div></div>
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">👋</i>La famiglia adesso</span></h2>
+       <div class="fl">${ids.map(i => { const st = statoOra(i); return `<button class="pr tap" data-persona="${i}" style="--pc:${col(i)}"><span class="pa">${ini(i)}</span><span class="pt"><b>${esc(P(i).nome)}${i === S.me ? ' <small>(tu)</small>' : ''}</b><small class="st-${st.k}">${esc(st.t)}</small></span><span class="chev">›</span></button>`; }).join('')}</div></div>
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.')}</div>
      <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.')}</div>
      ${ricordo(ri(3))}
@@ -196,6 +248,53 @@
     return `<button class="card memo tap${cls}" data-viaggio="${v.id}" data-apri-foto="${f.id}"><img src="${esc(f.prev)}" alt="" loading="lazy" decoding="async"><span class="mtx"><small>${titolo}</small><b>${esc(v.t)}</b></span></button>`;
   }
 
+  /* ---------- La pagina di una persona: si calcola da sola con i dati che ci sono già ---------- */
+  let persId = null;
+  const persAperto = () => $('#persona').classList.contains('on');
+  function openPersona(id) {
+    if (!S.persone[id]) return;
+    persId = id;
+    if (!persAperto()) history.pushState({ schermo: 'persona' }, '');
+    rPersona(true); $('#persona').scrollTop = 0; $('#persona').classList.add('on'); $('#fab').classList.add('via');
+  }
+  function closePersona(daIndietro) {
+    if (!persAperto()) return;
+    $('#persona').classList.remove('on'); if (!impAperto() && !tripAperto()) $('#fab').classList.remove('via');
+    if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
+  }
+  function rPersona(nuova) {
+    const id = persId, p = S.persone[id];
+    if (!p) { closePersona(); return; }
+    const mio = id === S.me, ora = oraAdesso(), suoi = (e) => (e.who || []).includes(id);
+    const sr = (i) => nuova ? ` rise" style="--i:${Math.min(i, 8)}` : '';
+    const giorni = [...Array(14)].map((_, i) => iso(addDays(TODAY, i))), dom = giorni[1];
+    const per = giorni.map(d => [d, delGiorno(d, suoi).filter(e => d !== T || !e.h || (e.fine || e.h) >= ora)]).filter(([, l]) => l.length);
+    const sett = giorni.slice(0, 7).reduce((n, d) => n + delGiorno(d, suoi).length, 0);
+    const c = S.cena[id];
+    const pezzi = [statoOra(id).t,
+      sett === 0 ? 'Settimana tranquilla' : sett >= 6 ? `Settimana piena: ${sett} impegni` : `${sett} ${sett === 1 ? 'impegno' : 'impegni'} in 7 giorni`,
+      c === 'si' ? 'Stasera a cena 🍝' : c === 'no' ? 'Stasera non a cena' : 'Per la cena non ha ancora risposto'];
+    const note = S.note.filter(n => n.by === id).sort((a, b) => (b.creato || 0) - (a.creato || 0)).slice(0, 3);
+    const desideri = S.regali.filter(r => r.per === id).sort((a, b) => (b.creato || 0) - (a.creato || 0));
+    const ricordi = S.viaggi.filter(v => suoi(v)).sort((a, b) => (b.da || '').localeCompare(a.da || ''));
+    const fileN = S.foto.filter(f => f.by === id).length;
+    $('#persIn').style.setProperty('--pc', col(id)); // il colore della persona (non nello stile degli elementi animati: ne hanno già uno)
+    $('#persIn').innerHTML = `
+     <div class="imp-top"><button class="back tap" id="persBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Indietro</button></div>
+     <div class="phero${sr(0)}"><span class="pav">${ini(id)}</span><div><h1>${esc(p.nome)}${mio ? ' <small>(tu)</small>' : ''}</h1>
+       <div class="riass">${pezzi.map(x => `<span>${esc(x)}</span>`).join('')}</div></div></div>
+     <div class="sec${sr(1)}">Prossimi impegni</div>
+     <div class="card${sr(1)}">${per.length ? per.slice(0, 5).map(([d, l]) => `<div class="pg"><small>${d === T ? 'Oggi' : d === dom ? 'Domani' : fmt(d, { weekday: 'long', day: 'numeric', month: 'short' })}</small>${evList(l)}</div>`).join('') : '<div class="empty">Niente nei prossimi 14 giorni.</div>'}</div>
+     <div class="sec${sr(2)}">In bacheca</div>
+     <div class="card${sr(2)}">${note.length ? note.map(n => `<p class="pn">${n.pin ? '📌 ' : ''}${esc(n.x)}</p>`).join('') : `<div class="empty">${mio ? 'Non hai' : 'Non ha'} ancora scritto note.</div>`}</div>
+     <div class="sec${sr(3)}">Lista dei desideri</div>
+     <div class="card${sr(3)}">${desideri.length ? `<div class="pdes">${desideri.slice(0, 5).map(r => `<span>🎁 ${esc(r.x)}</span>`).join('')}</div>` : `<div class="empty">${mio ? 'La tua lista è ancora vuota.' : 'La sua lista è ancora vuota.'}</div>`}
+       <button class="link tap" data-listareg="${id}">${mio ? 'Apri la tua lista' : 'Apri la lista' + (desideri.length ? ' e scegli cosa prendere' : '')} ›</button></div>
+     <div class="sec${sr(4)}">Ricordi insieme</div>
+     ${ricordi.length ? `<div class="pric${sr(4)}">${ricordi.slice(0, 4).map(v => { const cop = copertina(v), t = TIPO[tipoDi(v)]; return `<button class="tap" data-viaggio="${v.id}">${cop ? `<img src="${esc(cop.prev || cop.url)}" alt="" loading="lazy" decoding="async">` : `<span class="noimg">${t.e}</span>`}<b>${esc(v.t)}</b></button>`; }).join('')}</div>` : `<div class="card${sr(4)}"><div class="empty">Ancora nessun ricordo insieme.</div></div>`}
+     <div class="empty pfoot${sr(5)}">📷 ${fileN} ${fileN === 1 ? 'foto o video caricato' : 'foto e video caricati'} · ${ricordi.length} ${ricordi.length === 1 ? 'ricordo' : 'ricordi'}</div>`;
+  }
+
   /* Schermata di un viaggio (entra da destra come le Impostazioni) */
   let tripId = null, carico = null, tripHtml = '';
   const tripAperto = () => $('#trip').classList.contains('on');
@@ -206,7 +305,7 @@
   }
   function closeTrip(daIndietro) {
     if (!tripAperto()) return;
-    $('#trip').classList.remove('on'); if (!impAperto()) $('#fab').classList.remove('via');
+    $('#trip').classList.remove('on'); if (!impAperto() && !persAperto()) $('#fab').classList.remove('via');
     if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
   }
   function rTrip() {
@@ -446,6 +545,7 @@
     const a = document.activeElement && document.activeElement.id;
     R[page](); seen.add(vista());
     if (impAperto()) rImp();
+    if (persAperto()) rPersona();
     if (tripAperto()) rTrip();
     if (visAperto()) rViewer();
     fresh = null;
@@ -493,7 +593,7 @@
   $('#veil').onclick = () => closeSheet();
   // Il velo non fa scorrere la pagina sotto.
   $('#veil').addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-  addEventListener('popstate', () => { if (ignoraPop) { ignoraPop--; return; } if (visAperto()) closeViewer(true); else if (aperto()) closeSheet(true); else if (tripAperto()) closeTrip(true); else if (impAperto()) closeImp(true); else if (page !== 'oggi') go('oggi', true); });
+  addEventListener('popstate', () => { if (ignoraPop) { ignoraPop--; return; } if (visAperto()) closeViewer(true); else if (aperto()) closeSheet(true); else if (tripAperto()) closeTrip(true); else if (persAperto()) closePersona(true); else if (impAperto()) closeImp(true); else if (page !== 'oggi') go('oggi', true); });
 
   // Foglio: si chiude trascinandolo verso il basso, come su iPhone e Android.
   (() => {
@@ -534,6 +634,8 @@
     openSheet(`<h3>${esc(e.t)}</h3>
       <div>${fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })}${e.h ? ` · ${esc(e.h)}${e.fine ? '–' + esc(e.fine) : ''}` : ' · tutto il giorno'}${e.ripeti ? ` · ${RIPETI[e.ripeti].toLowerCase()}` : ''}</div>
       ${e.n ? `<div class="muted">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div><div class="src">${fonte}</div>
+      ${mioCal(e) ? `<div class="vis" data-vise="${e.id}"><label>Gli altri vedono</label>${segHtml('vis', [['mostra', '👁️ Tutto'], ['nascondi', '🔒 Solo occupato']], e.privato ? 'nascondi' : 'mostra')}
+        <div class="empty" id="visPerche">${regolaCal(e.t, regole()).perche} La scelta vale anche per gli altri impegni «${esc(e.t)}».</div></div>` : ''}
       ${modificabile(e) ? `<div class="row2"><button class="btn ghost tap" data-modifica="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">Elimina</button></div>` : `<div class="empty">Si cambia dal calendario di chi l'ha scritto.</div>`}`);
   }
   function sheetNota() {
@@ -594,6 +696,26 @@
        <button class="btn tap">Collega</button>
      </form>`);
   }
+  function sheetParole() {
+    const pr = S.priv.parole || PAROLE0, sc = Object.entries(S.priv.scelte || {}).sort();
+    const lista = (k) => `<div class="parole">${(pr[k] || []).map(w => `<button type="button" class="pw tap" data-togliw="${k}" data-w="${esc(w)}">${esc(w)} <b>✕</b></button>`).join('') || '<span class="empty">Nessuna parola</span>'}</div>
+      <form class="addp" data-lista="${k}"><input maxlength="30" placeholder="Aggiungi una parola" autocapitalize="off"><button class="btn tap" aria-label="Aggiungi">+</button></form>`;
+    openSheet(`<h3>Parole automatiche</h3>
+      <div class="empty">Se il titolo di un tuo impegno contiene una di queste parole, l'app decide da sola cosa vedono gli altri. Basta l'inizio della parola: «dottor» vale per dottore e dottoressa.</div>
+      <label>🔒 Solo "Occupato"</label>${lista('nascondi')}
+      <label>👁️ Sempre per intero</label>${lista('mostra')}
+      ${sc.length ? `<label>Scelte fatte a mano</label><div class="parole">${sc.map(([k, v]) => `<button type="button" class="pw tap" data-dimentica="${esc(k)}">${v === 'mostra' ? '👁️' : '🔒'} ${esc(k)} <b>✕</b></button>`).join('')}</div><div class="empty">Tocca una scelta per dimenticarla: torna a decidere l'app.</div>` : ''}
+      <button type="button" class="link tap" id="paroleReset">Rimetti le parole di partenza</button>`);
+  }
+  async function cambiaRegole(x, msg) {
+    S.priv = Object.assign({}, S.priv, x);
+    try {
+      if (x.scelte) await DATI.aggiorna('privati', S.me, { scelte: x.scelte }); // sostituisce l'elenco intero
+      else await DATI.imposta('privati', S.me, x);
+      await applicaRegole(x);
+    } catch (e) { return sbaglio(e); }
+    if (msg) toast(msg);
+  }
   function statoCal(me, collegato) {
     const links = linkCal(S.priv.calendario), st = me.calStato || {};
     if (!links.length) return collegato ? `<span class="ok">✓</span>Collegato: si aggiorna da solo ogni mezz'ora` : `<span class="no">!</span>Non ancora collegato`;
@@ -614,7 +736,7 @@
      <div class="imp-top"><button class="back tap" id="impBack" aria-label="Indietro"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Indietro</button></div>
      <h1 class="hello${sr(0)}">Impostazioni</h1>
      <div class="card prof${impNuova ? ' rise' : ''}" style="--pc:${col(S.me)};--i:1"><span class="pav">${ini(S.me)}</span><div><b>${esc(me.nome)}</b><div class="muted">Il tuo colore in famiglia: ${NOMI_COLORI[me.colore] || 'viola'}</div></div>
-       <div class="fam">${IDS().map(i => `<i style="--pc:${col(i)}" title="${esc(P(i).nome)}">${ini(i)}</i>`).join('')}</div></div>
+       <div class="fam">${IDS().map(i => `<button class="tap" data-persona="${i}" aria-label="${esc(P(i).nome)}"><i style="--pc:${col(i)}">${ini(i)}</i></button>`).join('')}</div></div>
 
      <div class="sec${sr(2)}">Notifiche</div>
      <div class="card${sr(2)}">
@@ -636,8 +758,10 @@
        <div class="stato">${statoCal(me, collegato)}</div>
        <button class="btn tap" id="calLink">${linkCal(S.priv.calendario).length ? 'Cambia il link' : 'Collega il mio calendario'}</button>
        ${linkCal(S.priv.calendario).length ? '<button class="link tap" id="calVia">Scollega il calendario</button>' : ''}
-       <label class="sw">Gli altri vedono solo "Occupato"<input type="checkbox" id="privOcc"${me.privacy === 'occupato' ? ' checked' : ''}></label>
-       <div class="empty">Se è acceso, dei tuoi impegni dal calendario gli altri vedono solo l'orario, senza titolo né luogo.</div>
+       <label>Degli impegni del calendario gli altri vedono</label>
+       ${segHtml('privg', [['tutto', '👁️ Tutto'], ['occupato', '🔒 Solo occupato']], me.privacy === 'occupato' ? 'occupato' : 'tutto')}
+       <div class="empty">Con "Solo occupato" vedono l'orario, senza titolo né luogo. Le parole automatiche e le tue scelte vincono su questa regola: tocca un tuo impegno per sceglierlo a mano.</div>
+       <button class="btn ghost tap" id="paroleBtn">Parole automatiche e scelte</button>
        <div class="empty">Oppure, una volta sola:</div>
        <label class="btn ghost tap filebtn">Importa un file del calendario (.ics)<input type="file" id="icsFile" accept=".ics,text/calendar" hidden></label>
        <div class="empty">Entrano i tuoi impegni dei prossimi 12 mesi. Se lo rifai, quelli importati prima vengono sostituiti.</div>
@@ -660,7 +784,7 @@
       if (x0 == null) return; x0 = null;
       const veloce = dx / Math.max(1, Date.now() - t0) > 0.5;
       sc.classList.remove('drag'); sc.style.transform = '';
-      if (dx > 110 || (veloce && dx > 40)) (sc.id === 'trip' ? closeTrip : closeImp)();
+      if (dx > 110 || (veloce && dx > 40)) ({ trip: closeTrip, persona: closePersona }[sc.id] || closeImp)();
     });
     });
   })();
@@ -747,6 +871,38 @@
     }
     if (t.id === 'meBtn') return openImp();
     if (t.id === 'calLink') return sheetCal();
+    if (d.persona) return openPersona(d.persona);
+    if (t.id === 'persBack') return closePersona();
+    if (d.listareg) {
+      const dalle = (impAperto() ? 1 : 0) + 1; closePersona(); if (impAperto()) closeImp();
+      seg = 'regali'; LS.set('noi4-bacheca', seg);
+      return setTimeout(() => { if (page === 'note') render(); else go('note'); }, 380 * dalle);
+    }
+    if (t.id === 'paroleBtn') return sheetParole();
+    if (d.vis) {
+      const e = S.impegni.find(x => x.id === t.closest('[data-vise]').dataset.vise); if (!e) return;
+      segSet(t.parentElement, d.vis === 'mostra' ? 0 : 1);
+      const sc = Object.assign({}, S.priv.scelte || {}, { [chiave(e.t)]: d.vis });
+      S.priv = Object.assign({}, S.priv, { scelte: sc });
+      try { await DATI.imposta('privati', S.me, { scelte: { [chiave(e.t)]: d.vis } }); await applicaRegole({ scelte: sc }); } catch (er) { return sbaglio(er); }
+      $('#visPerche') && ($('#visPerche').textContent = `L'hai scelto tu. Vale anche per gli altri impegni «${e.t}».`);
+      return toast(d.vis === 'mostra' ? 'Gli altri lo vedranno per intero' : 'Gli altri vedranno solo "Occupato"');
+    }
+    if (d.privg) {
+      segSet(t.parentElement, d.privg === 'occupato' ? 1 : 0);
+      S.persone[S.me] = Object.assign({}, P(S.me), { privacy: d.privg });
+      try { await DATI.imposta('persone', S.me, { privacy: d.privg }); await applicaRegole({ gen: d.privg }); } catch (er) { return sbaglio(er); }
+      return toast(d.privg === 'occupato' ? 'Gli altri vedranno solo "Occupato", salvo le eccezioni' : 'Gli altri vedranno i tuoi impegni per intero, salvo le eccezioni');
+    }
+    if (d.togliw) {
+      const pr = S.priv.parole || PAROLE0, nuovo = Object.assign({}, pr, { [d.togliw]: (pr[d.togliw] || []).filter(w => w !== d.w) });
+      await cambiaRegole({ parole: nuovo }); return sheetParole();
+    }
+    if (d.dimentica != null) {
+      const sc = Object.assign({}, S.priv.scelte || {}); delete sc[d.dimentica];
+      await cambiaRegole({ scelte: sc }, 'Ora decide l\'app'); return sheetParole();
+    }
+    if (t.id === 'paroleReset') { await cambiaRegole({ parole: PAROLE0 }, 'Parole di partenza rimesse'); return sheetParole(); }
     if (d.calg) { LS.set('noi4-calguida', d.calg); segSet(t.parentElement, d.calg === 'google' ? 1 : 0); $('#calPassi').innerHTML = passiHtml(d.calg); $('#calNota').textContent = NOTA_PASSI[d.calg]; return; }
     if (t.id === 'calIncolla') {
       try { const x = await navigator.clipboard.readText(); if (x) { $('#calU').value = x.trim(); toast(linkCal(x).length ? 'Link incollato' : 'Quello copiato non sembra un link di calendario'); } }
@@ -799,7 +955,7 @@
     }
     if (d.pk) return t.classList.toggle('on');
     if (d.cena) {
-      if (d.cena !== S.me) return toast('Puoi rispondere solo per te');
+      if (d.cena !== S.me) return openPersona(d.cena);
       const o = ['si', 'no', '?']; const v = o[(o.indexOf(S.cena[S.me] || '?') + 1) % 3];
       S.cena[S.me] = v; rOggi(); const n = document.querySelector(`[data-cena="${S.me}"]`); n && n.classList.add('bump');
       if (v === 'si' && IDS().every(i => S.cena[i] === 'si')) { festa(n); toast('Stasera tutti a tavola! 🍝'); }
@@ -836,7 +992,6 @@
     if (t.id === 'evAll') $('#evOre').hidden = t.checked;
     // Si salva dopo che l'interruttore ha finito di scorrere (il salvataggio ridisegna la pagina).
     if (t.dataset && t.dataset.pref) { const k = t.dataset.pref, v = t.checked; setTimeout(() => DATI.imposta('persone', S.me, { notifiche: Object.assign({}, P(S.me).notifiche, { [k]: v }) }).catch(sbaglio), 320); }
-    if (t.id === 'privOcc') { const v = t.checked ? 'occupato' : 'tutto'; setTimeout(() => DATI.imposta('persone', S.me, { privacy: v }).catch(sbaglio), 320); toast(t.checked ? 'Gli altri vedranno solo "Occupato"' : 'Gli altri vedranno i tuoi impegni per intero'); }
     if (t.id === 'icsFile' && t.files[0]) importaIcs(t.files[0]);
     if (t.id === 'fotoIn' && t.files.length) caricaFoto(t.files);
   });
@@ -846,6 +1001,11 @@
       $('#lgErr').textContent = '';
       try { await DATI.login($('#lgEmail').value, $('#lgPass').value); }
       catch (e) { $('#lgErr').textContent = 'Email o password non corrette.'; }
+    } else if (f.classList.contains('addp')) {
+      const w = chiave(f.querySelector('input').value), k = f.dataset.lista; if (!w) return;
+      const pr = S.priv.parole || PAROLE0, altra = k === 'nascondi' ? 'mostra' : 'nascondi';
+      const nuovo = { [k]: [...new Set([...(pr[k] || []), w])], [altra]: (pr[altra] || []).filter(x => x !== w) };
+      await cambiaRegole({ parole: nuovo }, `«${w}» aggiunta`); sheetParole();
     } else if (f.id === 'fCal') {
       const testo = $('#calU').value.trim(), links = linkCal(testo);
       if (testo && !links.length) return toast('Non sembra un link di calendario: deve cominciare con webcal:// o https://');
@@ -918,8 +1078,8 @@
   let stopPriv = null, privDi = null;
   function ascoltaPriv() {
     if (privDi === S.me) return;
-    if (stopPriv) stopPriv(); privDi = S.me; S.priv = {};
-    stopPriv = DATI.ascoltaDoc('privati', S.me, d => { S.priv = d; if (impAperto()) rImp(); }) || null;
+    if (stopPriv) stopPriv(); privDi = S.me; S.priv = {}; mappaImpegni();
+    stopPriv = DATI.ascoltaDoc('privati', S.me, d => { S.priv = d; mappaImpegni(); render(); }) || null;
   }
   function ascoltaCena() { if (stopCena) stopCena(); stopCena = DATI.ascoltaDoc('cena', T, c => { S.cena = c; render(); }); }
   DATI.avvia((persona, errore) => {
@@ -931,7 +1091,7 @@
       DATI.ascolta('regali', l => { S.regali = l; render(); });
       DATI.ascolta('viaggi', l => { S.viaggi = l; render(); });
       DATI.ascolta('foto', l => { S.foto = l; render(); });
-      DATI.ascolta('impegni', l => { S.impegni = l; render(); });
+      DATI.ascolta('impegni', l => { S.impRaw = l; mappaImpegni(); render(); });
       DATI.ascolta('note', l => { S.note = l; render(); });
       DATI.ascolta('spesa', l => { S.spesa = l; render(); });
       ascoltaCena();
