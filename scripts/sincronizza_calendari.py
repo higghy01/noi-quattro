@@ -39,7 +39,7 @@ COMPLEANNO = re.compile(r"b[iy]r?t?h?d[ae]y|byrt|\bb-?day\b|compl?ean+o|cumplea|
 FESTA = re.compile(r"festa|party|cena|pranzo|aperitivo", re.I)
 # Un impegno di tutto il giorno che torna ogni anno (es. solo "Marco") è quasi sempre un compleanno:
 # esce anche lui, tranne le feste e le ricorrenze con un nome chiaro.
-RICORRENZA = re.compile(r"festa|party|cena|pranzo|aperitivo|natale|vigilia|pasqua|pasquetta|capodanno|ferragosto|ognissanti|immacolata|santo stefano|epifania|befana|liberazione|repubblica|halloween|san valentino|anniversario|onomastico|ferie|vacanza", re.I)
+RICORRENZA = re.compile(r"festa|party|cena|pranzo|aperitivo|natale|vigilia|pasqua|pasquetta|capodanno|ferragosto|ognissanti|immacolata|santo stefano|epifania|befana|liberazione|repubblica|halloween|san valentino|anniversario|onomastico|ferie|vacanza|bollo|assicuraz|rinnov|scadenz|tass|revision|abbonament|pagament|bollett|canone|tagliando|patente|passaporto|carta d'identit|dichiaraz|730|imu", re.I)
 
 
 def compleanno(titolo, annuale=False):

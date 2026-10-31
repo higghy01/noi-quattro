@@ -16,6 +16,7 @@ import os
 
 from firebase_admin import messaging
 
+from sincronizza_calendari import compleanno
 from comune import ROMA, adesso, capita, database
 
 URL_APP = os.environ.get("URL_APP") or "https://higghy01.github.io/noi-quattro/"
@@ -92,7 +93,11 @@ def main():
     # Riepilogo serale: ognuno all'ora che ha scelto (di solito le 21).
     serale = [p for p in persone if ora.hour == ora_di(p, "oraRiepilogo", 21)]
     if serale:
-        lista = sorted((e for e in impegni if capita(e, domani)), key=lambda e: e.get("h") or "")
+        # Come l'app: i compleanni arrivati dai calendari prima della regola non si contano.
+        lista = sorted((e for e in impegni if capita(e, domani)
+                        and not (str(e.get("fonte", "")).startswith(("calendario:", "import:"))
+                                 and compleanno(e.get("t", ""), e.get("ripeti") == "annuale" and not e.get("h")))),
+                       key=lambda e: e.get("h") or "")
         if lista:
             for p in serale:
                 righe = [f"{e['h'] or 'tutto il giorno'} {titolo_per(e, p)[0]}" for e in lista[:4]]

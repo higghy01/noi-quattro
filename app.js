@@ -61,11 +61,11 @@
   }
   // I miei impegni che arrivano da un calendario (collegato o importato da file): per questi decido cosa vedono gli altri.
   const mioCal = (e) => e.fonte === 'calendario:' + S.me || e.fonte === 'import:' + S.me;
-  // Compleanni (Sasha, 31/10/2026: "non fregano a nessuno"): dai calendari non entrano, anche scritti di fretta.
+  // Compleanni (scelta del 31/10/2026): dai calendari non entrano, anche scritti di fretta.
   // Le stesse parole le usa il programma dei calendari (scripts/sincronizza_calendari.py): tenerle uguali.
   const COMPL = /b[iy]r?t?h?d[ae]y|byrt|\bb-?day\b|compl?ean+o|cumplea|geburtstag|anniversaire|🎂/i;
   const FESTA_C = /festa|party|cena|pranzo|aperitivo/i;
-  const RICORR = /festa|party|cena|pranzo|aperitivo|natale|vigilia|pasqua|pasquetta|capodanno|ferragosto|ognissanti|immacolata|santo stefano|epifania|befana|liberazione|repubblica|halloween|san valentino|anniversario|onomastico|ferie|vacanza/i;
+  const RICORR = /festa|party|cena|pranzo|aperitivo|natale|vigilia|pasqua|pasquetta|capodanno|ferragosto|ognissanti|immacolata|santo stefano|epifania|befana|liberazione|repubblica|halloween|san valentino|anniversario|onomastico|ferie|vacanza|bollo|assicuraz|rinnov|scadenz|tass|revision|abbonament|pagament|bollett|canone|tagliando|patente|passaporto|carta d'identit|dichiaraz|730|imu/i; // anche promemoria annuali (bollo, assicurazione…): non sono compleanni
   const compleanno = (t, annuale) => !FESTA_C.test(t) && (COMPL.test(t) || (!!annuale && !RICORR.test(t)));
   const daCalendario = (e) => /^(calendario|import):/.test(e.fonte || '');
   // I miei impegni nascosti: io vedo il titolo vero (sta nella mia parte privata), gli altri "Occupato".
@@ -97,7 +97,7 @@
   const mezziHtml = (sel, attr) => `<div class="mezzi">${mezziTutti().map(m => `<button type="button" class="mz tap${m === sel ? ' on' : ''}" ${attr}="${esc(m)}">${esc(m)}</button>`).join('')}</div>`;
 
   const oraAdesso = () => new Date().toTimeString().slice(0, 5);
-  /* Turni di lavoro e cena automatica (Sasha, 31/10/2026): dall'orario di lavoro si sa a che ora uno torna a casa,
+  /* Turni di lavoro e cena automatica (31/10/2026): dall'orario di lavoro si sa a che ora uno torna a casa,
      e chi è impegnato all'ora di cena risulta "fuori" da solo, senza scrivere niente. Il sì/no toccato a mano vince.
      Il tempo per tornare a casa lo sceglie ognuno nelle Impostazioni (di base 20 minuti). */
   const CENA = [20 * 60, 21 * 60]; // l'ora di cena: chi è impegnato in questa fascia non c'è
@@ -110,7 +110,7 @@
     const t = delGiorno(d || T, e => eTurno(e) && e.fonte === 'orario:' + id && e.h && e.fine && e.fine > e.h).pop();
     if (!t) return null;
     const m = minuti(t.fine) + strada(id);
-    return { turno: t, m, ora: hm(Math.min(m, 24 * 60 - 1)) };
+    return { turno: t, m, ora: hm(m) }; // dopo mezzanotte: 00:10, non 23:59
   }
   // Perché uno non è a cena stasera (o null): un turno che finisce tardi, o un impegno all'ora di cena.
   // Non contano gli impegni con tutta la famiglia (es. "Cena tutti insieme") né quelli di tutto il giorno.
@@ -500,9 +500,11 @@
   let tripId = null, carico = null, tripHtml = '';
   let selFoto = null; // null = non sto scegliendo; altrimenti l'insieme delle foto scelte da salvare
   const tripAperto = () => $('#trip').classList.contains('on');
-  function openTrip(id) {
+  function openTrip(id, alPostoDelFoglio) {
     tripId = id; tripHtml = ''; selFoto = null; gruppi = null; statoSalva = null;
-    if (!tripAperto()) history.pushState({ schermo: 'viaggio' }, '');
+    // Aperto subito dopo un foglio: il passo del foglio diventa quello del ricordo (il tasto indietro resta giusto).
+    if (alPostoDelFoglio) history.replaceState({ schermo: 'viaggio' }, '');
+    else if (!tripAperto()) history.pushState({ schermo: 'viaggio' }, '');
     rTrip(); $('#trip').scrollTop = 0; $('#trip').classList.add('on'); $('#fab').classList.add('via');
     setTimeout(() => riparaAnteprime(fotoDi(id)), 900);
   }
@@ -717,7 +719,7 @@
     } catch (e) {}
     return file.lastModified || Date.now();
   }
-  /* Album automatici (Sasha, 31/10/2026): si scelgono tante foto e video insieme e ognuno va da solo nel ricordo
+  /* Album automatici (31/10/2026): si scelgono tante foto e video insieme e ognuno va da solo nel ricordo
      del giorno in cui è stato scattato. Per un giorno senza ricordo se ne crea uno nuovo, col nome dell'impegno
      di famiglia di quel giorno se c'era (es. "Cena di compleanno"), altrimenti con la data. Prima di caricare si vede il piano. */
   const TIPO_DA = [[/cinema|film|teatro|concerto|spettacolo/i, 'cinema'], [/compleann|birthday/i, 'compleanno'], [/natale|capodanno|pasqua|festa/i, 'feste'],
@@ -768,15 +770,20 @@
   }
   async function caricaAlbum() {
     const p = piano; piano = null; if (!p) return;
-    closeSheet();
+    const foglio = aperto() && history.state && history.state.foglio;
+    closeSheet(true); let primo = true;
     for (const x of p) {
       let v = x.v;
       if (!v) {
         try { v = await DATI.aggiungi('viaggi', { t: x.nuovo.t, dove: '', da: x.giorno, a: x.fino || '', who: x.nuovo.who.length ? x.nuovo.who : [S.me], tipo: x.nuovo.tipo, creatoDa: S.me, creato: Date.now() }); }
         catch (er) { sbaglio(er); continue; }
       }
-      openTrip(v);
-      await caricaFoto(x.files, v);
+      openTrip(v, primo && foglio && !tripAperto()); primo = false;
+      // Tutti i file del giorno, 60 alla volta (prima se ne perdevano oltre i 60).
+      let ok = 0;
+      for (let i = 0; i < x.files.length; i += 60) ok += (await caricaFoto(x.files.slice(i, i + 60), v)) || 0;
+      // Un ricordo nuovo rimasto vuoto (nessun file entrato, es. tutti doppioni) si toglie.
+      if (!x.v && !ok && !fotoDi(v).length) await DATI.elimina('viaggi', v).catch(() => {});
     }
   }
   const MOSTRABILI = /^image\/(jpeg|png|webp|gif)$/;
@@ -785,7 +792,13 @@
      cambiano solo i pezzi diversi. */
   async function caricaFoto(files, perV) {
     if (!DATI.fotoPronte()) return toast('Lo spazio delle foto non è ancora attivo.');
-    const v = perV || tripId, list = [...files].filter(f => /^(image|video)\//.test(f.type) || /\.(heic|heif|jpe?g|png|mov|mp4)$/i.test(f.name)).slice(0, 60); let ok = 0, rotto = false;
+    // Doppioni: un file con lo stesso nome e la stessa grandezza c'è già nei ricordi, non si carica di nuovo.
+    const gia = new Set(S.foto.map(f => (f.nome || '') + '|' + (f.size || 0)));
+    const tutti = [...files].filter(f => /^(image|video)\//.test(f.type) || /\.(heic|heif|jpe?g|png|mov|mp4)$/i.test(f.name));
+    const doppi = tutti.filter(f => gia.has((f.name || '').slice(0, 80) + '|' + f.size)).length;
+    if (doppi) toast(doppi === 1 ? 'Un file c\'era già: non lo carico di nuovo' : `${doppi} file c'erano già: non li carico di nuovo`);
+    const v = perV || tripId, list = tutti.filter(f => !gia.has((f.name || '').slice(0, 80) + '|' + f.size)).slice(0, 60); let ok = 0, rotto = false;
+    if (!list.length) return 0;
     if (files.length > 60) toast('Ne carico 60 alla volta: poi aggiungi gli altri');
     const totB = list.reduce((a, f) => a + f.size, 0) || 1, fatti = {};
     const items = list.map((file, k) => {
@@ -854,9 +867,10 @@
     };
     await Promise.all([lavora(), lavora(), lavora()]);
     carico = null; rTrip();
-    if (rotto && !ok) return toast('Lo spazio delle foto non risponde. Chiudi e riapri l\'app, poi riprova.');
+    if (rotto && !ok) { toast('Lo spazio delle foto non risponde. Chiudi e riapri l\'app, poi riprova.'); return 0; }
     if (ok) { toast(ok === 1 ? 'Aggiunto 📷' : `${ok} tra foto e video aggiunti 📷`); festa($('#tripIn .hero')); }
     if (ok < list.length) setTimeout(() => toast(`${list.length - ok} file non sono entrati. Riprova.`), 2300);
+    return ok;
   }
 
   /* Visore: foto a tutto schermo, si scorre di lato, doppio tocco per ingrandire, giù per chiudere */
@@ -976,7 +990,7 @@
     if (new Date(ms).toDateString() === ieri.toDateString()) return 'ieri';
     return new Date(ms).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
   }
-  /* Ricette di famiglia (Sasha, 31/10/2026): una pagina aperta a tutti, con foto, ingredienti e preparazione;
+  /* Ricette di famiglia (31/10/2026): una pagina aperta a tutti, con foto, ingredienti e preparazione;
      un tocco e gli ingredienti scelti vanno nella lista della spesa (quelli già in lista non si doppiano). */
   let segSpesa = LS.get('noi4-spesa', 'lista') === 'ricette' ? 'ricette' : 'lista', ricAperta = null, ricHo = {};
   const ingredienti = (r) => (r.ingr || []).filter(x => typeof x === 'string' && x.trim()).slice(0, 60);
@@ -1159,7 +1173,7 @@
      <button type="button" class="link tap" id="prPiu">+ Un'altra idea</button>
      <button class="btn tap">Proponi a tutti</button></form>`);
   }
-  /* LEGO (Sasha, 31/10/2026, per la collezione della sorella): i set si cercano nel catalogo di "I miei LEGO",
+  /* LEGO (31/10/2026, per la collezione della sorella): i set si cercano nel catalogo di "I miei LEGO",
      l'app della collezione, che è pubblico. Si scarica solo la prima volta che serve (circa 2 MB). */
   const LEGO_URL = 'https://higghy01.github.io/app-lego/';
   let legoCat = null;
@@ -1178,7 +1192,7 @@
       .sort((a, b) => esatto(b) - esatto(a) || (b.anno || 0) - (a.anno || 0)).slice(0, 12);
   }
   const numLego = (n) => String(n || '').replace(/-1$/, '');
-  const legoInfo = (l) => `🧱 ${esc(numLego(l.num))}${l.pezzi ? ` · ${l.pezzi} pezzi` : ''}${l.anno ? ` · ${l.anno}` : ''}`;
+  const legoInfo = (l) => `🧱 ${esc(numLego(l.num))}${+l.pezzi ? ` · ${+l.pezzi} pezzi` : ''}${+l.anno ? ` · ${+l.anno}` : ''}`; // solo numeri: niente testo strano dal database
   function risLego() {
     const box = $('#legoRis'); if (!box) return;
     const q = $('#legoQ').value, ris = cercaLego(q);

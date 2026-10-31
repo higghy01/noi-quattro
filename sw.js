@@ -1,6 +1,6 @@
 // NDSZ - service worker: app usabile offline + notifiche (Firebase Cloud Messaging).
 // A ogni pubblicazione alzare VERSIONE, altrimenti i telefoni restano sulla copia vecchia.
-const VERSIONE = 'noi4-v36';
+const VERSIONE = 'noi4-v37';
 // Le librerie esterne hanno la versione nell'indirizzo: stanno in una copia a parte che NON si cancella a ogni
 // aggiornamento, così l'app si apre anche senza rete subito dopo una nuova versione.
 const CACHE_LIB = 'noi4-librerie';
@@ -27,8 +27,9 @@ self.addEventListener('install', e => {
   ]));
   self.skipWaiting();
 });
+// Si cancellano solo le copie di questa app (noi4-…): sullo stesso sito c'è anche l'app LEGO con la sua.
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => n !== VERSIONE && n !== CACHE_LIB).map(n => caches.delete(n)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => /^noi4-/.test(n) && n !== VERSIONE && n !== CACHE_LIB).map(n => caches.delete(n)))).then(() => self.clients.claim()));
 });
 // Prima la rete (per avere sempre l'ultima versione), la copia solo se manca internet.
 self.addEventListener('fetch', e => {
