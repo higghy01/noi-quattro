@@ -106,6 +106,16 @@
     if (!db.viaggi || !Object.values(db.viaggi).some(v => v.tipo)) viaggiEsempio(db);
     if (!db.ricette) db.ricette = { [uid()]: { t: 'Lasagne della nonna', porz: '6 persone', by: 'p2', creato: Date.now(), ingr: ['Sfoglia per lasagne', '500 g di ragù', '1 l di besciamella', 'Parmigiano', 'Mozzarella'], come: 'Un velo di besciamella, poi sfoglia, ragù, besciamella e parmigiano. Ripetere per 4 strati.\nForno a 180° per 40 minuti.' },
       [uid()]: { t: 'Tiramisù', porz: '8 persone', by: 'p3', creato: Date.now(), ingr: ['Savoiardi', '500 g di mascarpone', '4 uova', 'Zucchero', 'Caffè', 'Cacao amaro'], come: '' } };
+    // Sezione Personale: la scuola di p3 (Elena) e la sua copia di prova per p1.
+    if (!db.scuola) {
+      const ore = ['08:00-09:00', '09:00-10:00', '10:00-10:55', '11:05-12:00', '12:00-13:00', '13:00-14:00'];
+      const g = [['Matematica', 'Italiano', 'Italiano', 'Storia', 'Inglese', 'Arte'], ['Inglese', 'Matematica', 'Scienze', 'Scienze', 'Italiano', ''],
+        ['Educazione fisica', 'Educazione fisica', 'Inglese', 'Italiano', 'Storia', 'Geografia'], ['Matematica', 'Arte', 'Scienze', 'Inglese', 'Italiano', ''], ['Geografia', 'Storia', 'Matematica', 'Matematica', 'Italiano', 'Italiano']];
+      const orario = []; g.forEach((l, i) => l.forEach((m, o) => m && orario.push({ g: i + 1, o: o + 1, m })));
+      db.scuola = { p3: { classe: '3A', orario, ore, dal: iso(-30), al: iso(220), pause: [], copie: ['p1'] } };
+      db.compiti = { [uid()]: { per: 'p1', di: 'p3', m: 'Matematica', tipo: 'verifica', d: iso(3), x: 'Equazioni', by: 'p1', creato: Date.now(), fatto: false },
+        [uid()]: { per: 'p3', di: 'p3', m: 'Inglese', tipo: 'interrogazione', d: iso(2), x: '', by: 'p3', creato: Date.now(), fatto: false } };
+    }
     // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
     const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };
     const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} subs.forEach(s => s()); };

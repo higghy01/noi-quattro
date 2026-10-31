@@ -24,7 +24,7 @@
 
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
-  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [] };
+  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [] };
   let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = LS.get('noi4-bacheca', 'proposte') === 'regali' ? 'regali' : 'proposte';
   const seen = new Set(); let fresh = null; let avviato = false;
 
@@ -73,7 +73,8 @@
   function mappaImpegni() {
     const det = S.priv.dettagli || {};
     S.impegni = (S.impRaw || []).map(e => e.nascosto && mioCal(e) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e)
-      .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')));
+      .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')))
+      .concat(eventiScuola());
   }
   // Applica subito le regole ai miei impegni (senza aspettare il programma della mezz'ora).
   async function applicaRegole(rg) {
@@ -150,6 +151,8 @@
     // Impegni di più giorni (es. ferie dal 3 al 7): "fino" è l'ultimo giorno, compreso.
     if (!e.ripeti) return e.fino && e.fino > e.d ? d >= e.d && d <= e.fino : e.d === d;
     if (d < e.d) return false;
+    if (e.al && d > e.al) return false; // la scuola finisce a giugno
+    if (e.pause && e.pause.some(p => d >= p[0] && d <= p[1])) return false; // vacanze
     if (e.ripeti === 'settimanale') return new Date(d + 'T12:00:00').getDay() === new Date(e.d + 'T12:00:00').getDay();
     if (e.ripeti === 'mensile') return stessoGiorno(d, e.d.slice(8));
     if (e.ripeti === 'annuale') return d.slice(5, 7) === e.d.slice(5, 7) && stessoGiorno(d, e.d.slice(8));
@@ -227,7 +230,7 @@
       }
     });
   }
-  ['#p-oggi', '#p-cal', '#noteBody', '#p-viaggi', '#p-spesa', '#impIn', '#persIn', '#tripIn'].forEach(fluido);
+  ['#p-oggi', '#p-cal', '#noteBody', '#p-viaggi', '#p-spesa', '#impIn', '#persIn', '#tripIn', '#mioIn'].forEach(fluido);
   // A fine entrata la classe si toglie: così non riparte quando si torna sulla scheda.
   document.addEventListener('animationend', (ev) => {
     const t = ev.target; if (!t.classList || !/^fm-(rise|pop)$/.test(ev.animationName)) return;
@@ -459,7 +462,7 @@
   }
   function closePersona(daIndietro) {
     if (!persAperto()) return;
-    $('#persona').classList.remove('on'); if (!impAperto() && !tripAperto()) $('#fab').classList.remove('via');
+    $('#persona').classList.remove('on'); if (!impAperto() && !tripAperto() && !mioAperto()) $('#fab').classList.remove('via');
     if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
   }
   function rPersona(nuova) {
@@ -469,7 +472,7 @@
     const sr = (i) => nuova ? ` rise" style="--i:${Math.min(i, 8)}` : '';
     const giorni = [...Array(14)].map((_, i) => iso(addDays(TODAY, i))), dom = giorni[1];
     const per = giorni.map(d => [d, delGiorno(d, suoi).filter(e => d !== T || !e.h || inCorso(e, d) || (e.fine || e.h) >= ora)]).filter(([, l]) => l.length);
-    const sett = giorni.slice(0, 7).reduce((n, d) => n + delGiorno(d, suoi).length, 0);
+    const sett = giorni.slice(0, 7).reduce((n, d) => n + delGiorno(d, e => suoi(e) && !e.virtuale).length, 0); // la scuola e le note di scuola non contano
     const c = S.cena[id];
     const pezzi = [statoOra(id).t,
       sett === 0 ? 'Settimana tranquilla' : sett >= 6 ? `Settimana piena: ${sett} impegni` : `${sett} ${sett === 1 ? 'impegno' : 'impegni'} in 7 giorni`,
@@ -510,7 +513,7 @@
   }
   function closeTrip(daIndietro) {
     if (!tripAperto()) return;
-    selFoto = null; gruppi = null; statoSalva = null; $('#trip').classList.remove('on'); if (!impAperto() && !persAperto()) $('#fab').classList.remove('via');
+    selFoto = null; gruppi = null; statoSalva = null; $('#trip').classList.remove('on'); if (!impAperto() && !persAperto() && !mioAperto()) $('#fab').classList.remove('via');
     if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
   }
   function rTrip() {
@@ -1066,6 +1069,8 @@
     R[page](); seen.add(vista());
     if (impAperto()) rImp();
     if (persAperto()) rPersona();
+    if (mioAperto()) rMio();
+    pallinoMio();
     if (tripAperto()) rTrip();
     if (visAperto()) rViewer();
     fresh = null;
@@ -1113,7 +1118,7 @@
   $('#veil').onclick = () => closeSheet();
   // Il velo non fa scorrere la pagina sotto.
   $('#veil').addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-  addEventListener('popstate', () => { if (ignoraPop) { ignoraPop--; return; } if (visAperto()) closeViewer(true); else if (aperto()) closeSheet(true); else if (tripAperto()) closeTrip(true); else if (persAperto()) closePersona(true); else if (impAperto()) closeImp(true); else if (page !== 'oggi') go('oggi', true); });
+  addEventListener('popstate', () => { if (ignoraPop) { ignoraPop--; return; } if (visAperto()) closeViewer(true); else if (aperto()) closeSheet(true); else if (tripAperto()) closeTrip(true); else if (persAperto()) closePersona(true); else if (mioAperto()) closeMio(true); else if (impAperto()) closeImp(true); else if (page !== 'oggi') go('oggi', true); });
 
   // Foglio: si chiude trascinandolo verso il basso, come su iPhone e Android.
   (() => {
@@ -1153,15 +1158,16 @@
      <button class="btn tap">${e.id ? 'Salva le modifiche' : 'Salva impegno'}</button></form>`, () => { if (!e.id) setTimeout(() => $('#evT').focus(), 380); });
   }
   function sheetDettaglio(e) {
-    const fonte = e.fonte && e.fonte.startsWith('calendario:') ? `Dal calendario di ${esc(P(e.fonte.slice(11)).nome)}` : e.fonte && e.fonte.startsWith('import:') ? `Importato da ${esc(P(e.fonte.slice(7)).nome)}` : e.fonte && e.fonte.startsWith('orario:') ? `Dall'orario di lavoro di ${esc(P(e.fonte.slice(7)).nome)}` : `Aggiunto da ${esc(P(e.creatoDa).nome)}`;
+    const fonte = e.fonte && e.fonte.startsWith('calendario:') ? `Dal calendario di ${esc(P(e.fonte.slice(11)).nome)}` : e.fonte && e.fonte.startsWith('import:') ? `Importato da ${esc(P(e.fonte.slice(7)).nome)}` : e.fonte && e.fonte.startsWith('orario:') ? `Dall'orario di lavoro di ${esc(P(e.fonte.slice(7)).nome)}` : e.scuola ? `Dall'orario scolastico di ${esc(P(e.who[0]).nome)}` : `Aggiunto da ${esc(P(e.creatoDa).nome)}`;
     openSheet(`<h3>${esc(e.t)}</h3>
-      <div>${piuGiorni(e) ? `Dal ${fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })} al ${fmt(e.fino, { weekday: 'long', day: 'numeric', month: 'long' })}` : fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })}${e.h ? ` · ${esc(e.h)}${e.fine ? '–' + esc(e.fine) : ''}` : ' · tutto il giorno'}${e.ripeti ? ` · ${RIPETI[e.ripeti].toLowerCase()}` : ''}</div>
+      <div>${e.scuola ? `Ogni ${fmt(e.d, { weekday: 'long' })}${e.al ? `, fino al ${fmt(e.al, { day: 'numeric', month: 'long' })}` : ''}${e.h ? ` · ${esc(e.h)}–${esc(e.fine)}` : ''}` : `${piuGiorni(e) ? `Dal ${fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })} al ${fmt(e.fino, { weekday: 'long', day: 'numeric', month: 'long' })}` : fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })}${e.h ? ` · ${esc(e.h)}${e.fine ? '–' + esc(e.fine) : ''}` : ' · tutto il giorno'}${e.ripeti ? ` · ${RIPETI[e.ripeti].toLowerCase()}` : ''}`}</div>
       ${e.n ? `<div class="muted">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div><div class="src">${fonte}</div>
-      ${e.nascosto ? '' : `<button class="star tap${e.imp ? ' on' : ''}" data-impst="${e.id}">${e.imp ? '⭐ Importante: lo vedono tutti in Impegni' : '☆ Segna come importante'}</button>`}
-      ${e.fonte === 'import:' + S.me || !(e.fonte || '').startsWith('import:') ? `<div class="vis" data-mze="${e.id}"><label>Come ci andate</label>${mezziHtml(e.mezzo || '', 'data-mzd')}</div>` : ''}
+      ${e.scuola && S.scuola[e.who[0]] ? `<div class="lez mini">${lezioni(S.scuola[e.who[0]], e.scuola).map(x => `<div class="lz" style="--mc:${coloriMat(S.scuola[e.who[0]])[x.m]}"><span class="lo"><b>${x.da}ª${x.a > x.da ? `–${x.a}ª` : ''}</b>${x.h ? `<small>${esc(x.h)}</small>` : ''}</span><span class="lm"><b>${esc(x.m)}</b></span></div>`).join('')}</div>` : ''}
+      ${e.virtuale ? (moduli(S.me).some(m => m.di === e.who[0]) ? `<button class="btn ghost tap" data-apri-mio="1">Apri la sezione Personale</button>` : '') : e.nascosto ? '' : `<button class="star tap${e.imp ? ' on' : ''}" data-impst="${e.id}">${e.imp ? '⭐ Importante: lo vedono tutti in Impegni' : '☆ Segna come importante'}</button>`}
+      ${!e.virtuale && (e.fonte === 'import:' + S.me || !(e.fonte || '').startsWith('import:')) ? `<div class="vis" data-mze="${e.id}"><label>Come ci andate</label>${mezziHtml(e.mezzo || '', 'data-mzd')}</div>` : ''}
       ${mioCal(e) ? `<div class="vis" data-vise="${e.id}"><label>Gli altri vedono</label>${segHtml('vis', [['mostra', '👁️ Tutto'], ['nascondi', '🔒 Solo occupato']], e.privato ? 'nascondi' : 'mostra')}
         <div class="empty" id="visPerche">${regolaCal(e.t, regole()).perche} La scelta vale anche per gli altri impegni «${esc(e.t)}».</div></div>` : ''}
-      ${modificabile(e) ? `<div class="row2"><button class="btn ghost tap" data-modifica="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">Elimina</button></div>` : `<div class="empty">Si cambia dal calendario di chi l'ha scritto.</div>`}`);
+      ${modificabile(e) ? `<div class="row2"><button class="btn ghost tap" data-modifica="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">Elimina</button></div>` : `<div class="empty">${e.scuola ? 'Arriva dall\'orario della scuola: cambia quando arriva l\'orario nuovo.' : 'Si cambia dal calendario di chi l\'ha scritto.'}</div>`}`);
   }
   function sheetProposta(tp) {
     const t = PTIPO[tp];
@@ -1211,6 +1217,166 @@
      <button type="button" class="btn ghost tap" id="legoOn">🧱 Cerca un set LEGO</button>
      <div id="legoBox" class="legobox" hidden><input id="legoQ" type="search" maxlength="60" autocomplete="off" placeholder="Nome o numero, es. Hogwarts o 76419"><div id="legoRis" class="legoris"></div></div>
      <button class="btn tap">${mio ? 'Aggiungi alla mia lista' : 'Salva l\'idea'}</button></form>`, () => setTimeout(() => $('#reX').focus(), 380));
+  }
+
+
+  /* ---------- Sezione Personale (prova del 31/10/2026) ----------
+     Un pulsante uguale per tutti; dentro, cose diverse per ognuno, aggiunte un po' alla volta.
+     Per ora c'è "Scuola": l'orario scolastico (scuola/<persona>, lo scrive il programma "Orario scolastico")
+     e le note di chi lo usa (compiti: interrogazioni, verifiche, compiti…). Chi è in "copie" vede una copia
+     per provarla: l'orario è lo stesso, le note che aggiunge restano sue e le vede solo lui. */
+  const TIPI_C = [['interrogazione', '🙋', 'Interrogazione'], ['verifica', '📝', 'Verifica'], ['compito', '📚', 'Compiti'], ['portare', '🎒', 'Da portare'], ['altro', '📌', 'Altro']];
+  const TIPO_C = Object.fromEntries(TIPI_C.map(([k, e, n]) => [k, { e, n }]));
+  const GG = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  const titoloC = (c) => { const t = TIPO_C[c.tipo] || TIPO_C.altro; return c.tipo === 'altro' ? `${t.e} ${c.m}` : c.tipo === 'portare' ? `${t.e} Da portare: ${c.m}` : `${t.e} ${t.n} di ${c.m}`; };
+  const gSett = (d) => new Date(d + 'T12:00:00').getDay();
+  // Le ore della scuola: "08:00-09:00", una per ora di lezione (1ª, 2ª…). Se mancano, si mostra solo il numero dell'ora.
+  const oraDi = (s, o) => { const m = /^(\d{2}:\d{2})-(\d{2}:\d{2})$/.exec((s.ore || [])[o - 1] || ''); return m ? [m[1], m[2]] : null; };
+  // Le lezioni di un giorno della settimana (1 = lunedì), con le ore uguali di fila unite: "Lettere, 2ª-3ª".
+  function lezioni(s, g) {
+    const out = [];
+    for (const x of (s.orario || []).filter(x => +x.g === g).sort((a, b) => a.o - b.o)) {
+      const p = out[out.length - 1], t = oraDi(s, +x.o);
+      if (p && p.m === x.m && p.a + 1 === +x.o) { p.a = +x.o; if (t) p.fine = t[1]; }
+      else out.push({ m: String(x.m || ''), prof: String(x.prof || ''), da: +x.o, a: +x.o, h: t ? t[0] : '', fine: t ? t[1] : '' });
+    }
+    return out;
+  }
+  // Le vacanze: "da|a" (Firestore non tiene liste dentro liste).
+  const pause = (s) => (s.pause || []).map(p => String(p).split('|')).filter(p => p.length === 2);
+  const inPausa = (s, d) => pause(s).some(p => d >= p[0] && d <= p[1]);
+  const aScuola = (s, d) => d >= (s.dal || '') && (!s.al || d <= s.al) && !inPausa(s, d) && lezioni(s, gSett(d)).length > 0;
+  // Ogni materia il suo colore, sempre lo stesso (in ordine di come appare nell'orario).
+  function coloriMat(s) {
+    const m = [...new Set([...(s.orario || [])].sort((a, b) => a.g - b.g || a.o - b.o).map(x => x.m))];
+    return Object.fromEntries(m.map((x, i) => [x, `hsl(${Math.round(210 + i * 360 / Math.max(1, m.length)) % 360} 62% 56%)`]));
+  }
+  // Cosa vede una persona nella sua sezione: la sua scuola, o la copia di quella di qualcun altro.
+  function moduli(id) {
+    const out = [], ok = (s) => s && (s.orario || []).length;
+    if (ok(S.scuola[id])) out.push({ k: 'scuola', di: id, copia: false });
+    for (const [pid, s] of Object.entries(S.scuola)) if (pid !== id && ok(s) && (s.copie || []).includes(id) && S.persone[pid]) out.push({ k: 'scuola', di: pid, copia: true });
+    return out;
+  }
+  const mieiC = (di) => S.compiti.filter(c => c.per === S.me && (!di || c.di === di) && !c.via);
+  // Nel calendario: la scuola di ognuno la vedono tutti (un impegno per giorno della settimana, dalla prima all'ultima ora);
+  // le note (interrogazioni, verifiche…) solo chi le ha scritte.
+  function eventiScuola() {
+    const out = [];
+    for (const [pid, s] of Object.entries(S.scuola)) {
+      if (!S.persone[pid]) continue;
+      for (let g = 1; g <= 6; g++) {
+        const l = lezioni(s, g); if (!l.length) continue;
+        let d = new Date((s.dal || T) + 'T12:00:00'); while (d.getDay() !== g) d = addDays(d, 1);
+        const ore = l.reduce((n, x) => n + x.a - x.da + 1, 0), tutte = l.every(x => x.h);
+        out.push({ id: `scuola-${pid}-${g}`, t: '🎒 Scuola', d: iso(d), h: tutte ? l[0].h : '', fine: tutte ? l[l.length - 1].fine : '', who: [pid],
+          n: `${ore} ore: ${[...new Set(l.map(x => x.m))].join(', ')}`, ripeti: 'settimanale', al: s.al || '', pause: pause(s), fonte: `scuola:${pid}`, scuola: g, virtuale: true });
+      }
+    }
+    for (const c of mieiC()) {
+      if (c.fatto) continue;
+      const s = S.scuola[c.di], lz = s && lezioni(s, gSett(c.d)).find(x => x.m === c.m);
+      out.push({ id: `cmp-${c.id}`, t: titoloC(c), d: c.d, h: lz ? lz.h : '', fine: lz ? lz.fine : '', who: [S.me], n: c.x || '', ripeti: '', fonte: 'compito:' + S.me, cmp: c.id, virtuale: true });
+    }
+    return out;
+  }
+  const quando = (d) => { const n = Math.round((new Date(d + 'T12:00:00') - TODAY) / 864e5);
+    return n === 0 ? 'Oggi' : n === 1 ? 'Domani' : `${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')} · fra ${n} giorni`; };
+  // Il giorno da mostrare: oggi se la scuola non è ancora finita, altrimenti il prossimo giorno di scuola.
+  function giornoScuola(s) {
+    const ora = oraAdesso();
+    for (let i = 0; i < 30; i++) {
+      const d = iso(addDays(TODAY, i)); if (!aScuola(s, d)) continue;
+      const l = lezioni(s, gSett(d)), fine = l[l.length - 1].fine || '14:00';
+      if (i > 0 || ora < fine) return d;
+    }
+    return T;
+  }
+  // Le prossime lezioni di una materia, a partire dal giorno "da" (compreso).
+  function prossimeLezioni(s, m, da, n) {
+    const out = [];
+    for (let i = 0; i < 70 && out.length < n; i++) { const d = iso(addDays(new Date(da + 'T12:00:00'), i)); if (aScuola(s, d) && lezioni(s, gSett(d)).some(x => x.m === m)) out.push(d); }
+    return out;
+  }
+
+  let mioDay = null, mioNuova = false;
+  const mioAperto = () => $('#mio').classList.contains('on');
+  function openMio() {
+    if (!mioAperto()) history.pushState({ schermo: 'mio' }, '');
+    mioDay = null; mioNuova = true; rMio(); mioNuova = false;
+    $('#mio').scrollTop = 0; $('#mio').classList.add('on'); $('#fab').classList.add('via');
+  }
+  function closeMio(daIndietro) {
+    if (!mioAperto()) return;
+    $('#mio').classList.remove('on'); $('#fab').classList.remove('via');
+    if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
+  }
+  // Il pallino sul pulsante: c'è qualcosa per oggi o domani.
+  function pallinoMio() {
+    const dom = iso(addDays(TODAY, 1)), n = mieiC().filter(c => !c.fatto && (c.d === T || c.d === dom)).length;
+    const b = $('#mioBtn'); if (b) { b.classList.toggle('dot', n > 0); b.setAttribute('aria-label', n ? `Personale: ${n} ${n === 1 ? 'cosa' : 'cose'} per oggi o domani` : 'Personale'); }
+  }
+  function rMio() {
+    const sr = (i) => mioNuova ? ` rise" style="--i:${Math.min(i, 8)}` : '';
+    const mods = moduli(S.me);
+    const corpo = mods.length ? mods.map((m, i) => rScuola(m, sr, i)).join('')
+      : `<div class="card mvuoto${sr(1)}"><span class="mbig" aria-hidden="true">✨</span><b>La tua sezione</b><div class="empty">Qui arriveranno cose pensate per te, un po' alla volta.</div></div>`;
+    $('#mioIn').innerHTML = `
+     <div class="imp-top"><button class="back tap" id="mioBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Indietro</button></div>
+     <h1 class="hello${sr(0)}">Personale</h1>${corpo}`;
+  }
+  function rScuola(m, sr, k) {
+    const s = S.scuola[m.di], colM = coloriMat(s), nome = esc(P(m.di).nome);
+    if (!mioDay || !aScuola(s, mioDay) && mioDay < T) mioDay = giornoScuola(s);
+    // La settimana del giorno scelto, dal lunedì all'ultimo giorno con lezioni.
+    const ultimo = Math.max(...(s.orario || []).map(x => +x.g)), lun = inizioSettimana(new Date(mioDay + 'T12:00:00'));
+    const giorni = [...Array(ultimo)].map((_, i) => iso(addDays(lun, i)));
+    const kSel = Math.max(0, giorni.indexOf(mioDay));
+    const lz = aScuola(s, mioDay) ? lezioni(s, gSett(mioDay)) : [];
+    const note = mieiC(m.di), delGiornoC = note.filter(c => c.d === mioDay);
+    const arrivo = note.filter(c => c.d >= T).sort((a, b) => a.d.localeCompare(b.d) || (a.creato || 0) - (b.creato || 0));
+    const ore = {}; (s.orario || []).forEach(x => { ore[x.m] = (ore[x.m] || 0) + 1; });
+    const prof = {}; (s.orario || []).forEach(x => { if (x.prof) prof[x.m] = x.prof; });
+    return `${m.copia ? `<div class="hint mprova${sr(k * 4 + 1)}">🧪 Prova: è una copia della sezione di ${nome}. Le note che aggiungi qui le vedi solo tu.</div>` : ''}
+     <div class="sec${sr(k * 4 + 1)}">🎒 Scuola${s.classe ? ` · ${esc(s.classe)}` : ''}</div>
+     <div class="card scuola${sr(k * 4 + 2)}">
+       <div class="seg sgiorni" style="--n:${giorni.length};--k:${kSel}"><i class="spill"></i>${giorni.map(d => `<button type="button" class="tap${d === mioDay ? ' on' : ''}${d === T ? ' oggi' : ''}${aScuola(s, d) ? '' : ' no'}" data-mioday="${d}"><small>${GG[gSett(d)]}</small><b>${+d.slice(8)}</b>${note.some(c => c.d === d && !c.fatto) ? '<i class="sdot"></i>' : ''}</button>`).join('')}</div>
+       <div class="lgiorno"><b>${mioDay === T ? 'Oggi' : mioDay === iso(addDays(TODAY, 1)) ? 'Domani' : fmt(mioDay, { weekday: 'long', day: 'numeric', month: 'long' })}</b>${lz.length && lz[0].h ? `<small>${esc(lz[0].h)}–${esc(lz[lz.length - 1].fine)}</small>` : ''}</div>
+       ${lz.length ? `<div class="lez">${lz.map(x => { const nn = delGiornoC.filter(c => c.m === x.m);
+         return `<button type="button" class="lz tap" data-lez="${esc(x.m)}" data-di="${m.di}" style="--mc:${colM[x.m]}"><span class="lo"><b>${x.da}ª${x.a > x.da ? `–${x.a}ª` : ''}</b>${x.h ? `<small>${esc(x.h)}</small>` : ''}</span><span class="lm"><b>${esc(x.m)}</b>${x.prof ? `<small>${esc(x.prof)}</small>` : ''}${nn.length ? `<span class="lzn">${nn.map(c => `<span class="${c.fatto ? 'ok' : ''}">${(TIPO_C[c.tipo] || TIPO_C.altro).e} ${esc((TIPO_C[c.tipo] || TIPO_C.altro).n)}</span>`).join('')}</span>` : ''}</span><span class="lzp" aria-hidden="true">+</span></button>`; }).join('')}</div>
+       <div class="empty">Tocca una materia per segnare un'interrogazione, una verifica o i compiti.</div>`
+       : `<div class="empty">${inPausa(s, mioDay) ? 'Vacanza: niente scuola 🎉' : 'Niente scuola questo giorno.'}</div>`}
+     </div>
+     <div class="sec${sr(k * 4 + 3)}">In arrivo</div>
+     <div class="card${sr(k * 4 + 3)}">${arrivo.length ? `<div class="cmpl">${arrivo.map(c => `<div class="cmp${c.fatto ? ' fatto' : ''}" style="--mc:${colM[c.m] || 'var(--acc)'}"><button type="button" class="ck tap" data-cmpfatto="${c.id}" aria-label="${c.fatto ? 'Da rifare' : 'Fatto'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><button type="button" class="cmx tap" data-cmp="${c.id}"><b>${esc(titoloC(c))}</b><small>${quando(c.d)}${c.x ? ' · ' + esc(c.x) : ''}</small></button></div>`).join('')}</div>`
+       : `<div class="empty">Niente in arrivo. Quando c'è un'interrogazione o una verifica, segnala qui: la vedi anche nel calendario.</div>`}
+       <button type="button" class="link tap" data-cmpnuovo="${m.di}">+ Segna qualcosa</button></div>
+     <div class="sec${sr(k * 4 + 4)}">Materie</div>
+     <div class="card${sr(k * 4 + 4)}"><div class="mat">${Object.keys(colM).map(x => `<span style="--mc:${colM[x]}"><i></i><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'}${prof[x] ? ' · ' + esc(prof[x]) : ''}</small></span>`).join('')}</div></div>`;
+  }
+  // Foglio per segnare una cosa: il giorno è già scelto (la prossima lezione di quella materia), il testo è facoltativo,
+  // e toccare il tipo salva subito.
+  function sheetNuovoC(di, mat) {
+    const s = S.scuola[di]; if (!s) return;
+    const da = mioDay && mioDay > T ? mioDay : iso(addDays(TODAY, 1));
+    const date = prossimeLezioni(s, mat, da, 3); if (!date.length) date.push(da);
+    openSheet(`<h3 class="cmh" style="--mc:${coloriMat(s)[mat] || 'var(--acc)'}"><i></i>${esc(mat)}</h3><form class="stack" id="fCm" data-di="${di}" data-m="${esc(mat)}">
+      <label>Per quando</label>
+      <div class="seg" style="--n:${date.length};--k:0"><i class="spill"></i>${date.map((d, i) => `<button type="button" class="tap${i ? '' : ' on'}" data-cmd="${d}">${d === iso(addDays(TODAY, 1)) ? 'Domani' : fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')}</button>`).join('')}</div>
+      <input id="cmX" maxlength="120" autocomplete="off" placeholder="Dettagli, se vuoi (es. capitoli 3 e 4)">
+      <label>Cosa c'è? Tocca per segnarlo</label>
+      <div class="tipi">${TIPI_C.map(([k, e, n]) => `<button type="button" class="tp tap" data-cmtipo="${k}"><b>${e}</b>${n}</button>`).join('')}</div></form>`);
+  }
+  function sheetMaterie(di) {
+    const s = S.scuola[di]; if (!s) return; const colM = coloriMat(s);
+    openSheet(`<h3>Per quale materia?</h3><div class="tipi">${Object.keys(colM).map(x => `<button type="button" class="tp tap mt" data-lez="${esc(x)}" data-di="${di}" style="--mc:${colM[x]}"><i></i>${esc(x)}</button>`).join('')}</div>`);
+  }
+  function sheetC(id) {
+    const c = S.compiti.find(x => x.id === id); if (!c) return;
+    const s = S.scuola[c.di], lz = s && lezioni(s, gSett(c.d)).find(x => x.m === c.m);
+    openSheet(`<h3>${esc(titoloC(c))}</h3><div>${fmt(c.d, { weekday: 'long', day: 'numeric', month: 'long' })}${lz ? ` · ${lz.da}ª ora${lz.h ? ` (${esc(lz.h)})` : ''}` : ''}</div>
+      ${c.x ? `<div class="muted">${esc(c.x)}</div>` : ''}<div class="src">${c.di === S.me ? 'Lo vedi solo tu' : 'Lo vedi solo tu: è nella tua copia di prova'}</div>
+      <div class="row2"><button type="button" class="btn ${c.fatto ? 'ghost' : ''} tap" data-cmpfatto="${c.id}" data-chiudi="1">${c.fatto ? 'Non ancora fatto' : '✓ Fatto'}</button><button type="button" class="btn bad tap" data-cmpvia="${c.id}">Elimina</button></div>`);
   }
 
   /* ---------- Impostazioni (schermata intera che entra da destra) ---------- */
@@ -1358,7 +1524,7 @@
       if (x0 == null) return; x0 = null;
       const veloce = dx / Math.max(1, Date.now() - t0) > 0.5;
       sc.classList.remove('drag'); sc.style.transform = '';
-      if (dx > 110 || (veloce && dx > 40)) ({ trip: closeTrip, persona: closePersona }[sc.id] || closeImp)();
+      if (dx > 110 || (veloce && dx > 40)) ({ trip: closeTrip, persona: closePersona, mio: closeMio }[sc.id] || closeImp)();
     });
     });
   })();
@@ -1673,7 +1839,32 @@
       if (v === 'si' && IDS().every(i => S.cena[i] === 'si')) { festa(n); toast('Stasera tutti a tavola! 🍝'); }
       return DATI.imposta('cena', T, { [S.me]: v }).catch(sbaglio);
     }
-    if (d.ev) { const e = S.impegni.find(x => x.id === d.ev); return e && sheetDettaglio(e); }
+    if (d.ev) { const e = S.impegni.find(x => x.id === d.ev); return e && (e.cmp ? sheetC(e.cmp) : sheetDettaglio(e)); }
+    // Sezione Personale
+    if (t.id === 'mioBtn') return openMio();
+    if (t.id === 'mioBack') return closeMio();
+    if (d.apriMio) { closeSheet(); return openMio(); }
+    if (d.mioday) { mioDay = d.mioday; return rMio(); }
+    if (d.lez && d.di) return sheetNuovoC(d.di, d.lez);
+    if (d.cmpnuovo) return sheetMaterie(d.cmpnuovo);
+    if (d.cmp) return sheetC(d.cmp);
+    if (d.cmd) { const b = [...t.parentElement.querySelectorAll('button')]; return segSet(t.parentElement, b.indexOf(t)); }
+    if (d.cmtipo) {
+      const f = t.closest('form'), dd = f.querySelector('[data-cmd].on');
+      const c = { per: S.me, di: f.dataset.di, m: f.dataset.m, tipo: d.cmtipo, d: dd ? dd.dataset.cmd : iso(addDays(TODAY, 1)), x: $('#cmX').value.trim().slice(0, 120), by: S.me, creato: Date.now(), fatto: false };
+      closeSheet(); toast(`${TIPO_C[c.tipo].e} Segnato per ${quando(c.d).split(' · ')[0].toLowerCase()}`);
+      return DATI.aggiungi('compiti', c).catch(sbaglio);
+    }
+    if (d.cmpfatto) {
+      const c = S.compiti.find(x => x.id === d.cmpfatto); if (!c) return;
+      if (d.chiudi) closeSheet(); else if (!c.fatto) t.closest('.cmp') && t.closest('.cmp').classList.add('fatto');
+      if (!c.fatto) toast('Fatto ✓');
+      return DATI.aggiorna('compiti', c.id, { fatto: !c.fatto }).catch(sbaglio);
+    }
+    if (d.cmpvia) {
+      if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare'; return; }
+      closeSheet(); return DATI.elimina('compiti', d.cmpvia).then(() => toast('Eliminato')).catch(sbaglio);
+    }
     if (d.modifica) return sheetEvento(S.impegni.find(x => x.id === d.modifica));
     if (d.elimina) {
       if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare'; return; }
@@ -1904,7 +2095,7 @@
     if (stopCena) { stopCena(); stopCena = null; }
     if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
     for (const k in stopSorp) { stopSorp[k](); delete stopSorp[k]; }
-    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [] });
+    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [] });
     seen.clear();
   }
   DATI.avvia((persona, errore) => {
@@ -1916,6 +2107,8 @@
       if (DATI.iscriviDiNuovo) DATI.iscriviDiNuovo();
       a(DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); render(); }));
       a(DATI.ascolta('regali', l => { S.regali = l; render(); }));
+      a(DATI.ascolta('scuola', l => { S.scuola = Object.fromEntries(l.map(x => [x.id, x])); mappaImpegni(); render(); }));
+      a(DATI.ascolta('compiti', l => { S.compiti = l; mappaImpegni(); render(); }));
       a(DATI.ascolta('ricette', l => { S.ricette = l; render(); if (ricAperta) sheetRicetta(ricAperta, true); }));
       a(DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); }));
       a(DATI.ascolta('viaggi', l => { S.viaggi = l; render(); }));

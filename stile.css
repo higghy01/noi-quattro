@@ -560,3 +560,51 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .rfotoin img,.rfotoin .noimg{position:static;flex:none;width:64px;height:64px;border-radius:12px;object-fit:cover;font-size:28px;background:color-mix(in srgb,var(--acc) 14%,var(--soft))}
 .rfotoin>span:last-child{font-weight:600;color:var(--acc)}
 #ricSpesa{width:100%}
+
+/* Personale (v39): pulsante accanto alle impostazioni e scheda Scuola */
+.hbtn{display:flex;align-items:center;gap:10px;flex:none}
+.mio{width:44px;height:44px;border-radius:999px;background:color-mix(in srgb,var(--me) 13%,var(--panel));border:1px solid color-mix(in srgb,var(--me) 22%,transparent);display:grid;place-items:center;position:relative;transition:transform .12s var(--ease),background .24s}
+.mio svg{width:22px;height:22px;fill:color-mix(in srgb,var(--me) 75%,var(--fg));stroke:none;transition:transform .5s var(--pop)}
+.mio:active svg{transform:rotate(-18deg) scale(1.1)}
+.mio.dot::after{content:"";position:absolute;top:2px;right:2px;width:11px;height:11px;border-radius:999px;background:var(--p-corallo);box-shadow:0 0 0 2px var(--bg);animation:fm-pop .5s var(--pop) both}
+.mvuoto{justify-items:center;text-align:center;padding:28px 16px;gap:6px}
+.mvuoto .mbig{font-size:38px;line-height:1;margin-bottom:4px}
+.mprova{--pc:var(--p-ambra)}
+.sgiorni{margin-bottom:0}
+.sgiorni button{min-height:54px;display:grid;place-content:center;gap:1px;line-height:1.1}
+.sgiorni button small{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.sgiorni button b{font:650 17px var(--f-disp)}
+.sgiorni button.oggi b{color:var(--me)}
+.sgiorni button.no{opacity:.45}
+.lgiorno{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 2px}
+.lgiorno b{font:650 17px var(--f-disp)}.lgiorno b::first-letter{text-transform:uppercase}
+.lgiorno small{color:var(--muted);font-size:13px;white-space:nowrap}
+.lez{display:grid;gap:6px}
+.lz{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:10px;padding:9px 10px 9px 0;border-radius:14px;background:color-mix(in srgb,var(--mc) 9%,transparent);text-align:left;width:100%;position:relative;overflow:hidden}
+.lz::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:0 4px 4px 0;background:var(--mc)}
+.lz .lo{display:grid;justify-items:center;line-height:1.15}
+.lz .lo b{font:650 14px var(--f-disp)}.lz .lo small{font-size:11px;color:var(--muted)}
+.lz .lm{display:grid;gap:1px;min-width:0}
+.lz .lm b{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lz .lm small{font-size:12px;color:var(--muted)}
+.lzn{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.lzn span{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--mc) 20%,var(--panel))}
+.lzn span.ok{opacity:.55;text-decoration:line-through}
+.lzp{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;color:var(--muted);font-size:20px;background:var(--panel)}
+.lez.mini .lz{padding-block:6px}
+.cmpl{display:grid;gap:4px}
+.cmp{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:6px;transition:opacity .3s}
+.cmp .ck{width:44px;height:44px;display:grid;place-items:center;flex:none}
+.cmp .ck svg{width:26px;height:26px;padding:4px;border-radius:999px;border:2px solid var(--mc);fill:none;stroke:transparent;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;transition:background .24s,stroke .24s}
+.cmp.fatto .ck svg{background:var(--mc);stroke:#fff;animation:fm-pop .4s var(--pop)}
+.cmp .cmx{display:grid;gap:2px;text-align:left;min-height:44px;align-content:center;min-width:0}
+.cmp .cmx b{font-weight:600;font-size:15px}
+.cmp .cmx small{font-size:13px;color:var(--muted)}
+.cmp.fatto .cmx{opacity:.55}.cmp.fatto .cmx b{text-decoration:line-through}
+.mat{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.mat span{display:grid;grid-template-columns:12px 1fr;column-gap:10px;align-items:center}
+.mat i,.cmh i,.tp.mt i{width:12px;height:12px;border-radius:999px;background:var(--mc);display:inline-block;flex:none}
+.mat b{font-weight:600;font-size:14px}.mat small{grid-column:2;font-size:12px;color:var(--muted)}
+.cmh{display:flex;align-items:center;gap:10px}
+.tp.mt{padding-left:12px}
+.sgiorni .sdot{position:absolute;bottom:5px;left:50%;width:5px;height:5px;margin-left:-2.5px;border-radius:999px;background:var(--p-corallo)}

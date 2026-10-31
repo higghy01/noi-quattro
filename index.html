@@ -48,7 +48,10 @@ document.querySelectorAll('meta[name=theme-color]').forEach(function(m){m.datase
         <h1 class="hello" id="hello">Ciao</h1>
         <div class="date" id="today"></div>
       </div>
-      <button class="me tap" id="meBtn" aria-label="Impostazioni">·</button>
+      <div class="hbtn">
+        <button class="mio tap" id="mioBtn" aria-label="Personale"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg></button>
+        <button class="me tap" id="meBtn" aria-label="Impostazioni">·</button>
+      </div>
     </header>
     <div class="banner" id="banner" hidden></div>
     <section class="page on" id="p-oggi"><div class="stack" aria-hidden="true"><div class="skel" style="height:150px"></div><div class="skel" style="height:110px"></div><div class="skel" style="height:90px"></div></div></section>
@@ -76,6 +79,8 @@ document.querySelectorAll('meta[name=theme-color]').forEach(function(m){m.datase
 <section class="screen" id="imp" aria-label="Impostazioni"><div class="in" id="impIn"></div></section>
 <!-- La pagina di una persona -->
 <section class="screen" id="persona" aria-label="Persona"><div class="in" id="persIn"></div></section>
+<!-- Personale: cose diverse per ognuno -->
+<section class="screen" id="mio" aria-label="Personale"><div class="in" id="mioIn"></div></section>
 <!-- Un ricordo con le sue foto e i suoi video -->
 <section class="screen" id="trip" aria-label="Ricordo"><div class="in" id="tripIn"></div></section>
 <!-- Foto a tutto schermo -->
