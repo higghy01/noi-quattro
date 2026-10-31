@@ -30,7 +30,7 @@
       const tutti = ['p1', 'p2', 'p3', 'p4'];
       const o = { persone: {}, impegni: {}, note: {}, spesa: {}, cena: {} };
       [['p1', 'Marco', 'blu'], ['p2', 'Giulia', 'rosa'], ['p3', 'Elena', 'ambra'], ['p4', 'Paolo', 'verde']]
-        .forEach(([id, nome, colore], i) => o.persone[id] = { nome, colore, ordine: i, notifiche: { promemoria: true, nuovi: true, riepilogo: true, cena: true, proposte: true } });
+        .forEach(([id, nome, colore], i) => o.persone[id] = { nome, colore, ordine: i, notifiche: { promemoria: true, nuovi: true, riepilogo: true, cena: true, proposte: true, conflitti: true } });
       [ev('Turno al lavoro', 0, '06:30', ['p1'], 'Fino alle 11:30', { fonte: 'calendario:p1' }),
        ev('Dentista', 0, '15:00', ['p3', 'p2'], 'Studio in centro'),
        ev('Cena tutti insieme', 0, '20:00', tutti, 'Pizza fatta in casa'),
@@ -38,7 +38,8 @@
        ev('Gran Premio in TV', 1, '21:00', ['p1', 'p4'], ''),
        ev('Spesa grande', 2, '10:00', ['p2'], 'Chi vuole qualcosa lo scrive in Spesa'),
        ev('Compleanno della nonna', 4, '', tutti, '', { ripeti: 'annuale' }),
-       ev('Revisione auto', 5, '09:00', ['p4'], 'Portare il libretto')].forEach(e => o.impegni[uid()] = e);
+       ev('Revisione auto', 5, '09:00', ['p4'], 'Portare il libretto'),
+       ev('Riunione di condominio', 1, '19:00', ['p1'], ''), ev('Matrimonio di Chiara', 12, '11:00', ['p1', 'p2'], 'In comune')].forEach(e => o.impegni[uid()] = e);
       o.note[uid()] = { by: 'p3', x: 'Qualcuno ha visto le mie cuffie bianche?', pin: false, creato: now - 9e7 };
       // Proposte: una aperta con voti, una appena fatta senza idee, una già decisa.
       const op = (x, by, k) => ({ x, by, creato: now - 5e6 + k });

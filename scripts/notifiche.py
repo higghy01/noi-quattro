@@ -6,6 +6,7 @@
 - cena: il pomeriggio (alle 17, o all'ora scelta), "A cena stasera?" a chi non ha ancora risposto;
 - proposte: una proposta nuova (a tutti tranne chi l'ha fatta), "hanno votato tutti" (a chi l'ha fatta)
   e cosa si è deciso (a tutti tranne chi ha deciso);
+- conflitti: a chi ha due impegni che si accavallano oggi, domani o dopodomani;
 - note: quando una nota nuova è messa in evidenza (le note non si scrivono più, restano le vecchie).
 Ognuno sceglie quali ricevere dall'app (persone/<id>.notifiche). Cosa è già stato mandato
 si ricorda in sistema/notifiche, così niente arriva due volte.
@@ -113,6 +114,25 @@ def main():
             for p in persone:
                 if p != n.get("by"):
                     manda(p, "note", f"Nota di {nome(n.get('by'))}", n.get("x", "")[:120], f"nota|{d.id}|{p}")
+
+    # Due impegni della stessa persona alla stessa ora (oggi, domani, dopodomani: "inviati" ricorda per 2 giorni).
+    def intervallo(e):
+        a = int(e["h"][:2]) * 60 + int(e["h"][3:5])
+        b = int(e["fine"][:2]) * 60 + int(e["fine"][3:5]) if e.get("fine") else a + 60
+        return a, (b if b > a else 24 * 60)
+    for k in range(3):
+        giorno = (ora.date() + dt.timedelta(days=k)).isoformat()
+        del_giorno = [e for e in impegni if e.get("h") and capita(e, giorno)]
+        for p in persone:
+            suoi = sorted((e for e in del_giorno if p in (e.get("who") or [])), key=lambda e: e["h"])
+            for i, x in enumerate(suoi):
+                for y in suoi[i + 1:]:
+                    (a1, b1), (a2, b2) = intervallo(x), intervallo(y)
+                    tx, ty = titolo_per(x, p)[0], titolo_per(y, p)[0]
+                    if a1 < b2 and a2 < b1 and tx != ty:
+                        quando = "oggi" if k == 0 else "domani" if k == 1 else dt.date.fromisoformat(giorno).strftime("%d/%m")
+                        manda(p, "conflitti", f"Due impegni alla stessa ora {quando}", f"{x['h']} {tx} · {y['h']} {ty}",
+                              f"conf|{min(x['id'], y['id'])}|{max(x['id'], y['id'])}|{giorno}|{p}")
 
     # Proposte: nuove, "hanno votato tutti", decise.
     for d in db.collection("proposte").stream():
