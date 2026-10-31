@@ -1,0 +1,20 @@
+# Quando cambia firestore.rules le pubblica da solo su Firebase (si può anche lanciare a mano).
+name: Regole del database
+on:
+  push:
+    branches: [main]
+    paths: [firestore.rules]
+  workflow_dispatch: {}
+concurrency: { group: regole, cancel-in-progress: false }
+jobs:
+  pubblica:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: scripts/requisiti.txt }
+      - run: pip install -r scripts/requisiti.txt
+      - run: python scripts/pubblica_regole.py
+        env:
+          FIREBASE_CHIAVE: ${{ secrets.FIREBASE_CHIAVE }}

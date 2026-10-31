@@ -17,6 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650&display=swap">
 <link rel="stylesheet" href="stile.css">
+<script>try{var t=localStorage.getItem('noi4-tema');if(t==='chiaro'||t==='scuro')document.documentElement.dataset.theme=t==='chiaro'?'light':'dark'}catch(e){}</script>
 </head>
 <body>
 <!-- Accesso -->
@@ -43,10 +44,10 @@
         <h1 class="hello" id="hello">Ciao</h1>
         <div class="date" id="today"></div>
       </div>
-      <button class="me tap" id="meBtn" aria-label="Il mio profilo">·</button>
+      <button class="me tap" id="meBtn" aria-label="Impostazioni">·</button>
     </header>
     <div class="banner" id="banner" hidden></div>
-    <section class="page on" id="p-oggi"></section>
+    <section class="page on" id="p-oggi"><div class="stack" aria-hidden="true"><div class="skel" style="height:150px"></div><div class="skel" style="height:110px"></div><div class="skel" style="height:90px"></div></div></section>
     <section class="page" id="p-cal"></section>
     <section class="page" id="p-note"></section>
     <section class="page" id="p-spesa"></section>
@@ -64,6 +65,9 @@
     </div>
   </nav>
 </div>
+
+<!-- Impostazioni: schermata intera che entra da destra -->
+<section class="screen" id="imp" aria-label="Impostazioni"><div class="in" id="impIn"></div></section>
 
 <div class="veil" id="veil"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="in" id="sheetIn"></div></div>
