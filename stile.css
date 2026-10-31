@@ -3,7 +3,7 @@
 :root{
   --bg:#F5F4F8; --panel:#FFFFFF; --fg:#1C1A24; --muted:#6C687A; --line:#E4E1EB; --soft:#EFEDF4;
   --acc:#5B4BD6; --acc-ink:#FFFFFF; --bad:#C8402E; --ok:#2E9A5E;
-  --p-blu:#2F74D0; --p-rosa:#C93A7B; --p-ambra:#C98208; --p-verde:#2E9A5E; --p-viola:#7A5CC7; --p-corallo:#D9573F;
+  --p-blu:#2F74D0; --p-rosa:#C93A7B; --p-ambra:#C98208; --p-verde:#2E9A5E; --p-viola:#7A5CC7; --p-corallo:#D9573F; --p-rosso:#D23B3B; --p-grigio:#6F7282;
   --f-disp:"Bricolage Grotesque", ui-rounded, -apple-system, "SF Pro Rounded", system-ui, sans-serif;
   --f-body:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
   --ease:cubic-bezier(.2,.8,.2,1); --pop:cubic-bezier(.34,1.4,.5,1);
@@ -13,7 +13,7 @@
 @media (prefers-color-scheme: dark){:root{
   --bg:#111016; --panel:#1B1A22; --fg:#F1EFF6; --muted:#A29DB2; --line:#2C2A36; --soft:#24222D;
   --acc:#8F83F0; --acc-ink:#15131D; --bad:#F07A66; --ok:#52C285;
-  --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70;
+  --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70; --p-rosso:#F2706B; --p-grigio:#A4A7B5;
   color-scheme:dark}}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
