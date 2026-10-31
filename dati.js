@@ -32,11 +32,25 @@
       [['Latte', 'p2', false], ['Pane', 'p4', false], ['Mozzarella per la pizza', 'p1', false], ['Mele', 'p3', true], ['Detersivo piatti', 'p2', false]]
         .forEach(([x, by, done], i) => o.spesa[uid()] = { x, by, done, creato: now - i * 1000 });
       o.cena[iso(0)] = { p1: 'si', p2: 'si', p4: 'no' };
+      regaliEsempio(o);
       o.me = 'p1';
       return o;
     }
+    function regaliEsempio(o) {
+      const now = Date.now();
+      o.regali = {}; o.sorprese = {};
+      const r = {};
+      [['p1', 'Cuffie senza fili', ''], ['p1', 'Libro sulla Formula 1', ''], ['p2', 'Pianta per il balcone', 'Una di quelle grandi'],
+       ['p3', 'Felpa nera taglia S', 'https://www.example.com'], ['p3', 'Biglietti per un concerto', ''], ['p4', 'Guanti da moto', 'Taglia L']]
+        .forEach(([per, x, n], i) => { const id = uid(); r[per + i] = id; o.regali[id] = { per, x, n, creato: now - i * 1000 }; });
+      o.sorprese.p3 = { presi: { [r.p33]: 'p2' }, idee: { [uid()]: { x: 'Cornice con la foto delle vacanze', by: 'p4', creato: now } } };
+      o.sorprese.p2 = { presi: {}, idee: { [uid()]: { x: 'Cena al ristorante per il compleanno', by: 'p1', creato: now } } };
+    }
     try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
     if (!db || !db.persone) db = esempio();
+    if (!db.regali) regaliEsempio(db);
+    // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
+    const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };
     const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} subs.forEach(s => s()); };
     const list = (col) => Object.entries(db[col] || {}).map(([id, v]) => Object.assign({ id }, v));
     return {
@@ -46,10 +60,10 @@
       ricomincia() { db = esempio(); save(); this._cb(db.me); },
       login() {}, reset() {}, esci() {},
       ascolta(col, cb) { const s = () => cb(list(col)); subs.push(s); s(); },
-      ascoltaDoc(col, id, cb) { const s = () => cb((db[col] || {})[id] || {}); subs.push(s); s(); },
+      ascoltaDoc(col, id, cb) { const s = () => cb((db[col] || {})[id] || {}); subs.push(s); s(); return () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); }; },
       async aggiungi(col, data) { const id = uid(); (db[col] = db[col] || {})[id] = data; save(); return id; },
       async aggiorna(col, id, data) { db[col][id] = Object.assign({}, db[col][id] || {}, data); save(); },
-      async imposta(col, id, data) { (db[col] = db[col] || {})[id] = Object.assign({}, db[col][id] || {}, data); save(); },
+      async imposta(col, id, data) { (db[col] = db[col] || {})[id] = unisci(db[col][id] || {}, data); save(); },
       async elimina(col, id) { delete db[col][id]; save(); },
       async molti(col, arr) { arr.forEach(d => (db[col] = db[col] || {})[uid()] = d); save(); },
       async attivaNotifiche() { return 'Nella modalità prova le notifiche non partono: funzioneranno nell\'app vera.'; }
@@ -78,8 +92,8 @@
       login: (email, pass) => auth.signInWithEmailAndPassword(email.trim(), pass),
       reset: (email) => auth.sendPasswordResetEmail(email.trim()),
       esci: () => auth.signOut(),
-      ascolta(col, cb) { return fs.collection(col).onSnapshot(s => cb(s.docs.map(d => Object.assign({ id: d.id }, d.data())))); },
-      ascoltaDoc(col, id, cb) { return fs.collection(col).doc(id).onSnapshot(d => cb(d.data() || {})); },
+      ascolta(col, cb) { return fs.collection(col).onSnapshot(s => cb(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(col, e)); },
+      ascoltaDoc(col, id, cb) { return fs.collection(col).doc(id).onSnapshot(d => cb(d.data() || {}), () => cb({})); },
       aggiungi: (col, data) => fs.collection(col).add(data).then(r => r.id),
       aggiorna: (col, id, data) => fs.collection(col).doc(id).update(data),
       imposta: (col, id, data) => fs.collection(col).doc(id).set(data, { merge: true }),

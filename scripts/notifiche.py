@@ -2,8 +2,8 @@
 
 - promemoria: circa un'ora prima di un impegno, a chi partecipa;
 - nuovi: quando qualcuno ti aggiunge a un impegno;
-- riepilogo: alle 21, gli impegni di domani;
-- cena: alle 17, "A cena stasera?" a chi non ha ancora risposto;
+- riepilogo: la sera (alle 21, o all'ora scelta nelle Impostazioni), gli impegni di domani;
+- cena: il pomeriggio (alle 17, o all'ora scelta), "A cena stasera?" a chi non ha ancora risposto;
 - note: quando una nota nuova è messa in evidenza.
 Ognuno sceglie quali ricevere dall'app (persone/<id>.notifiche). Cosa è già stato mandato
 si ricorda in sistema/notifiche, così niente arriva due volte.
@@ -38,6 +38,7 @@ def main():
     impegni = [dict(d.to_dict(), id=d.id) for d in db.collection("impegni").stream()]
 
     vuole = lambda p, tipo: (persone.get(p, {}).get("notifiche") or {}).get(tipo, True)
+    ora_di = lambda p, k, solita: int((persone.get(p, {}).get("notifiche") or {}).get(k) or solita)
     nome = lambda p: persone.get(p, {}).get("nome", "Qualcuno")
     da_mandare = []  # (persona, titolo, testo, chiave)
 
@@ -64,19 +65,21 @@ def main():
                 if p != e.get("creatoDa"):
                     manda(p, "nuovi", f"{nome(e.get('creatoDa'))} ti ha aggiunto", f"{e['t']} · {quando}", f"nuovo|{e['id']}|{p}")
 
-    # Riepilogo serale alle 21.
-    if ora.hour == 21:
+    # Riepilogo serale: ognuno all'ora che ha scelto (di solito le 21).
+    serale = [p for p in persone if ora.hour == ora_di(p, "oraRiepilogo", 21)]
+    if serale:
         lista = sorted((e for e in impegni if capita(e, domani)), key=lambda e: e.get("h") or "")
         if lista:
             righe = [f"{e['h'] or 'tutto il giorno'} {e['t']}" for e in lista[:4]]
             testo = " · ".join(righe) + (f" e altri {len(lista) - 4}" if len(lista) > 4 else "")
-            for p in persone:
+            for p in serale:
                 manda(p, "riepilogo", f"Domani: {len(lista)} impegni in famiglia", testo, f"riep|{oggi}|{p}")
 
-    # Cena alle 17.
-    if ora.hour == 17:
+    # Cena: ognuno all'ora che ha scelto (di solito le 17).
+    pomeriggio = [p for p in persone if ora.hour == ora_di(p, "oraCena", 17)]
+    if pomeriggio:
         cena = (db.collection("cena").document(oggi).get().to_dict() or {})
-        for p in persone:
+        for p in pomeriggio:
             if cena.get(p) not in ("si", "no"):
                 manda(p, "cena", "A cena stasera?", "Rispondi con un tocco nella scheda Oggi.", f"cena|{oggi}|{p}")
 

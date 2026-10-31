@@ -1,4 +1,4 @@
-// Regole del database di "Noi quattro". Si incollano nella console di Firebase (Firestore > Regole).
+// Regole del database di "Noi quattro". Si pubblicano da sole (workflow "Regole del database") a ogni modifica.
 // Entra solo chi ha un documento in "membri" con la sua email come nome (li crea Sasha dalla console):
 // così nel codice pubblico non c'è nessuna email.
 rules_version = '2';
@@ -21,7 +21,7 @@ service cloud.firestore {
     match /persone/{id} {
       allow read: if membro();
       allow update: if membro() && io() == id
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifiche']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifiche', 'privacy']);
       allow create, delete: if false;
     }
 
@@ -52,6 +52,19 @@ service cloud.firestore {
       allow read: if membro();
       allow create: if membro() && request.resource.data.keys().hasOnly([io()]);
       allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([io()]);
+    }
+
+    // Liste dei regali: ognuno scrive solo la sua lista, tutti la leggono.
+    match /regali/{id} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.per == io();
+      allow update: if membro() && resource.data.per == io() && request.resource.data.per == io();
+      allow delete: if membro() && resource.data.per == io();
+    }
+
+    // Le sorprese per una persona (chi prende cosa, idee segrete): tutti tranne lei.
+    match /sorprese/{persona} {
+      allow read, write: if membro() && io() != persona;
     }
 
     // Telefoni iscritti alle notifiche: ognuno iscrive solo sé stesso.

@@ -2,7 +2,8 @@
 
 Per ogni persona legge il suo link privato del calendario (.ics) dai segreti di GitHub:
   CALENDARI = {"p1": "https://...", "p2": "webcal://..."}   (un solo segreto, in formato JSON)
-Facoltativo, variabile (non segreta) PRIVACY = {"p2": "occupato"}: di quella persona si vede solo "Occupato".
+Chi sceglie nelle Impostazioni dell'app "solo Occupato" (persone/<id>.privacy) mostra agli altri solo "Occupato".
+Facoltativo, variabile (non segreta) PRIVACY = {"p2": "occupato"}: stesso effetto, deciso da GitHub.
 Prende gli impegni dei prossimi 60 giorni e li scrive con fonte "calendario:<persona>";
 quelli spariti dal calendario vengono tolti. Nessun dato finisce nel codice o nei log.
 """
@@ -60,6 +61,9 @@ def main():
         print("Nessun calendario collegato.")
         return
     db = database()
+    for d in db.collection("persone").stream():
+        if (d.to_dict() or {}).get("privacy") == "occupato":
+            privacy[d.id] = "occupato"
     errori = 0
     for persona, url in calendari.items():
         try:
