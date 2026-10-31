@@ -48,6 +48,21 @@ service cloud.firestore {
       allow delete: if membro() && resource.data.by == io();
     }
 
+    // Proposte (piccoli sondaggi): chi propone cambia tutto; gli altri aggiungono idee
+    // (senza cambiare o togliere quelle che ci sono) e cambiano solo il proprio voto.
+    match /proposte/{id} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.by == io()
+        && request.resource.data.opzioni is map && request.resource.data.voti is map;
+      allow update: if membro() && (resource.data.by == io() && request.resource.data.by == io()
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['opzioni', 'voti'])
+            && request.resource.data.voti.diff(resource.data.voti).affectedKeys().hasOnly([io()])
+            && request.resource.data.opzioni.diff(resource.data.opzioni).changedKeys().size() == 0
+            && request.resource.data.opzioni.diff(resource.data.opzioni).removedKeys().size() == 0
+            && request.resource.data.opzioni.size() <= 30));
+      allow delete: if membro() && resource.data.by == io();
+    }
+
     // Cose di tutta la famiglia (per ora: i nostri mezzi).
     match /famiglia/{doc} {
       allow read, write: if membro();
