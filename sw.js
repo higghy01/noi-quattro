@@ -1,6 +1,12 @@
 // Noi quattro - service worker: app usabile offline + notifiche (Firebase Cloud Messaging).
 // A ogni pubblicazione alzare VERSIONE, altrimenti i telefoni restano sulla copia vecchia.
-const VERSIONE = 'noi4-v16';
+const VERSIONE = 'noi4-v17';
+// Le librerie esterne hanno la versione nell'indirizzo: stanno in una copia a parte che NON si cancella a ogni
+// aggiornamento, così l'app si apre anche senza rete subito dopo una nuova versione.
+const CACHE_LIB = 'noi4-librerie';
+const FB = 'https://www.gstatic.com/firebasejs/10.14.1/';
+const LIB_FILE = ['app', 'auth', 'firestore', 'messaging', 'storage'].map(n => FB + 'firebase-' + n + '-compat.js')
+  .concat(['https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js']);
 const LIBRERIE = ['www.gstatic.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 const FILE = ['./', 'index.html', 'stile.css', 'morphdom.js', 'app.js', 'dati.js', 'config.js', 'manifest.json', 'icona-180.png', 'icona-512.png'];
 
@@ -13,9 +19,16 @@ if (self.CONFIG && self.CONFIG.firebase && self.CONFIG.firebase.apiKey) {
   firebase.messaging();
 }
 
-self.addEventListener('install', e => { e.waitUntil(caches.open(VERSIONE).then(c => c.addAll(FILE))); self.skipWaiting(); });
+self.addEventListener('install', e => {
+  e.waitUntil(Promise.all([
+    caches.open(VERSIONE).then(c => c.addAll(FILE)),
+    // Le librerie: si scaricano solo quelle che mancano (se una non arriva, l'aggiornamento va avanti lo stesso).
+    caches.open(CACHE_LIB).then(c => Promise.all(LIB_FILE.map(u => c.match(u).then(r => r || c.add(u).catch(() => {})))))
+  ]));
+  self.skipWaiting();
+});
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => n !== VERSIONE).map(n => caches.delete(n)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => n !== VERSIONE && n !== CACHE_LIB).map(n => caches.delete(n)))).then(() => self.clients.claim()));
 });
 // Prima la rete (per avere sempre l'ultima versione), la copia solo se manca internet.
 self.addEventListener('fetch', e => {
@@ -23,7 +36,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   // Librerie e caratteri esterni (hanno la versione nell'indirizzo): prima la copia, così l'app si apre subito anche senza rete.
   if (LIBRERIE.includes(u.hostname)) {
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(n => { const c = n.clone(); caches.open(VERSIONE).then(x => x.put(e.request, c)); return n; })));
+    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(n => { const c = n.clone(); caches.open(CACHE_LIB).then(x => x.put(e.request, c)); return n; })));
     return;
   }
   if (u.origin !== location.origin) return;

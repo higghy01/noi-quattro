@@ -42,7 +42,7 @@ def main():
     if errore:
         print(errore)
         sys.exit(1)
-    # Lo spazio foto esiste solo dopo che Sasha lo attiva: finché manca non è un errore.
+    # Lo spazio foto esiste solo dopo che viene attivato dalla console: finché manca non è un errore.
     secchio = chiave.get("storage_bucket") or os.environ.get("SECCHIO") or f"{progetto}.firebasestorage.app"
     errore = pubblica("storage.rules", f"firebase.storage/{secchio}")
     if errore:

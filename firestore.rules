@@ -1,5 +1,5 @@
 // Regole del database di "Noi quattro". Si pubblicano da sole (workflow "Regole del database") a ogni modifica.
-// Entra solo chi ha un documento in "membri" con la sua email come nome (li crea Sasha dalla console):
+// Entra solo chi ha un documento in "membri" con la sua email come nome (li crea il programma "Prepara famiglia"):
 // così nel codice pubblico non c'è nessuna email.
 rules_version = '2';
 service cloud.firestore {

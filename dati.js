@@ -2,7 +2,20 @@
 // sia in "modalità prova" (tutto sul telefono, dati di esempio). app.js usa solo DATI.
 (function () {
   const cfg = (window.CONFIG && window.CONFIG.firebase) || {};
-  const vero = !!(cfg.apiKey && cfg.projectId && window.firebase);
+  const configurato = !!(cfg.apiKey && cfg.projectId);
+  const vero = configurato && !!window.firebase;
+
+  /* ---------- App vera ma Firebase non si è caricato (niente rete e nessuna copia) ----------
+     Mai la modalità prova al posto dell'app vera: si spiega cosa succede e si riprova da soli quando torna internet. */
+  function senzaRete() {
+    const msg = 'Per aprire l\'app serve internet ancora per una volta: riprova appena c\'è rete.';
+    return {
+      modo: 'senza-rete',
+      avvia(cb) { cb(null, msg); addEventListener('online', () => location.reload(), { once: true }); },
+      login() { return Promise.reject(new Error(msg)); }, reset() { return Promise.reject(new Error(msg)); }, esci() {},
+      ascolta() {}, ascoltaDoc() { return () => {}; }, fotoPronte: () => false
+    };
+  }
 
   /* ---------- Modalità prova ---------- */
   function prova() {
@@ -97,10 +110,15 @@
       ascolta(col, cb) { const s = () => cb(list(col)); subs.push(s); s(); },
       ascoltaDoc(col, id, cb) { const s = () => cb((db[col] || {})[id] || {}); subs.push(s); s(); return () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); }; },
       async aggiungi(col, data) { const id = uid(); (db[col] = db[col] || {})[id] = data; save(); return id; },
-      async aggiorna(col, id, data) { db[col][id] = Object.assign({}, db[col][id] || {}, data); save(); },
+      // Come Firebase: "cuori.p1" cambia solo quel pezzo dentro "cuori".
+      async aggiorna(col, id, data) {
+        const o = Object.assign({}, db[col][id] || {});
+        for (const k in data) { const [a, b] = k.split('.'); if (b) o[a] = Object.assign({}, o[a], { [b]: data[k] }); else o[k] = data[k]; }
+        db[col][id] = o; save();
+      },
       async imposta(col, id, data) { (db[col] = db[col] || {})[id] = unisci(db[col][id] || {}, data); save(); },
       async elimina(col, id) { delete db[col][id]; save(); },
-      async molti(col, arr) { arr.forEach(d => (db[col] = db[col] || {})[uid()] = d); save(); },
+      async molti(col, arr) { const ids = arr.map(d => { const id = uid(); (db[col] = db[col] || {})[id] = d; return id; }); save(); return ids; },
       async attivaNotifiche() { return 'Nella modalità prova le notifiche non partono: funzioneranno nell\'app vera.'; },
       // Prova: la foto resta sul telefono come immagine piccola (lo spazio qui è poco).
       async carica(path, blob) {
@@ -118,6 +136,7 @@
     const fs = firebase.firestore();
     fs.enablePersistence({ synchronizeTabs: true }).catch(() => {}); // funziona anche senza internet
     let persona = null;
+    const subito = (p, val) => { if (navigator.onLine) return p.then(() => val); p.catch(e => console.error(e)); return Promise.resolve(val); };
     return {
       modo: 'firebase',
       avvia(cb) {
@@ -138,16 +157,20 @@
       esci: () => auth.signOut(),
       ascolta(col, cb) { return fs.collection(col).onSnapshot(s => cb(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(col, e)); },
       ascoltaDoc(col, id, cb) { return fs.collection(col).doc(id).onSnapshot(d => cb(d.data() || {}), () => cb({})); },
-      aggiungi: (col, data) => fs.collection(col).add(data).then(r => r.id),
-      aggiorna: (col, id, data) => fs.collection(col).doc(id).update(data),
-      imposta: (col, id, data) => fs.collection(col).doc(id).set(data, { merge: true }),
-      elimina: (col, id) => fs.collection(col).doc(id).delete(),
+      // Senza rete Firebase tiene la modifica sul telefono e la manda appena torna internet, ma la sua "conferma"
+      // arriva solo allora: offline si risponde subito, così l'app dice "salvato" e non resta in attesa.
+      aggiungi(col, data) { const r = fs.collection(col).doc(); return subito(r.set(data), r.id); },
+      aggiorna: (col, id, data) => subito(fs.collection(col).doc(id).update(data)),
+      imposta: (col, id, data) => subito(fs.collection(col).doc(id).set(data, { merge: true })),
+      elimina: (col, id) => subito(fs.collection(col).doc(id).delete()),
       async molti(col, arr) {
+        const ids = [];
         for (let i = 0; i < arr.length; i += 400) {
           const b = fs.batch();
-          arr.slice(i, i + 400).forEach(d => b.set(fs.collection(col).doc(), d));
+          arr.slice(i, i + 400).forEach(d => { const r = fs.collection(col).doc(); ids.push(r.id); b.set(r, d); });
           await b.commit();
         }
+        return ids;
       },
       // Spazio foto (Firebase Storage): ogni file porta con sé chi l'ha caricato.
       fotoPronte: () => !!firebase.storage,
@@ -177,5 +200,5 @@
     };
   }
 
-  window.DATI = vero ? firebaseVero() : prova();
+  window.DATI = vero ? firebaseVero() : configurato ? senzaRete() : prova();
 })();
