@@ -1020,7 +1020,7 @@
   let riFile = null;
   function rSpesa() {
     if (segSpesa === 'ricette') {
-      $('#p-spesa').innerHTML = `<div class="stack"><div class="seg${ri(0)}" style="--n:2;--k:1"><i class="spill"></i><button class="tap" data-segspesa="lista">Lista 🛒</button><button class="tap on" data-segspesa="ricette">Ricette 🍳</button></div>${rRicette()}</div>`;
+      $('#p-spesa').innerHTML = `<div class="stack"><div class="seg" style="--n:2;--k:1"><i class="spill"></i><button class="tap" data-segspesa="lista">Lista 🛒</button><button class="tap on" data-segspesa="ricette">Ricette 🍳</button></div>${rRicette()}</div>`;
       return;
     }
     const ord = (a, b) => (b.creato || 0) - (a.creato || 0);
@@ -1029,7 +1029,7 @@
     const sotto = x => x.done && x.presoDa ? `preso da ${chi(x.presoDa)}${x.preso ? ' · ' + fa(x.preso) : ''}` : `aggiunto da ${chi(x.by)}${x.creato ? ' · ' + fa(x.creato) : ''}`;
     const row = x => `<button class="item tap${x.done ? ' done' : ''}${x.id === fresh ? ' pop' : ''}" data-item="${x.id}" style="--pc:${col(x.done && x.presoDa ? x.presoDa : x.by)}"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><span class="nm">${esc(x.x)}</span><small>${sotto(x)}</small></span><span class="who">${S.persone[x.done && x.presoDa ? x.presoDa : x.by] ? avt(x.done && x.presoDa ? x.presoDa : x.by) : ''}</span></button>`;
     const keep = $('#itemTx') ? $('#itemTx').value : '';
-    $('#p-spesa').innerHTML = `<div class="stack"><div class="seg${ri(0)}" style="--n:2;--k:0"><i class="spill"></i><button class="tap on" data-segspesa="lista">Lista 🛒</button><button class="tap" data-segspesa="ricette">Ricette 🍳</button></div>
+    $('#p-spesa').innerHTML = `<div class="stack"><div class="seg" style="--n:2;--k:0"><i class="spill"></i><button class="tap on" data-segspesa="lista">Lista 🛒</button><button class="tap" data-segspesa="ricette">Ricette 🍳</button></div>
      <form class="add${ri(0)}" id="addItem"><input id="itemTx" placeholder="Cosa serve?" autocomplete="off" aria-label="Cosa serve" enterkeyhint="done"><button class="btn tap">Aggiungi</button></form>
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🛒</i>Da prendere</span> <small>${todo.length}</small></h2><div>${todo.map(row).join('') || '<div class="empty">Niente da prendere.</div>'}</div></div>
      ${done.length ? `<div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">✅</i>Già nel carrello</span> <button class="link tap" id="clear">Togli</button></h2><div>${done.map(row).join('')}</div></div>` : ''}
