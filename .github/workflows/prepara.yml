@@ -1,0 +1,16 @@
+# Si lancia a mano (Actions > Prepara famiglia > Run workflow): crea account, persone e permessi.
+name: Prepara famiglia
+on:
+  workflow_dispatch: {}
+jobs:
+  prepara:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r scripts/requisiti.txt
+      - run: python scripts/prepara_famiglia.py
+        env:
+          FIREBASE_CHIAVE: ${{ secrets.FIREBASE_CHIAVE }}
+          FAMIGLIA: ${{ secrets.FAMIGLIA }}

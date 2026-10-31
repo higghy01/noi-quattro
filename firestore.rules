@@ -1,0 +1,66 @@
+// Regole del database di "Noi quattro". Si incollano nella console di Firebase (Firestore > Regole).
+// Entra solo chi ha un documento in "membri" con la sua email come nome (li crea Sasha dalla console):
+// così nel codice pubblico non c'è nessuna email.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function email() { return request.auth.token.email.lower(); }
+    function membro() {
+      return request.auth != null && exists(/databases/$(db)/documents/membri/$(email()));
+    }
+    function io() { return get(/databases/$(db)/documents/membri/$(email())).data.persona; }
+
+    // Elenco della famiglia: ognuno legge solo il proprio, nessuno lo cambia dall'app.
+    match /membri/{em} {
+      allow read: if request.auth != null && email() == em;
+      allow write: if false;
+    }
+
+    // Nome, colore e preferenze: tutti leggono, ognuno cambia solo i suoi.
+    match /persone/{id} {
+      allow read: if membro();
+      allow update: if membro() && io() == id
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifiche']);
+      allow create, delete: if false;
+    }
+
+    match /impegni/{id} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.creatoDa == io()
+        && request.resource.data.fonte in ['app', 'import:' + io()];
+      // Quelli dei calendari collegati li scrive solo il programma automatico.
+      allow update: if membro() && resource.data.fonte in ['app', 'import:' + io()]
+        && request.resource.data.fonte == resource.data.fonte
+        && request.resource.data.creatoDa == resource.data.creatoDa;
+      allow delete: if membro() && resource.data.fonte in ['app', 'import:' + io()];
+    }
+
+    match /note/{id} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.by == io();
+      allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin']);
+      allow delete: if membro() && resource.data.by == io();
+    }
+
+    match /spesa/{id} {
+      allow read, create, update, delete: if membro();
+    }
+
+    // Una risposta per persona: ognuno scrive solo la sua.
+    match /cena/{giorno} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.keys().hasOnly([io()]);
+      allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([io()]);
+    }
+
+    // Telefoni iscritti alle notifiche: ognuno iscrive solo sé stesso.
+    match /token/{t} {
+      allow create, update: if membro() && request.resource.data.persona == io();
+      allow read, delete: if false;
+    }
+
+    // Tutto il resto (es. "sistema", usato dai programmi automatici) è chiuso.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
