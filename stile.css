@@ -7,20 +7,33 @@
   --f-disp:"Bricolage Grotesque", ui-rounded, -apple-system, "SF Pro Rounded", system-ui, sans-serif;
   --f-body:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
   --ease:cubic-bezier(.2,.8,.2,1); --pop:cubic-bezier(.34,1.4,.5,1);
-  --r:16px; --me:var(--acc);
+  --r:20px; --me:var(--acc);
+  --shadow:0 1px 2px rgb(30 20 60 / .04),0 6px 22px rgb(30 20 60 / .07);
   color-scheme:light;
 }
 /* Scuro: automatico col telefono, oppure scelto nelle Impostazioni (data-theme) */
 @media (prefers-color-scheme: dark){:root:not([data-theme=light]){
   --bg:#111016; --panel:#1B1A22; --fg:#F1EFF6; --muted:#A29DB2; --line:#2C2A36; --soft:#24222D;
   --acc:#8F83F0; --acc-ink:#15131D; --bad:#F07A66; --ok:#52C285;
-  --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70; --p-rosso:#F2706B; --p-grigio:#A4A7B5;
+  --shadow:none; --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70; --p-rosso:#F2706B; --p-grigio:#A4A7B5;
   color-scheme:dark}}
 :root[data-theme=dark]{
   --bg:#111016; --panel:#1B1A22; --fg:#F1EFF6; --muted:#A29DB2; --line:#2C2A36; --soft:#24222D;
   --acc:#8F83F0; --acc-ink:#15131D; --bad:#F07A66; --ok:#52C285;
-  --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70; --p-rosso:#F2706B; --p-grigio:#A4A7B5;
+  --shadow:none; --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70; --p-rosso:#F2706B; --p-grigio:#A4A7B5;
   color-scheme:dark}
+
+/* Un colore per scheda (come La mia app): Oggi viola, Impegni blu, Bacheca ambra, Spesa verde */
+:root[data-page=cal]{--acc:#2F6FC9}
+:root[data-page=note]{--acc:#B4650C}
+:root[data-page=spesa]{--acc:#23845A}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme=light])[data-page=cal]{--acc:#6AA2EE}
+  :root:not([data-theme=light])[data-page=note]{--acc:#F2B03D}
+  :root:not([data-theme=light])[data-page=spesa]{--acc:#52C285}}
+:root[data-theme=dark][data-page=cal]{--acc:#6AA2EE}
+:root[data-theme=dark][data-page=note]{--acc:#F2B03D}
+:root[data-theme=dark][data-page=spesa]{--acc:#52C285}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{overflow-x:clip;overscroll-behavior:none}
@@ -32,7 +45,11 @@ input,textarea,.note p{-webkit-user-select:text;user-select:text}
 body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-body);margin:0;-webkit-text-size-adjust:100%;
   padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(160px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
-.wrap{max-width:520px;margin:0 auto}
+.wrap{max-width:520px;margin:0 auto;position:relative;z-index:1}
+/* Alone del colore della scheda dietro il saluto: cambia colore dolcemente */
+.aura{position:absolute;top:70px;left:50%;width:520px;height:300px;margin-left:-260px;border-radius:50%;background:var(--acc);filter:blur(80px);opacity:.2;pointer-events:none;transition:background-color .6s var(--ease)}
+.ttl{display:inline-flex;align-items:center;gap:10px;min-width:0}
+.ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-style:normal;font-size:16px;background:color-mix(in srgb,var(--acc) 12%,transparent);flex:none;transition:background-color .4s}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 [hidden]{display:none!important}
@@ -56,7 +73,7 @@ input::-webkit-date-and-time-value{text-align:left;min-height:1.45em}
 
 /* Testata */
 .head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:20px 12px}
-.hello{font:650 28px/1.1 var(--f-disp);letter-spacing:-.01em;margin:0;text-wrap:balance}
+.hello{font:650 30px/1.08 var(--f-disp);letter-spacing:-.01em;margin:0;text-wrap:balance}
 .hello span{color:var(--me)}
 .date{color:var(--muted);font-size:13px;margin-top:4px}
 .me{width:44px;height:44px;border-radius:999px;background:var(--me);color:#fff;font:650 17px var(--f-disp);display:grid;place-items:center;flex:none;transition:background .24s,transform .12s var(--ease);position:relative;box-shadow:0 6px 16px color-mix(in srgb,var(--me) 32%,transparent)}
@@ -78,7 +95,7 @@ input::-webkit-date-and-time-value{text-align:left;min-height:1.45em}
 
 h2{font:650 17px/1.2 var(--f-disp);margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px}
 h2 small{font:500 13px var(--f-body);color:var(--muted)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:12px;width:100%;text-align:left}
+.card{background:var(--panel);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);display:grid;gap:12px;width:100%;text-align:left}
 .stack{display:grid;gap:12px}
 .empty{color:var(--muted);font-size:13px}
 
@@ -136,7 +153,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 /* Spesa */
 .add{display:flex;gap:8px}
 .add input{flex:1;min-width:0}
-.btn{min-height:44px;padding:0 16px;border-radius:12px;background:var(--acc);color:var(--acc-ink);font-weight:600}
+.btn{min-height:44px;padding:0 16px;border-radius:14px;background:var(--acc);color:var(--acc-ink);font-weight:600;transition:background-color .4s,transform .12s var(--ease)}
 .btn.ghost{background:var(--soft);color:var(--fg)}
 .btn.bad{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
 .item{display:flex;align-items:center;gap:12px;min-height:48px;border-top:1px solid var(--line);width:100%;text-align:left}
@@ -151,15 +168,16 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .link{color:var(--acc);font-weight:600;font-size:13px;min-height:44px;text-align:left}
 
 /* Barra in basso */
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);
-  padding:6px max(12px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
-.tabs .in{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);position:relative}
-.tab{display:grid;justify-items:center;gap:2px;min-height:52px;padding-top:6px;font-size:12px;color:var(--muted);position:relative;z-index:1;transition:color .24s}
+.tabs{position:fixed;z-index:20;left:max(12px,calc(50% - 260px));right:max(12px,calc(50% - 260px));bottom:max(10px,calc(env(safe-area-inset-bottom,0px) - 10px));
+  background:color-mix(in srgb,var(--panel) 78%,transparent);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);
+  border:1px solid color-mix(in srgb,var(--line) 80%,transparent);border-radius:28px;padding:5px;box-shadow:0 10px 30px rgb(20 10 50 / .14)}
+.tabs .in{display:grid;grid-template-columns:repeat(4,1fr);position:relative}
+.tab{display:grid;justify-items:center;align-content:center;gap:2px;min-height:54px;font-size:12px;color:var(--muted);position:relative;z-index:1;transition:color .24s}
 .tab svg{width:24px;height:24px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .tab.on{color:var(--acc)}
 .tab.on svg{animation:fm-bump .42s var(--pop)}
-.tpill{position:absolute;top:2px;left:0;width:25%;height:calc(100% - 4px);border-radius:14px;background:color-mix(in srgb,var(--acc) 13%,transparent);transition:transform .38s var(--ease)}
-.fab{position:fixed;right:max(16px,calc(env(safe-area-inset-right,0px) + 16px));bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:21;width:56px;height:56px;border-radius:18px;background:var(--acc);color:var(--acc-ink);font-size:28px;line-height:1;display:grid;place-items:center;box-shadow:0 8px 24px color-mix(in srgb,var(--acc) 40%,transparent);transition:transform .3s var(--pop),opacity .24s}
+.tpill{position:absolute;top:0;left:0;width:25%;height:100%;border-radius:23px;background:color-mix(in srgb,var(--acc) 14%,transparent);transition:transform .42s var(--pop),background-color .4s}
+.fab{position:fixed;right:max(16px,calc(env(safe-area-inset-right,0px) + 16px),calc(50% - 260px));bottom:calc(max(10px,calc(env(safe-area-inset-bottom,0px) - 10px)) + 80px);z-index:21;width:56px;height:56px;border-radius:20px;background:linear-gradient(145deg,color-mix(in srgb,var(--acc) 82%,#fff),var(--acc));color:var(--acc-ink);font-size:28px;line-height:1;display:grid;place-items:center;box-shadow:0 10px 26px color-mix(in srgb,var(--acc) 42%,transparent);transition:transform .3s var(--pop),opacity .24s,background-color .4s}
 
 /* Foglio dal basso */
 /* Il velo spento è anche invisibile: su iPhone (iOS 26) un elemento fisso in alto, anche trasparente, colora la barra dell'orario. */

@@ -68,13 +68,13 @@
     const ids = IDS();
     const yes = ids.filter(i => S.cena[i] === 'si').length;
     $('#p-oggi').innerHTML = `<div class="stack">
-     <div class="card${ri(0)}"><h2>A cena stasera? <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
+     <div class="card${ri(0)}"><h2><span class="ttl"><i class="ic">🍽️</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
        <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = S.cena[i] || '?'; return `<button class="cv tap" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${ini(i)}</span><span class="nm">${esc(P(i).nome)}</span></button>`; }).join('')}</div>
        <div class="empty">Tocca il tuo cerchio: sì, no, non so.</div></div>
-     <div class="card${ri(1)}"><h2>Oggi <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.')}</div>
-     <div class="card${ri(2)}"><h2>Domani <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.')}</div>
-     ${pinned.length ? `<div class="card${ri(3)}"><h2>In evidenza</h2>${pinned.map(n => `<div style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><p style="margin:6px 0 0;white-space:pre-wrap">${esc(n.x)}</p></div>`).join('')}</div>` : ''}
-     <button class="card tap${ri(4)}" data-go="spesa"><h2>Lista della spesa <small>${left ? `${left} da prendere ›` : 'tutto preso ›'}</small></h2></button>
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.')}</div>
+     <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.')}</div>
+     ${pinned.length ? `<div class="card${ri(3)}"><h2><span class="ttl"><i class="ic">📌</i>In evidenza</span></h2>${pinned.map(n => `<div style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><p style="margin:6px 0 0;white-space:pre-wrap">${esc(n.x)}</p></div>`).join('')}</div>` : ''}
+     <button class="card tap${ri(4)}" data-go="spesa"><h2><span class="ttl"><i class="ic">🛒</i>Lista della spesa</span> <small>${left ? `${left} da prendere ›` : 'tutto preso ›'}</small></h2></button>
     </div>`;
   }
 
@@ -90,7 +90,7 @@
        ${days.map(d => { const ppl = [...new Set(delGiorno(d, show).flatMap(e => e.who || []))].filter(p => S.persone[p]); return `<button class="day tap${d === selDay ? ' sel' : ''}${d === T ? ' oggi' : ''}" data-day="${d}"><span class="wd">${fmt(d, { weekday: 'short' })}</span><span class="dn">${+d.slice(8)}</span><span class="pd">${ppl.slice(0, 4).map(p => `<i style="--pc:${col(p)}"></i>`).join('')}</span></button>`; }).join('')}</div>
        <div class="filters">${['tutti', ...ids].map(f => `<button class="fb tap${filt === f ? ' on' : ''}" data-f="${f}" style="--pc:${f === 'tutti' ? 'var(--acc)' : col(f)}"><i></i>${f === 'tutti' ? 'Tutti' : esc(P(f).nome)}</button>`).join('')}</div>
      </div>
-     <div class="card${ri(1)}"><h2>${selDay === T ? 'Oggi' : fmt(selDay, { weekday: 'long', day: 'numeric', month: 'long' })}</h2>${evList(delGiorno(selDay, show))}</div>
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">📅</i>${selDay === T ? 'Oggi' : fmt(selDay, { weekday: 'long', day: 'numeric', month: 'long' })}</span></h2>${evList(delGiorno(selDay, show))}</div>
     </div>`;
   }
 
@@ -105,7 +105,7 @@
   function rBacheca() {
     const list = [...S.note].sort((a, b) => (b.pin - a.pin) || ((b.creato || 0) - (a.creato || 0)));
     const nuova = !seen.has(vista());
-    return `<div class="stack"><h2 class="${ri(0)}">Bacheca di casa <small>${S.note.length} note</small></h2>
+    return `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">📝</i>Bacheca di casa</span> <small>${S.note.length} note</small></h2>
     ${list.length ? `<div class="notes">${list.map((n, i) => `<div class="note${n.id === fresh ? ' pop' : nuova ? ' rise' : ''}" style="--pc:${col(n.by)};--i:${Math.min(i + 1, 6)}"><p>${esc(n.x)}</p><div class="by"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="acts">${n.by === S.me ? `<button class="del tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}<button class="pin tap${n.pin ? ' on' : ''}" data-pin="${n.id}" aria-label="Metti in evidenza">📌</button></span></div></div>`).join('')}</div>` : '<div class="empty big"><b>📝</b><span>Ancora nessuna nota. Tocca + per scriverne una.</span></div>'}</div>`;
   }
 
@@ -148,8 +148,8 @@
     const keep = $('#itemTx') ? $('#itemTx').value : '';
     $('#p-spesa').innerHTML = `<div class="stack">
      <form class="add${ri(0)}" id="addItem"><input id="itemTx" placeholder="Cosa serve?" autocomplete="off" aria-label="Cosa serve" enterkeyhint="done"><button class="btn tap">Aggiungi</button></form>
-     <div class="card${ri(1)}"><h2>Da prendere <small>${todo.length}</small></h2><div>${todo.map(row).join('') || '<div class="empty">Niente da prendere.</div>'}</div></div>
-     ${done.length ? `<div class="card${ri(2)}"><h2>Già nel carrello <button class="link tap" id="clear">Togli</button></h2><div>${done.map(row).join('')}</div></div>` : ''}
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🛒</i>Da prendere</span> <small>${todo.length}</small></h2><div>${todo.map(row).join('') || '<div class="empty">Niente da prendere.</div>'}</div></div>
+     ${done.length ? `<div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">✅</i>Già nel carrello</span> <button class="link tap" id="clear">Togli</button></h2><div>${done.map(row).join('')}</div></div>` : ''}
     </div>`;
     $('#itemTx').value = keep;
   }
@@ -189,7 +189,7 @@
       else if (p === 'oggi' && history.state && history.state.scheda) { ignoraPop++; history.back(); }
     }
     const dir = Math.sign(SCHEDE.indexOf(p) - SCHEDE.indexOf(page));
-    page = p;
+    page = p; document.documentElement.dataset.page = p;
     document.querySelectorAll('.page').forEach(el => { el.classList.toggle('on', el.id === 'p-' + p); if (el.id === 'p-' + p) el.style.setProperty('--dx', dir * 22 + 'px'); });
     document.querySelectorAll('.tab').forEach((t, i) => { t.classList.toggle('on', t.dataset.p === p); if (t.dataset.p === p) $('#tpill').style.transform = `translateX(${i * 100}%)`; });
     scrollTo({ top: 0 }); render();
@@ -526,7 +526,12 @@
   function applicaTema() {
     const t = LS.get('noi4-tema', 'auto'), r = document.documentElement;
     if (t === 'auto') delete r.dataset.theme; else r.dataset.theme = t === 'scuro' ? 'dark' : 'light';
-    document.querySelectorAll('meta[name=theme-color]').forEach(m => { const scuro = t === 'auto' ? /dark/.test(m.media) : t === 'scuro'; m.content = scuro ? '#111016' : '#F5F4F8'; });
+    // Colore della barra in alto (orario, Dynamic Island): se il tema è scelto a mano, un colore solo, senza seguire il telefono.
+    document.querySelectorAll('meta[name=theme-color]').forEach((m, i) => {
+      if (!m.dataset.media) m.dataset.media = m.getAttribute('media') || '';
+      if (t === 'auto') { m.setAttribute('media', m.dataset.media); m.content = /dark/.test(m.dataset.media) ? '#111016' : '#F5F4F8'; }
+      else { m.removeAttribute('media'); m.content = t === 'scuro' ? '#111016' : '#F5F4F8'; }
+    });
   }
   applicaTema();
   function ascoltaCena() { if (stopCena) stopCena(); stopCena = DATI.ascoltaDoc('cena', T, c => { S.cena = c; render(); }); }
