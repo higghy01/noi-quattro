@@ -2,7 +2,7 @@
    (solo transform e opacity), entrata una volta sola, chiaro e scuro, iPhone e Android. Prefisso keyframes: fm- */
 :root{
   --bg:#F5F4F8; --panel:#FFFFFF; --fg:#1C1A24; --muted:#6C687A; --line:#E4E1EB; --soft:#EFEDF4;
-  --acc:#5B4BD6; --acc-ink:#FFFFFF; --bad:#C8402E; --ok:var(--acc);
+  --acc:#5B4BD6; --acc-ink:#FFFFFF; --bad:#A65F00; --ok:var(--acc);
   --p-blu:#2F74D0; --p-rosa:#C93A7B; --p-ambra:#C98208; --p-verde:#2E9A5E; --p-viola:#7A5CC7; --p-corallo:#D9573F; --p-rosso:#D23B3B; --p-grigio:#6F7282;
   --f-disp:"Bricolage Grotesque", ui-rounded, -apple-system, "SF Pro Rounded", system-ui, sans-serif;
   --f-body:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
@@ -14,15 +14,16 @@
 /* Scuro: automatico col telefono, oppure scelto nelle Impostazioni (data-theme) */
 @media (prefers-color-scheme: dark){:root:not([data-theme=light]){
   --bg:#111016; --panel:#1B1A22; --fg:#F1EFF6; --muted:#A29DB2; --line:#2C2A36; --soft:#24222D;
-  --acc:#8F83F0; --acc-ink:#15131D; --bad:#F07A66; --ok:var(--acc);
+  --acc:#8F83F0; --acc-ink:#15131D; --bad:#F2B03D; --ok:var(--acc);
   --shadow:none; --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70; --p-rosso:#F2706B; --p-grigio:#A4A7B5;
   color-scheme:dark}}
 :root[data-theme=dark]{
   --bg:#111016; --panel:#1B1A22; --fg:#F1EFF6; --muted:#A29DB2; --line:#2C2A36; --soft:#24222D;
-  --acc:#8F83F0; --acc-ink:#15131D; --bad:#F07A66; --ok:var(--acc);
+  --acc:#8F83F0; --acc-ink:#15131D; --bad:#F2B03D; --ok:var(--acc);
   --shadow:none; --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70; --p-rosso:#F2706B; --p-grigio:#A4A7B5;
   color-scheme:dark}
 
+/* "Attenzione / elimina / errore" (--bad) in ambra scuro: il rosso è il colore di una persona. */
 /* Un colore per scheda (come La mia app), mai uguale a quello di una persona (rosso, blu, verde, grigio):
    Oggi viola, Impegni petrolio, Bacheca oro, Ricordi fucsia, Spesa arancio. */
 :root[data-page=cal]{--acc:#0E7C8A}
@@ -42,7 +43,7 @@
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{overflow-x:clip;overscroll-behavior:none}
-/* Pagina ferma di lato e senza barre di scorrimento (Sasha, 31/10/2026: "lo scorrimento e la linea al lato"):
+/* Pagina ferma di lato e senza barre di scorrimento (richiesta del 31/10/2026):
    col dito si scorre solo in su e in giù; le file che scorrono di lato (storie, filtri) restano libere. */
 html,body{width:100%;max-width:100%;overscroll-behavior-x:none;scrollbar-width:none}
 body{touch-action:pan-y;position:relative}

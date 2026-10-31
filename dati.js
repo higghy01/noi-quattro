@@ -126,6 +126,7 @@
       },
       async imposta(col, id, data) { (db[col] = db[col] || {})[id] = unisci(db[col][id] || {}, data); save(); },
       async elimina(col, id) { delete db[col][id]; save(); },
+      async eliminaMolti(col, ids) { ids.forEach(id => delete (db[col] || {})[id]); save(); },
       async molti(col, arr) { const ids = arr.map(d => { const id = uid(); (db[col] = db[col] || {})[id] = d; return id; }); save(); return ids; },
       async attivaNotifiche() { return 'Nella modalità prova le notifiche non partono: funzioneranno nell\'app vera.'; },
       // Prova: la foto resta sul telefono come immagine piccola (lo spazio qui è poco).
@@ -181,6 +182,11 @@
       aggiorna: (col, id, data) => subito(fs.collection(col).doc(id).update(data)),
       imposta: (col, id, data) => subito(fs.collection(col).doc(id).set(data, { merge: true })),
       elimina: (col, id) => subito(fs.collection(col).doc(id).delete()),
+      async eliminaMolti(col, ids) {
+        for (let i = 0; i < ids.length; i += 400) {
+          const b = fs.batch(); ids.slice(i, i + 400).forEach(id => b.delete(fs.collection(col).doc(id))); await b.commit();
+        }
+      },
       async molti(col, arr) {
         const ids = [];
         for (let i = 0; i < arr.length; i += 400) {

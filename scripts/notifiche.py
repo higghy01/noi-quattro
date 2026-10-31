@@ -162,7 +162,8 @@ def main():
         voti = pr.get("voti") or {}
         # Solo per le proposte degli ultimi due giorni: così l'avviso non torna quando "inviati" dimentica.
         due_giorni = int((ora - dt.timedelta(days=2)).timestamp() * 1000)
-        if chi in persone and opz and int(pr.get("creato") or 0) > due_giorni and all(voti.get(p) for p in persone):
+        # "Tutti" = tutti gli altri: chi propone può anche non votare.
+        if chi in persone and opz and int(pr.get("creato") or 0) > due_giorni and all(voti.get(p) for p in persone if p != chi):
             conta = {k: sum(1 for p in persone if k in (voti.get(p) or [])) for k in opz}
             testa = max(sorted(opz, key=lambda k: opz[k].get("creato", 0)), key=lambda k: conta[k])
             manda(chi, "proposte", f"Hanno votato tutti: {q}", f"In testa: {opz[testa]['x']} ({conta[testa]} voti). Decidi nella Bacheca.", f"tutti|{d.id}|{chi}")

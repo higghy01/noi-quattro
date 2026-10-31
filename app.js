@@ -114,6 +114,8 @@
     return false;
   }
   const piuGiorni = (e) => !e.ripeti && e.fino && e.fino > e.d;
+  // Un impegno di più giorni, in un giorno che non è l'ultimo, dura fino a mezzanotte: la sera non è "finito".
+  const inCorso = (e, d) => piuGiorni(e) && d < e.fino;
   // "dal 3 al 7 nov" per gli impegni di più giorni.
   const durataGiorni = (e) => `dal ${fmt(e.d, { day: 'numeric', month: e.d.slice(0, 7) === e.fino.slice(0, 7) ? undefined : 'short' })} al ${fmt(e.fino, { day: 'numeric', month: 'short' })}`;
   const delGiorno = (d, f) => S.impegni.filter(e => capita(e, d) && (!f || f(e))).sort((a, b) => (a.h || '').localeCompare(b.h || ''));
@@ -140,7 +142,7 @@
     for (let i = 0; i < 45 && out.length < n; i++) {
       const d = iso(addDays(TODAY, i));
       for (const e of delGiorno(d, importante)) {
-        if (visti.has(e.id) || (d === T && e.h && (e.fine || e.h) < oraAdesso())) continue;
+        if (visti.has(e.id) || (d === T && e.h && !inCorso(e, d) && (e.fine || e.h) < oraAdesso())) continue;
         visti.add(e.id); out.push([d, e]); if (out.length >= n) break;
       }
     }
@@ -416,7 +418,7 @@
     const mio = id === S.me, ora = oraAdesso(), suoi = (e) => (e.who || []).includes(id);
     const sr = (i) => nuova ? ` rise" style="--i:${Math.min(i, 8)}` : '';
     const giorni = [...Array(14)].map((_, i) => iso(addDays(TODAY, i))), dom = giorni[1];
-    const per = giorni.map(d => [d, delGiorno(d, suoi).filter(e => d !== T || !e.h || (e.fine || e.h) >= ora)]).filter(([, l]) => l.length);
+    const per = giorni.map(d => [d, delGiorno(d, suoi).filter(e => d !== T || !e.h || inCorso(e, d) || (e.fine || e.h) >= ora)]).filter(([, l]) => l.length);
     const sett = giorni.slice(0, 7).reduce((n, d) => n + delGiorno(d, suoi).length, 0);
     const c = S.cena[id];
     const pezzi = [statoOra(id).t,
@@ -875,7 +877,7 @@
   function render() {
     if (!S.me || !S.persone[S.me]) return;
     const nuovoGiorno = iso(new Date()) !== T;
-    if (nuovoGiorno) { TODAY = new Date(); TODAY.setHours(12, 0, 0, 0); T = iso(TODAY); ascoltaCena(); }
+    if (nuovoGiorno) { const ieri = T; TODAY = new Date(); TODAY.setHours(12, 0, 0, 0); T = iso(TODAY); ascoltaCena(); if (selDay === ieri) { selDay = T; weekStart = inizioSettimana(TODAY); } }
     document.documentElement.style.setProperty('--me', col(S.me));
     $('#hello').innerHTML = `${saluto()}, <span>${esc(P(S.me).nome)}</span>`;
     $('#meBtn').innerHTML = avt(S.me) + GEAR;
@@ -1175,6 +1177,7 @@
   const senzaDettagli = (via) => { const d = Object.assign({}, S.priv.dettagli || {}); via.forEach(e => delete d[e.id]); return d; };
   async function importaIcs(file) {
     if (!window.ICAL) return toast('Serve internet per leggere il file. Riprova.');
+    if (!navigator.onLine) return toast('Serve internet per importare: riprova appena c\'è rete.');
     toast('Leggo il calendario…');
     try {
       const comp = new ICAL.Component(ICAL.parse(await file.text()));
@@ -1209,7 +1212,8 @@
         }
       }
       const vecchi = S.impegni.filter(e => e.fonte === 'import:' + S.me);
-      for (const e of vecchi) await DATI.elimina('impegni', e.id);
+      toast(`Importo ${out.length} impegni…`);
+      await DATI.eliminaMolti('impegni', vecchi.map(e => e.id)); // tutti insieme, non uno alla volta
       const ids = await DATI.molti('impegni', out);
       // I titoli privati: via quelli dei vecchi impegni importati, dentro quelli nuovi (si riscrive l'elenco intero).
       const dettagli = senzaDettagli(vecchi);
@@ -1279,7 +1283,10 @@
     }
     if (d.delviaggio) {
       if (!d.sicuro) { d.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare tutto'; return; }
-      const fs = fotoDi(d.delviaggio); closeSheet(); closeTrip();
+      const fs = fotoDi(d.delviaggio);
+      // Foglio e schermata si chiudono insieme: si tolgono tutti e due i passi del tasto indietro in un colpo solo.
+      const passi = (aperto() && history.state && history.state.foglio ? 1 : 0) + (tripAperto() ? 1 : 0);
+      closeSheet(true); closeTrip(true); if (passi) { ignoraPop++; history.go(-passi); }
       for (const f of fs) { await DATI.elimina('foto', f.id).catch(() => {}); DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); DATI.eliminaFile(f.pathD); }
       await DATI.elimina('viaggi', d.delviaggio).catch(sbaglio); return toast('Ricordo eliminato');
     }
@@ -1410,7 +1417,9 @@
     if (d.modifica) return sheetEvento(S.impegni.find(x => x.id === d.modifica));
     if (d.elimina) {
       if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare'; return; }
-      closeSheet(); await DATI.elimina('impegni', d.elimina).catch(sbaglio); return toast('Impegno eliminato');
+      closeSheet(); await DATI.elimina('impegni', d.elimina).catch(sbaglio);
+      if ((S.priv.dettagli || {})[d.elimina]) DATI.aggiorna('privati', S.me, { dettagli: senzaDettagli([{ id: d.elimina }]) }).catch(() => {}); // via anche il titolo privato
+      return toast('Impegno eliminato');
     }
     if (d.day) { selDay = d.day; return rCal(); }
     if (d.wk) {
@@ -1477,7 +1486,14 @@
     if (f.id === 'fLogin') {
       $('#lgErr').textContent = '';
       try { await DATI.login($('#lgEmail').value, $('#lgPass').value); }
-      catch (e) { $('#lgErr').textContent = DATI.modo === 'senza-rete' ? e.message : 'Email o password non corrette.'; }
+      catch (e) {
+        // Il messaggio giusto per ogni caso: niente rete, troppi tentativi, oppure email o password sbagliate.
+        const c = (e && e.code) || '';
+        $('#lgErr').textContent = DATI.modo === 'senza-rete' ? e.message
+          : !navigator.onLine || c === 'auth/network-request-failed' ? 'Manca internet: riprova appena c\'è rete.'
+          : c === 'auth/too-many-requests' ? 'Troppi tentativi: aspetta qualche minuto, oppure scegli una nuova password con il tasto qui sotto.'
+          : 'Email o password non corrette.';
+      }
     } else if (f.id === 'fMz') {
       const n = $('#mzN').value.trim(); if (!n) return toast('Scrivi il nome del mezzo');
       const m = { e: mzTipo, n: n.charAt(0).toUpperCase() + n.slice(1) };

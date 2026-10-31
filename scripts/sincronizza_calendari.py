@@ -32,7 +32,7 @@ from firebase_admin import firestore
 from comune import ROMA, adesso, database
 
 GIORNI = 60
-# Compleanni dai calendari (Sasha, 31/10/2026: "non fregano a nessuno"): non entrano nell'app.
+# Compleanni dai calendari (scelta del 31/10/2026): non entrano nell'app.
 # Una festa vera ("Festa di compleanno", "cena per il compleanno") resta.
 COMPLEANNO = re.compile(r"birthday|compleanno|\bbday\b|cumpleaños", re.I)
 FESTA = re.compile(r"festa|party|cena|pranzo|aperitivo", re.I)
