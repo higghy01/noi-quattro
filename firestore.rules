@@ -30,9 +30,12 @@ service cloud.firestore {
       allow create: if membro() && request.resource.data.creatoDa == io()
         && request.resource.data.fonte in ['app', 'import:' + io()];
       // Quelli dei calendari collegati li scrive solo il programma automatico.
-      allow update: if membro() && resource.data.fonte in ['app', 'import:' + io()]
+      allow update: if membro() && ((resource.data.fonte in ['app', 'import:' + io()]
         && request.resource.data.fonte == resource.data.fonte
-        && request.resource.data.creatoDa == resource.data.creatoDa;
+        && request.resource.data.creatoDa == resource.data.creatoDa)
+        // Dei miei impegni dal calendario posso solo scegliere se gli altri vedono il titolo o "Occupato".
+        || (resource.data.fonte == 'calendario:' + io()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['t', 'n', 'nascosto'])));
       allow delete: if membro() && resource.data.fonte in ['app', 'import:' + io()];
     }
 
@@ -67,13 +70,16 @@ service cloud.firestore {
       allow read, write: if membro() && io() != persona;
     }
 
-    // La parte privata di ognuno (il link del suo calendario): la vede e la cambia solo lui.
-    // La legge anche il programma automatico su GitHub, che ha la chiave di servizio.
+    // La parte privata di ognuno: link del calendario, parole automatiche, scelte "mostra/occupato"
+    // e i titoli veri dei suoi impegni nascosti. La vede e la cambia solo lui.
+    // La legge e la scrive anche il programma automatico su GitHub, che ha la chiave di servizio.
     match /privati/{persona} {
+      function campi() { return ['calendario', 'aggiornato', 'parole', 'scelte', 'dettagli']; }
+      function link() { return request.resource.data.get('calendario', '') is string && request.resource.data.get('calendario', '').size() < 3000; }
       allow read, delete: if membro() && io() == persona;
-      allow create, update: if membro() && io() == persona
-        && request.resource.data.keys().hasOnly(['calendario', 'aggiornato'])
-        && request.resource.data.calendario is string && request.resource.data.calendario.size() < 3000;
+      allow create: if membro() && io() == persona && request.resource.data.keys().hasOnly(campi()) && link();
+      allow update: if membro() && io() == persona
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(campi()) && link();
     }
 
     // Viaggi: tutti li vedono e li completano; li cancella solo chi li ha creati.

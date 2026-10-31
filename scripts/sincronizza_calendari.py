@@ -4,8 +4,12 @@ Il link privato del calendario (.ics, webcal://...) lo incolla ognuno nelle Impo
 finisce in privati/<persona>.calendario (anche più link, uno per riga), che legge solo lui e questo programma.
 In alternativa (o per chi non usa l'app) il segreto di GitHub CALENDARI = {"p1": "https://...", "p2": ["webcal://...", "..."]}.
 Il link messo nell'app vince su quello del segreto.
-Chi sceglie nelle Impostazioni "solo Occupato" (persone/<id>.privacy) mostra agli altri solo "Occupato".
-Facoltativo, variabile (non segreta) PRIVACY = {"p2": "occupato"}: stesso effetto, deciso da GitHub.
+Cosa vedono gli altri di ogni impegno (titolo e luogo, oppure solo "Occupato"), in quest'ordine:
+  1. le scelte fatte a mano nell'app, per titolo (privati/<persona>.scelte = {"palestra": "mostra"|"nascondi"});
+  2. le parole automatiche (privati/<persona>.parole, se mancano quelle di partenza PAROLE0), prima quelle da nascondere;
+  3. la regola generale: persone/<id>.privacy == "occupato" (o la variabile PRIVACY = {"p2": "occupato"}).
+Le stesse regole le applica l'app (app.js, regolaCal): tenerle uguali.
+Il titolo vero degli impegni nascosti va solo in privati/<persona>.dettagli, che legge solo lui.
 Prende gli impegni dei prossimi 60 giorni e li scrive con fonte "calendario:<persona>";
 quelli spariti dal calendario vengono tolti, e anche tutti quando uno scollega il calendario.
 Com'è andata lo scrive in persone/<id>.calStato (solo numeri e ora), così l'app lo mostra.
@@ -13,6 +17,7 @@ Nessun link né dato finisce nel codice o nei log.
 """
 import datetime as dt
 import hashlib
+import re
 import json
 import os
 import sys
@@ -42,16 +47,16 @@ def leggi(url):
     return icalendar.Calendar.from_ical(r.content)
 
 
-def collegamenti(db):
+def collegamenti(privati):
     """Per ogni persona l'elenco dei suoi link: prima quelli messi nell'app, poi il segreto CALENDARI."""
     cal = {}
     for k, v in json.loads(os.environ.get("CALENDARI") or "{}").items():
         cal[k] = [v] if isinstance(v, str) else [x for x in v if isinstance(x, str)]
-    for d in db.collection("privati").stream():
-        testo = (d.to_dict() or {}).get("calendario") or ""
+    for pid, priv in privati.items():
+        testo = priv.get("calendario") or ""
         link = [x for x in testo.split() if x.lower().startswith(("https://", "webcal://"))][:5]
         if link:
-            cal[d.id] = link
+            cal[pid] = link
     return cal
 
 
@@ -59,25 +64,63 @@ def ora(x):
     return x.astimezone(ROMA) if isinstance(x, dt.datetime) and x.tzinfo else x
 
 
-def impegni(cal, persona, solo_occupato):
+PAROLE0 = {
+    "nascondi": ["medico", "dottor", "dentista", "visita", "analisi", "esami", "prelievo", "ospedale", "terapia", "psicolog",
+                 "fisioterap", "banca", "avvocato", "notaio", "commercialista", "colloquio", "privato"],
+    "mostra": ["cena", "pranzo", "colazione", "aperitivo", "compleanno", "famiglia", "festa", "natale", "pasqua", "vacanza",
+               "viaggio", "ferie"],
+}
+
+
+def chiave(t):
+    return " ".join(str(t or "").lower().split())
+
+
+def contiene(k, parola):
+    w = chiave(parola)
+    return bool(w) and re.search(r"(^|[^\w])" + re.escape(w), k) is not None
+
+
+def regola(priv, generale):
+    """Restituisce una funzione titolo -> True se gli altri possono vederlo per intero."""
+    scelte = priv.get("scelte") or {}
+    parole = priv.get("parole") or PAROLE0
+
+    def visibile(titolo):
+        k = chiave(titolo)
+        if scelte.get(k) in ("mostra", "nascondi"):
+            return scelte[k] == "mostra"
+        if any(contiene(k, w) for w in parole.get("nascondi") or []):
+            return False
+        if any(contiene(k, w) for w in parole.get("mostra") or []):
+            return True
+        return generale != "occupato"
+    return visibile
+
+
+def impegni(cal, persona, visibile):
     oggi = adesso().date()
     for ev in recurring_ical_events.of(cal).between(oggi, oggi + dt.timedelta(days=GIORNI)):
         inizio = ora(ev.get("DTSTART").dt)
         fine = ora(ev.get("DTEND").dt) if ev.get("DTEND") else None
         tutto = not isinstance(inizio, dt.datetime)
-        chiave = f"{persona}|{ev.get('UID')}|{inizio}"
-        yield "cal-" + hashlib.sha1(chiave.encode()).hexdigest()[:20], {
-            "t": "Occupato" if solo_occupato else str(ev.get("SUMMARY", "Impegno"))[:80],
+        uid = f"{persona}|{ev.get('UID')}|{inizio}"
+        titolo = str(ev.get("SUMMARY", "Impegno"))[:80]
+        luogo = str(ev.get("LOCATION", ""))[:200]
+        vis = visibile(titolo)
+        yield "cal-" + hashlib.sha1(uid.encode()).hexdigest()[:20], {
+            "t": titolo if vis else "Occupato",
             "d": (inizio if tutto else inizio.date()).isoformat(),
             "h": "" if tutto else inizio.strftime("%H:%M"),
             "fine": "" if tutto or not isinstance(fine, dt.datetime) or fine == inizio else fine.strftime("%H:%M"),
             "who": [persona],
-            "n": "" if solo_occupato else str(ev.get("LOCATION", ""))[:200],
+            "n": luogo if vis else "",
             "ripeti": "",
             "fonte": f"calendario:{persona}",
             "creatoDa": persona,
             "creato": 0,  # 0 = non avvisare come "nuovo impegno"
-        }
+            "nascosto": not vis,
+        }, None if vis else {"t": titolo, "n": luogo}
 
 
 def main():
@@ -87,7 +130,8 @@ def main():
     for pid, p in persone.items():
         if p.get("privacy") == "occupato":
             privacy[pid] = "occupato"
-    calendari = collegamenti(db)
+    privati = {d.id: d.to_dict() or {} for d in db.collection("privati").stream()}
+    calendari = collegamenti(privati)
     col = db.collection("impegni")
     errori = 0
     for persona in sorted(set(persone) | set(calendari)):
@@ -97,10 +141,14 @@ def main():
             if "calStato" in persone.get(persona, {}):
                 db.collection("persone").document(persona).update({"calStato": firestore.DELETE_FIELD})
             continue
-        nuovi, letti = {}, 0
+        nuovi, dettagli, letti = {}, {}, 0
+        visibile = regola(privati.get(persona, {}), privacy.get(persona))
         for url in link:
             try:
-                nuovi.update(impegni(leggi(url), persona, privacy.get(persona) == "occupato"))
+                for i, doc, det in impegni(leggi(url), persona, visibile):
+                    nuovi[i] = doc
+                    if det:
+                        dettagli[i] = det
                 letti += 1
             except Exception as e:  # un calendario che non risponde non deve bloccare gli altri
                 print(f"{persona}: un calendario non letto ({type(e).__name__})")
@@ -115,6 +163,12 @@ def main():
             for op, i, v in ops[k:k + 450]:
                 b.set(col.document(i), v) if op == "set" else b.delete(col.document(i))
             b.commit()
+        # I titoli veri degli impegni nascosti: solo nella parte privata (si sostituisce l'elenco intero).
+        if letti == len(link) and (dettagli or privati.get(persona, {}).get("dettagli")):
+            db.collection("privati").document(persona).set({"dettagli": dettagli}, merge=["dettagli"])
+        elif dettagli:
+            vecchi_det = privati.get(persona, {}).get("dettagli") or {}
+            db.collection("privati").document(persona).set({"dettagli": {**vecchi_det, **dettagli}}, merge=["dettagli"])
         if persona in persone:
             stato = {"calStato": {"letti": letti, "tot": len(link), "n": len(nuovi), "quando": int(time.time() * 1000)}} if link \
                 else {"calStato": firestore.DELETE_FIELD}

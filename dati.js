@@ -32,9 +32,17 @@
       [['Latte', 'p2', false], ['Pane', 'p4', false], ['Mozzarella per la pizza', 'p1', false], ['Mele', 'p3', true], ['Detersivo piatti', 'p2', false]]
         .forEach(([x, by, done], i) => o.spesa[uid()] = { x, by, done, creato: now - i * 1000 });
       o.cena[iso(0)] = { p1: 'si', p2: 'si', p4: 'no' };
-      regaliEsempio(o);
+      regaliEsempio(o); calEsempio(o);
       o.me = 'p1';
       return o;
+    }
+    // Impegni dal calendario di p1: uno visibile e uno nascosto (gli altri vedono "Occupato", il titolo vero sta in privati/p1).
+    function calEsempio(o) {
+      const id1 = uid(), id2 = uid();
+      o.impegni = o.impegni || {};
+      o.impegni[id1] = { t: 'Palestra', d: iso(1), h: '18:30', fine: '19:30', who: ['p1'], n: '', fonte: 'calendario:p1', creatoDa: 'p1', creato: 0 };
+      o.impegni[id2] = { t: 'Occupato', d: iso(2), h: '09:00', fine: '10:00', who: ['p1'], n: '', fonte: 'calendario:p1', creatoDa: 'p1', creato: 0, nascosto: true };
+      o.privati = { p1: { dettagli: { [id2]: { t: 'Visita dal dottore', n: 'Portare le analisi' } } } };
     }
     function regaliEsempio(o) {
       const now = Date.now();
@@ -73,6 +81,7 @@
     try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
     if (!db || !db.persone) db = esempio();
     if (!db.regali) regaliEsempio(db);
+    if (!db.privati) calEsempio(db);
     if (!db.viaggi || !Object.values(db.viaggi).some(v => v.tipo)) viaggiEsempio(db);
     // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
     const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };
