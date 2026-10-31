@@ -126,7 +126,7 @@
       cambiaPersona(id) { db.me = id; save(); this._cb(id); },
       ricomincia() { db = esempio(); save(); this._cb(db.me); },
       login() {}, reset() {}, esci() {},
-      ascolta(col, cb) { const s = () => cb(list(col)); subs.push(s); s(); },
+      ascolta(col, cb, dove) { const s = () => cb(dove ? list(col).filter(x => x[dove[0]] === dove[2]) : list(col)); subs.push(s); s(); },
       ascoltaDoc(col, id, cb) { const s = () => cb((db[col] || {})[id] || {}); subs.push(s); s(); return () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); }; },
       async aggiungi(col, data) { const id = uid(); (db[col] = db[col] || {})[id] = data; save(); return id; },
       // Come Firebase: "cuori.p1" cambia solo quel pezzo dentro "cuori".
@@ -185,7 +185,8 @@
         } catch (e) { console.error(e); }
         return auth.signOut();
       },
-      ascolta(col, cb) { return fs.collection(col).onSnapshot(s => cb(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(col, e)); },
+      // dove = ['campo', '==', valore]: solo i documenti che servono (le regole non lasciano leggere gli altri).
+      ascolta(col, cb, dove) { return (dove ? fs.collection(col).where(...dove) : fs.collection(col)).onSnapshot(s => cb(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(col, e)); },
       ascoltaDoc(col, id, cb) { return fs.collection(col).doc(id).onSnapshot(d => cb(d.data() || {}), () => cb({})); },
       // Senza rete Firebase tiene la modifica sul telefono e la manda appena torna internet, ma la sua "conferma"
       // arriva solo allora: offline si risponde subito, così l'app dice "salvato" e non resta in attesa.

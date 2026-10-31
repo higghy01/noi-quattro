@@ -137,7 +137,7 @@
     const pros = oggi.find(e => e.h && e.h > ora);
     if (pros && r && pros.id === r.turno.id) return { t: `Alle ${pros.h} al lavoro, a casa verso le ${r.ora}`, c: `${pros.h} · lavoro`, k: 'dopo' };
     if (pros) return { t: `Alle ${pros.h}: ${pros.t}`, c: `${pros.h} · ${pros.t}`, k: 'dopo' };
-    const tutto = oggi.find(e => !e.h);
+    const tutto = oggi.find(e => !e.h && !e.virtuale);
     if (tutto) return { t: `Oggi: ${tutto.t}`, c: tutto.t, k: 'dopo' };
     const cv = cenaDi(id).v, cena = cv === 'si' ? 'A cena 🍝' : cv === 'no' ? 'Fuori a cena' : null;
     return oggi.length ? { t: 'Impegni di oggi finiti', c: cena || 'Finito per oggi', k: 'lib' } : { t: 'Oggi niente in programma', c: cena || 'Giornata libera', k: 'lib' };
@@ -173,9 +173,10 @@
     const a = minuti(e.h), b = e.fine ? minuti(e.fine) : a + 60; return [a, b > a ? b : 24 * 60];
   };
   function accavallati(e, d, chi) {
-    if (!e.h) return [];
+    // La scuola e le note di scuola non danno avvisi: sono già nell'orario.
+    if (!e.h || e.virtuale) return [];
     const [a1, b1] = intervallo(e, d);
-    return delGiorno(d, x => x.id !== e.id && x.h && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
+    return delGiorno(d, x => x.id !== e.id && x.h && !x.virtuale && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
   }
   // Impegni importanti: con tutta la famiglia, segnati con la stella, o con parole da grande occasione.
   const PAROLE_IMP = ['matrimonio', 'laurea', 'battesimo', 'comunione', 'cresima', 'funerale', 'viaggio', 'partenza', 'volo', 'trasloco', 'esame', 'concerto', 'vacanza', 'ferie', 'natale', 'capodanno', 'pasqua'];
@@ -1118,7 +1119,7 @@
   $('#veil').onclick = () => closeSheet();
   // Il velo non fa scorrere la pagina sotto.
   $('#veil').addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-  addEventListener('popstate', () => { if (ignoraPop) { ignoraPop--; return; } if (visAperto()) closeViewer(true); else if (aperto()) closeSheet(true); else if (tripAperto()) closeTrip(true); else if (persAperto()) closePersona(true); else if (mioAperto()) closeMio(true); else if (impAperto()) closeImp(true); else if (page !== 'oggi') go('oggi', true); });
+  addEventListener('popstate', () => { if (ignoraPop) { ignoraPop--; return; } if (visAperto()) closeViewer(true); else if (aperto()) closeSheet(true); else if (tripAperto()) closeTrip(true); else if (mioAperto()) closeMio(true); else if (persAperto()) closePersona(true); else if (impAperto()) closeImp(true); else if (page !== 'oggi') go('oggi', true); });
 
   // Foglio: si chiude trascinandolo verso il basso, come su iPhone e Android.
   (() => {
@@ -1268,7 +1269,7 @@
       if (!S.persone[pid]) continue;
       for (let g = 1; g <= 6; g++) {
         const l = lezioni(s, g); if (!l.length) continue;
-        let d = new Date((s.dal || T) + 'T12:00:00'); while (d.getDay() !== g) d = addDays(d, 1);
+        let d = s.dal ? new Date(s.dal + 'T12:00:00') : addDays(TODAY, -6); while (d.getDay() !== g) d = addDays(d, 1);
         const ore = l.reduce((n, x) => n + x.a - x.da + 1, 0), tutte = l.every(x => x.h);
         out.push({ id: `scuola-${pid}-${g}`, t: '🎒 Scuola', d: iso(d), h: tutte ? l[0].h : '', fine: tutte ? l[l.length - 1].fine : '', who: [pid],
           n: `${ore} ore: ${[...new Set(l.map(x => x.m))].join(', ')}`, ripeti: 'settimanale', al: s.al || '', pause: pause(s), fonte: `scuola:${pid}`, scuola: g, virtuale: true });
@@ -1302,14 +1303,16 @@
 
   let mioDay = null, mioNuova = false;
   const mioAperto = () => $('#mio').classList.contains('on');
-  function openMio() {
-    if (!mioAperto()) history.pushState({ schermo: 'mio' }, '');
+  // alPostoDelFoglio: aperta da un foglio, prende il suo posto nella cronologia (così "indietro" resta giusto).
+  function openMio(alPostoDelFoglio) {
+    if (alPostoDelFoglio === true && history.state && history.state.foglio) history.replaceState({ schermo: 'mio' }, '');
+    else if (!mioAperto()) history.pushState({ schermo: 'mio' }, '');
     mioDay = null; mioNuova = true; rMio(); mioNuova = false;
     $('#mio').scrollTop = 0; $('#mio').classList.add('on'); $('#fab').classList.add('via');
   }
   function closeMio(daIndietro) {
     if (!mioAperto()) return;
-    $('#mio').classList.remove('on'); $('#fab').classList.remove('via');
+    $('#mio').classList.remove('on'); if (!impAperto() && !persAperto() && !tripAperto()) $('#fab').classList.remove('via');
     if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
   }
   // Il pallino sul pulsante: c'è qualcosa per oggi o domani.
@@ -1844,7 +1847,7 @@
     // Sezione Personale
     if (t.id === 'mioBtn') return openMio();
     if (t.id === 'mioBack') return closeMio();
-    if (d.apriMio) { closeSheet(); return openMio(); }
+    if (d.apriMio) { closeSheet(true); return openMio(true); }
     if (d.mioday) { mioDay = d.mioday; return rMio(); }
     if (d.lez && d.di) return sheetNuovoC(d.di, d.lez);
     if (d.cmpnuovo) return sheetMaterie(d.cmpnuovo);
@@ -2106,10 +2109,10 @@
       avviato = true;
       const a = (x) => { if (typeof x === 'function') stopDati.push(x); };
       if (DATI.iscriviDiNuovo) DATI.iscriviDiNuovo();
-      a(DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); render(); }));
+      a(DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); mappaImpegni(); render(); }));
       a(DATI.ascolta('regali', l => { S.regali = l; render(); }));
       a(DATI.ascolta('scuola', l => { S.scuola = Object.fromEntries(l.map(x => [x.id, x])); mappaImpegni(); render(); }));
-      a(DATI.ascolta('compiti', l => { S.compiti = l; mappaImpegni(); render(); }));
+      a(DATI.ascolta('compiti', l => { S.compiti = l; mappaImpegni(); render(); }, ['per', '==', persona]));
       a(DATI.ascolta('ricette', l => { S.ricette = l; render(); if (ricAperta) sheetRicetta(ricAperta, true); }));
       a(DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); }));
       a(DATI.ascolta('viaggi', l => { S.viaggi = l; render(); }));

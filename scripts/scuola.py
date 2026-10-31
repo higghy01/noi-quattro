@@ -40,22 +40,38 @@ def main():
         doc.delete()
         print("Orario scolastico tolto")
         return
-    lezioni = []
+    lezioni, viste = [], set()
     for x in dati.get("lezioni") or []:
-        g, o, m = int(x.get("g", 0)), int(x.get("o", 0)), str(x.get("m", "")).strip()[:60]
+        m = x.get("m")
+        g, o, m = int(x.get("g", 0)), int(x.get("o", 0)), m.strip()[:60] if isinstance(m, str) else ""
         if not (1 <= g <= 6 and 1 <= o <= 12 and m):
             raise SystemExit("Lezione non valida")
+        if (g, o) in viste:
+            raise SystemExit("Due lezioni nella stessa ora")
+        viste.add((g, o))
         lezioni.append({"g": g, "o": o, "m": m, "prof": str(x.get("prof", "")).strip()[:40]})
     ore = [str(h) for h in dati.get("ore") or []]
     if any(not ORE.match(h) for h in ore) or len(ore) > 12:
         raise SystemExit("Ore non valide")
-    pause = [[data(a), data(b)] for a, b in dati.get("pause") or []]
+    pause = []
+    for p in dati.get("pause") or []:
+        if not (isinstance(p, list) and len(p) == 2):
+            raise SystemExit("Vacanza non valida: servono inizio e fine")
+        a, b = data(p[0]), data(p[1])
+        if not a or not b or a > b:
+            raise SystemExit("Vacanza non valida: servono inizio e fine, in ordine")
+        pause.append([a, b])
+    dal, al = data(dati.get("dal")), data(dati.get("al"))
+    if not dal:
+        raise SystemExit("Manca il primo giorno di scuola (dal)")
+    if al and al < dal:
+        raise SystemExit("La fine della scuola (al) viene prima dell'inizio (dal)")
     copie = [str(c) for c in dati.get("copie") or [] if PERSONA.match(str(c)) and str(c) != persona]
     if not lezioni:
         raise SystemExit("Nessuna lezione")
-    doc.set({"orario": lezioni, "ore": ore, "classe": str(dati.get("classe", ""))[:20], "dal": data(dati.get("dal")),
+    doc.set({"orario": lezioni, "ore": ore, "classe": str(dati.get("classe", ""))[:20], "dal": dal,
              # Firestore non accetta liste dentro liste: ogni vacanza è "da|a".
-             "al": data(dati.get("al")), "pause": [f"{a}|{b}" for a, b in pause], "copie": copie})
+             "al": al, "pause": [f"{a}|{b}" for a, b in pause], "copie": copie})
     giorni = len({x["g"] for x in lezioni})
     print(f"Orario scolastico: {len(lezioni)} ore in {giorni} giorni, {len(ore)} orari, {len(pause)} vacanze, {len(copie)} copie")
 
