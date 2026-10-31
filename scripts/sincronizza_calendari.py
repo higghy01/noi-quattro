@@ -188,7 +188,7 @@ def main():
             stato = {"calStato": {"letti": letti, "tot": len(link), "n": len(nuovi), "quando": int(time.time() * 1000)}} if link \
                 else {"calStato": firestore.DELETE_FIELD}
             db.collection("persone").document(persona).update(stato)
-        print(f"{persona}: {letti}/{len(link)} calendari, {len(nuovi)} impegni, {len(togli)} tolti")
+        print(f"{persona}: {letti}/{len(link)} calendari, {len(nuovi)} impegni ({len(dettagli)} nascosti come Occupato), {len(togli)} tolti")
     if errori and errori == sum(1 for v in calendari.values() if v):
         sys.exit(1)
 
