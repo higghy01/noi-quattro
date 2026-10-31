@@ -166,8 +166,10 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .item.done .box{background:var(--ok);border-color:var(--ok)}
 .item.done .box svg{stroke-dashoffset:0}
 .item .tx{flex:1;min-width:0;overflow-wrap:anywhere;transition:color .24s,opacity .24s}
-.item.done .tx{color:var(--muted);text-decoration:line-through;opacity:.7}
-.item .who{width:10px;height:10px;border-radius:999px;background:var(--pc);flex:none}
+.item.done .tx{color:var(--muted);opacity:.7}.item.done .tx .nm{text-decoration:line-through}
+.item .who{position:relative;width:28px;height:28px;border-radius:999px;background:var(--pc);color:#fff;display:grid;place-items:center;font:600 12px var(--f-body);flex:none;transition:background-color .3s}
+.item .tx small{display:block;font-size:12px;color:var(--muted);margin-top:1px;text-decoration:none}
+.item{padding:6px 0}
 .link{color:var(--acc);font-weight:600;font-size:13px;min-height:44px;text-align:left}
 
 /* Barra in basso */

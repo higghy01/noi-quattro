@@ -589,10 +589,22 @@
     } catch (e) { if (e && e.name === 'AbortError') return; window.open(f.url, '_blank'); }
   }
 
+  // "adesso", "5 min fa", "2 ore fa", "ieri", "lun 3 nov"
+  function fa(ms) {
+    const m = Math.round((Date.now() - ms) / 60000);
+    if (m < 1) return 'adesso';
+    if (m < 60) return `${m} min fa`;
+    if (m < 60 * 12 || new Date(ms).toDateString() === new Date().toDateString()) return `${Math.round(m / 60)} ${Math.round(m / 60) === 1 ? 'ora' : 'ore'} fa`;
+    const ieri = new Date(); ieri.setDate(ieri.getDate() - 1);
+    if (new Date(ms).toDateString() === ieri.toDateString()) return 'ieri';
+    return new Date(ms).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
   function rSpesa() {
     const ord = (a, b) => (b.creato || 0) - (a.creato || 0);
     const todo = S.spesa.filter(x => !x.done).sort(ord), done = S.spesa.filter(x => x.done).sort(ord);
-    const row = x => `<button class="item tap${x.done ? ' done' : ''}${x.id === fresh ? ' pop' : ''}" data-item="${x.id}" style="--pc:${col(x.by)}"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx">${esc(x.x)}</span><span class="who" title="${esc(P(x.by).nome)}"></span></button>`;
+    const chi = (id) => id === S.me ? 'te' : esc(P(id).nome);
+    const sotto = x => x.done && x.presoDa ? `preso da ${chi(x.presoDa)}${x.preso ? ' · ' + fa(x.preso) : ''}` : `aggiunto da ${chi(x.by)}${x.creato ? ' · ' + fa(x.creato) : ''}`;
+    const row = x => `<button class="item tap${x.done ? ' done' : ''}${x.id === fresh ? ' pop' : ''}" data-item="${x.id}" style="--pc:${col(x.done && x.presoDa ? x.presoDa : x.by)}"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><span class="nm">${esc(x.x)}</span><small>${sotto(x)}</small></span><span class="who">${S.persone[x.done && x.presoDa ? x.presoDa : x.by] ? avt(x.done && x.presoDa ? x.presoDa : x.by) : ''}</span></button>`;
     const keep = $('#itemTx') ? $('#itemTx').value : '';
     $('#p-spesa').innerHTML = `<div class="stack">
      <form class="add${ri(0)}" id="addItem"><input id="itemTx" placeholder="Cosa serve?" autocomplete="off" aria-label="Cosa serve" enterkeyhint="done"><button class="btn tap">Aggiungi</button></form>
@@ -1086,7 +1098,7 @@
       const x = S.spesa.find(y => y.id === d.item); if (!x) return;
       t.classList.toggle('done');
       if (!x.done && S.spesa.filter(y => !y.done).length === 1) { festa(t.querySelector('.box')); setTimeout(() => toast('Tutto preso! 🎉'), 200); }
-      setTimeout(() => DATI.aggiorna('spesa', x.id, { done: !x.done }).catch(sbaglio), 380); return;
+      setTimeout(() => DATI.aggiorna('spesa', x.id, x.done ? { done: false, presoDa: '', preso: 0 } : { done: true, presoDa: S.me, preso: Date.now() }).catch(sbaglio), 380); return;
     }
     if (t.id === 'clear') { const g = S.spesa.filter(x => x.done); for (const x of g) DATI.elimina('spesa', x.id).catch(sbaglio); return toast('Lista pulita'); }
   });
