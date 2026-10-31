@@ -175,10 +175,10 @@
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🍽️</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
        <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = S.cena[i] || '?'; return `<button class="cv tap" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${esc(P(i).nome)}</span></button>`; }).join('')}</div>
        <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.</div></div>
+     ${propOggi(ri(1))}
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.')}</div>
      <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.')}</div>
      ${ricordo(ri(3))}
-     ${propOggi(ri(3))}
      <button class="card tap${ri(4)}" data-go="spesa"><h2><span class="ttl"><i class="ic">🛒</i>Lista della spesa</span> <small>${left ? `${left} da prendere ›` : 'tutto preso ›'}</small></h2></button>
     </div>`;
   }
@@ -234,7 +234,7 @@
     return `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">🗳️</i>Proposte</span> <small>${aperte.length ? `${aperte.length} ${aperte.length === 1 ? 'aperta' : 'aperte'}` : ''}</small></h2>
     ${aperte.length ? aperte.map(card).join('') : `<div class="empty big${ri(1)}"><b>🗳️</b><span>Nessuna proposta aperta. Tocca + per chiedere cosa si mangia, dove si va, cosa si fa.</span></div>`}
     ${decise.length ? `<div class="sec">Già decise</div>${decise.map(card).join('')}` : ''}
-    ${vecchie.length ? `<div class="sec">Vecchie note</div><div class="card">${vecchie.map(n => `<div class="pn vn" style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="vx">${esc(n.x)}</span>${n.by === S.me ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div>`).join('')}</div>` : ''}</div>`;
+    ${vecchie.length ? `<div class="sec">Vecchie note</div><div class="card">${vecchie.map(n => `<div class="pn vn" style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="vnx">${esc(n.x)}</span>${n.by === S.me ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div>`).join('')}</div>` : ''}</div>`;
   }
   function propCard(p, k) {
     const ops = opzioniDi(p), ids = IDS(), mio = p.by === S.me, t = PTIPO[p.tipo] || PTIPO.altro;

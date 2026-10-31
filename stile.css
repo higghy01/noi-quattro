@@ -457,5 +457,5 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .pn small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
 .prOps{display:grid;gap:8px}
 .opz{font-weight:400;color:var(--muted);font-size:12px}
-.vn{display:flex;align-items:center;gap:8px}.vn .vx{flex:1;min-width:0;font-size:14px}
+.vn{display:flex;align-items:center;gap:8px}.vn .vnx{flex:1;min-width:0;font-size:14px}
 @media (prefers-reduced-motion: reduce){.op .bar{transition:none}}
