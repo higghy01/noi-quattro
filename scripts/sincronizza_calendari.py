@@ -161,7 +161,8 @@ def main():
         for k in range(0, len(ops), 450):
             b = db.batch()
             for op, i, v in ops[k:k + 450]:
-                b.set(col.document(i), v) if op == "set" else b.delete(col.document(i))
+                # merge: resta quello che la famiglia aggiunge nell'app (es. "mezzo")
+                b.set(col.document(i), v, merge=True) if op == "set" else b.delete(col.document(i))
             b.commit()
         # I titoli veri degli impegni nascosti: solo nella parte privata (si sostituisce l'elenco intero).
         if letti == len(link) and (dettagli or privati.get(persona, {}).get("dettagli")):

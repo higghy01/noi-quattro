@@ -6,7 +6,7 @@
   --p-blu:#2F74D0; --p-rosa:#C93A7B; --p-ambra:#C98208; --p-verde:#2E9A5E; --p-viola:#7A5CC7; --p-corallo:#D9573F; --p-rosso:#D23B3B; --p-grigio:#6F7282;
   --f-disp:"Bricolage Grotesque", ui-rounded, -apple-system, "SF Pro Rounded", system-ui, sans-serif;
   --f-body:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
-  --ease:cubic-bezier(.2,.8,.2,1); --pop:cubic-bezier(.34,1.4,.5,1);
+  --ease:cubic-bezier(.2,.8,.2,1); --pop:cubic-bezier(.34,1.4,.5,1); --sheet-ease:cubic-bezier(.32,.72,0,1);
   --r:20px; --me:var(--acc);
   --shadow:0 1px 2px rgb(30 20 60 / .04),0 6px 22px rgb(30 20 60 / .07);
   color-scheme:light;
@@ -56,8 +56,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 [hidden]{display:none!important}
-.tap{transition:transform .12s var(--ease),opacity .12s}
-.tap:active{transform:scale(.97)}
+.tap{transition:transform .38s var(--pop),opacity .2s}
+.tap:active{transform:scale(.96);transition:transform .1s var(--ease),opacity .1s}
 .muted{color:var(--muted)}
 
 /* Accesso */
@@ -186,7 +186,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 /* Il velo spento è anche invisibile: su iPhone (iOS 26) un elemento fisso in alto, anche trasparente, colora la barra dell'orario. */
 .veil{position:fixed;inset:0;z-index:30;background:rgb(10 8 20 / .38);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .3s var(--ease),visibility 0s linear .3s}
 .veil.on{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .3s var(--ease),visibility 0s}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;background:var(--panel);border-radius:22px 22px 0 0;transform:translateY(105%);transition:transform .42s var(--ease);
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;background:var(--panel);border-radius:22px 22px 0 0;transform:translateY(105%);transition:transform .5s var(--sheet-ease);
   padding:8px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-height:88vh;max-height:88dvh;overflow:auto;overscroll-behavior:contain}
 .sheet.drag{transition:none}
 .sheet.on{transform:none}
@@ -244,9 +244,9 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 
 /* Impostazioni */
 .screen{position:fixed;inset:0;z-index:25;background:var(--bg);overflow-y:auto;overflow-x:clip;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
-  transform:translateX(100%);visibility:hidden;transition:transform .42s var(--ease),visibility 0s linear .42s;
+  transform:translateX(100%);visibility:hidden;transition:transform .46s var(--sheet-ease),visibility 0s linear .46s;
   padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(40px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
-.screen.on{transform:none;visibility:visible;transition:transform .42s var(--ease),visibility 0s}
+.screen.on{transform:none;visibility:visible;transition:transform .5s var(--sheet-ease),visibility 0s}
 .screen.drag{transition:none}
 .screen .in{max-width:520px;margin:0 auto;display:grid;gap:12px}
 .imp-top{padding-top:12px;margin-left:-8px}
@@ -386,3 +386,22 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .pric img,.pric .noimg{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--acc) 14%,var(--soft));font-size:30px}
 .pric b{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pfoot{text-align:center;padding:4px 0 24px}
+
+/* Foto profilo al posto dell'iniziale */
+.pa,.gav,.avs i,.pav,.pk i,.fam i{position:relative}
+.fimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+.pfoto{position:relative;cursor:pointer}
+.pfoto .cam{position:absolute;right:-6px;bottom:-6px;width:26px;height:26px;border-radius:999px;background:var(--panel);display:grid;place-items:center;font-size:13px;box-shadow:0 2px 8px rgb(0 0 0 / .18)}
+.prof .muted .link{display:inline;min-height:0;padding:0;font-size:inherit}
+/* Come ci andate */
+.mezzi{display:flex;flex-wrap:wrap;gap:6px}
+.mz{min-height:36px;padding:0 12px;border-radius:999px;background:var(--soft);font-size:14px;color:var(--fg);transition:background-color .24s,color .24s,transform .38s var(--pop)}
+.mz.on{background:var(--acc);color:var(--acc-ink)}
+.mzr{font-size:13px;color:var(--muted);margin-top:2px}
+.addm{display:grid;gap:8px;margin-top:10px}
+/* Idee regalo: d'accordo o no */
+.voti{display:inline-flex;gap:6px}
+.vt{min-height:34px;padding:0 10px;border-radius:999px;border:1px solid var(--line);font-size:13px;font-weight:600;display:inline-flex;align-items:center;transition:background-color .24s,border-color .24s,transform .38s var(--pop)}
+.vt.on.si{background:color-mix(in srgb,var(--ok) 18%,transparent);border-color:var(--ok)}
+.vt.on.no{background:color-mix(in srgb,var(--bad) 16%,transparent);border-color:var(--bad)}
+.mze{font-size:20px;line-height:1}

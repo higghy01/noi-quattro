@@ -21,7 +21,7 @@ service cloud.firestore {
     match /persone/{id} {
       allow read: if membro();
       allow update: if membro() && io() == id
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifiche', 'privacy']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifiche', 'privacy', 'foto', 'fotoPath']);
       allow create, delete: if false;
     }
 
@@ -35,7 +35,9 @@ service cloud.firestore {
         && request.resource.data.creatoDa == resource.data.creatoDa)
         // Dei miei impegni dal calendario posso solo scegliere se gli altri vedono il titolo o "Occupato".
         || (resource.data.fonte == 'calendario:' + io()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['t', 'n', 'nascosto'])));
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['t', 'n', 'nascosto']))
+        // Come ci si va: lo può segnare chiunque, su qualsiasi impegno.
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mezzo']));
       allow delete: if membro() && resource.data.fonte in ['app', 'import:' + io()];
     }
 
@@ -44,6 +46,11 @@ service cloud.firestore {
       allow create: if membro() && request.resource.data.by == io();
       allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin']);
       allow delete: if membro() && resource.data.by == io();
+    }
+
+    // Cose di tutta la famiglia (per ora: i nostri mezzi).
+    match /famiglia/{doc} {
+      allow read, write: if membro();
     }
 
     match /spesa/{id} {
