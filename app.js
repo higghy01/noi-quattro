@@ -83,7 +83,7 @@
   function rNote() {
     const list = [...S.note].sort((a, b) => (b.pin - a.pin) || ((b.creato || 0) - (a.creato || 0)));
     $('#p-note').innerHTML = `<div class="stack"><h2 class="${ri(0)}">Bacheca di casa <small>${S.note.length} note</small></h2>
-    ${list.length ? `<div class="notes">${list.map((n, i) => `<div class="note${n.id === fresh ? ' pop' : ri(i + 1)}" style="--pc:${col(n.by)}"><p>${esc(n.x)}</p><div class="by"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="acts">${n.by === S.me ? `<button class="del tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}<button class="pin tap${n.pin ? ' on' : ''}" data-pin="${n.id}" aria-label="Metti in evidenza">📌</button></span></div></div>`).join('')}</div>` : '<div class="empty">Ancora nessuna nota. Tocca + per scriverne una.</div>'}</div>`;
+    ${list.length ? `<div class="notes">${list.map((n, i) => `<div class="note${n.id === fresh ? ' pop' : seen.has(page) ? '' : ' rise'}" style="--pc:${col(n.by)};--i:${Math.min(i + 1, 6)}"><p>${esc(n.x)}</p><div class="by"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="acts">${n.by === S.me ? `<button class="del tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}<button class="pin tap${n.pin ? ' on' : ''}" data-pin="${n.id}" aria-label="Metti in evidenza">📌</button></span></div></div>`).join('')}</div>` : '<div class="empty">Ancora nessuna nota. Tocca + per scriverne una.</div>'}</div>`;
   }
 
   function rSpesa() {
@@ -122,8 +122,15 @@
     b.hidden = !off || nascosto;
     if (!b.hidden) b.innerHTML = `<span>Vuoi sapere quando c'è qualcosa di nuovo?</span><button class="tap" id="bnOn">Attiva notifiche</button>`;
   }
-  function go(p) {
-    if (p === page) return; page = p;
+  function go(p, daIndietro) {
+    // Toccando la scheda già aperta si torna in cima, come nelle app.
+    if (p === page) return scrollTo({ top: 0, behavior: 'smooth' });
+    // Tasto/gesto "indietro" (Samsung): dalle altre schede torna a Oggi invece di chiudere l'app.
+    if (!daIndietro) {
+      if (page === 'oggi') history.pushState({ scheda: 1 }, '');
+      else if (p === 'oggi' && history.state && history.state.scheda) { ignoraPop++; history.back(); }
+    }
+    page = p;
     document.querySelectorAll('.page').forEach(el => el.classList.toggle('on', el.id === 'p-' + p));
     document.querySelectorAll('.tab').forEach((t, i) => { t.classList.toggle('on', t.dataset.p === p); if (t.dataset.p === p) $('#tpill').style.transform = `translateX(${i * 100}%)`; });
     scrollTo({ top: 0 }); render();
@@ -132,9 +139,43 @@
   const sbaglio = (e) => { console.error(e); toast('Non sono riuscito a salvare. Riprova tra poco.'); };
 
   /* ---------- Fogli dal basso ---------- */
-  function openSheet(html, after) { $('#sheetIn').innerHTML = `<div class="grab"></div>` + html; $('#veil').classList.add('on'); $('#sheet').classList.add('on'); $('#sheet').scrollTop = 0; after && after(); }
-  function closeSheet() { $('#veil').classList.remove('on'); $('#sheet').classList.remove('on'); }
-  $('#veil').onclick = closeSheet;
+  let ignoraPop = 0; // i "torna indietro" fatti dall'app stessa
+  const aperto = () => $('#sheet').classList.contains('on');
+  function openSheet(html, after) {
+    if (!aperto()) history.pushState({ foglio: 1 }, '');
+    $('#sheetIn').innerHTML = `<div class="grab"></div>` + html; $('#veil').classList.add('on'); $('#sheet').classList.add('on'); $('#sheet').scrollTop = 0; after && after();
+  }
+  function closeSheet(daIndietro) {
+    if (!aperto()) return;
+    $('#veil').classList.remove('on'); $('#sheet').classList.remove('on');
+    if (daIndietro !== true && history.state && history.state.foglio) { ignoraPop++; history.back(); }
+  }
+  $('#veil').onclick = () => closeSheet();
+  // Il velo non fa scorrere la pagina sotto.
+  $('#veil').addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  addEventListener('popstate', () => { if (ignoraPop) { ignoraPop--; return; } if (aperto()) closeSheet(true); else if (page !== 'oggi') go('oggi', true); });
+
+  // Foglio: si chiude trascinandolo verso il basso, come su iPhone e Android.
+  (() => {
+    const sh = $('#sheet'), veil = $('#veil'); let y0 = null, dy = 0, t0 = 0;
+    sh.addEventListener('touchstart', e => {
+      y0 = sh.scrollTop <= 0 && !e.target.closest('input,textarea,select') ? e.touches[0].clientY : null; dy = 0; t0 = Date.now();
+    }, { passive: true });
+    sh.addEventListener('touchmove', e => {
+      if (y0 == null) return;
+      dy = e.touches[0].clientY - y0;
+      if (dy <= 0) { if (sh.classList.contains('drag')) { sh.classList.remove('drag'); sh.style.transform = ''; veil.style.opacity = ''; } return; }
+      e.preventDefault(); sh.classList.add('drag');
+      sh.style.transform = `translateY(${dy}px)`; veil.style.opacity = Math.max(0, 1 - dy / 400);
+    }, { passive: false });
+    sh.addEventListener('touchend', () => {
+      if (y0 == null || !sh.classList.contains('drag')) { y0 = null; return; }
+      const veloce = dy / Math.max(1, Date.now() - t0) > 0.5;
+      sh.classList.remove('drag'); sh.style.transform = ''; veil.style.opacity = '';
+      if (dy > 110 || (veloce && dy > 40)) closeSheet();
+      y0 = null;
+    });
+  })();
   const pickHtml = (sel) => `<div class="pick">${IDS().map(i => `<button type="button" class="pk tap${sel.includes(i) ? ' on' : ''}" data-pk="${i}" style="--pc:${col(i)}"><i>${ini(i)}</i>${esc(P(i).nome)}</button>`).join('')}</div>`;
 
   function sheetEvento(e) {

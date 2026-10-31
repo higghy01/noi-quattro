@@ -17,9 +17,13 @@
   color-scheme:dark}}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{overflow-x:clip}
+html,body{overflow-x:clip;overscroll-behavior:none}
+html{touch-action:manipulation}
+/* Come un'app: niente selezione del testo né menu a pressione lunga sui comandi (i campi e le note restano selezionabili) */
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,.note p{-webkit-user-select:text;user-select:text}
 body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-body);margin:0;-webkit-text-size-adjust:100%;
-  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(96px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(160px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .wrap{max-width:520px;margin:0 auto}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
@@ -30,15 +34,18 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .muted{color:var(--muted)}
 
 /* Accesso */
-.login{min-height:100vh;display:grid;place-items:center;padding-block:32px}
+.login{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding-block:32px}
 .login-in{width:100%;max-width:400px;display:grid;gap:16px;animation:fm-rise .52s var(--ease) both}
 .logo{display:flex;gap:6px}
 .logo i{width:28px;height:28px;border-radius:999px;background:var(--pc);animation:fm-pop .5s var(--pop) both}
 .logo i:nth-child(2){animation-delay:60ms}.logo i:nth-child(3){animation-delay:120ms}.logo i:nth-child(4){animation-delay:180ms}
 .err{color:var(--bad);font-size:13px;min-height:18px}
 label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
-input,textarea,select{min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:10px 12px;font:16px var(--f-body);width:100%}
+input,textarea,select{min-width:0;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:10px 12px;font:16px var(--f-body);width:100%}
 textarea{min-height:88px;resize:none}
+/* iPhone: data e ora restano dentro la colonna e allineate a sinistra */
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;display:block}
+input::-webkit-date-and-time-value{text-align:left;min-height:1.45em}
 
 /* Testata */
 .head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:20px 12px}
@@ -47,7 +54,7 @@ textarea{min-height:88px;resize:none}
 .date{color:var(--muted);font-size:13px;margin-top:4px}
 .me{width:44px;height:44px;border-radius:999px;background:var(--me);color:#fff;font:650 17px var(--f-disp);display:grid;place-items:center;flex:none;transition:background .24s}
 .banner{font-size:13px;color:var(--fg);background:var(--soft);border-radius:12px;padding:10px 12px;margin-bottom:12px;display:flex;gap:8px;align-items:center;justify-content:space-between}
-.banner button{color:var(--acc);font-weight:600;min-height:32px;flex:none}
+.banner button{color:var(--acc);font-weight:600;min-height:44px;margin-block:-6px;flex:none}
 
 /* Pagine */
 .page{display:none}
@@ -112,7 +119,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .note p{margin:0;overflow-wrap:anywhere;white-space:pre-wrap}
 .note .by{display:flex;justify-content:space-between;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
 .note .acts{display:flex}
-.note .pin,.note .del{min-width:32px;min-height:32px;display:grid;place-items:center;border-radius:999px;opacity:.45;transition:opacity .24s,transform .3s var(--pop)}
+.note .pin,.note .del{min-width:40px;min-height:40px;margin:-4px;display:grid;place-items:center;border-radius:999px;opacity:.45;transition:opacity .24s,transform .3s var(--pop)}
 .note .pin.on{opacity:1;transform:rotate(-20deg)}
 
 /* Spesa */
@@ -146,11 +153,13 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .veil{position:fixed;inset:0;z-index:30;background:rgb(10 8 20 / .38);opacity:0;pointer-events:none;transition:opacity .3s var(--ease)}
 .veil.on{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;background:var(--panel);border-radius:22px 22px 0 0;transform:translateY(105%);transition:transform .42s var(--ease);
-  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-height:88vh;overflow:auto;overscroll-behavior:contain}
+  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-height:88vh;max-height:88dvh;overflow:auto;overscroll-behavior:contain}
+.sheet.drag{transition:none}
 .sheet.on{transform:none}
 .sheet .in{max-width:520px;margin:0 auto;display:grid;gap:12px}
 .sheet input,.sheet textarea,.sheet select{background:var(--bg)}
-.grab{width:40px;height:5px;border-radius:999px;background:var(--line);margin:4px auto 8px}
+.grab{width:40px;height:5px;border-radius:999px;background:var(--line);margin:4px auto 8px;position:relative}
+.grab::after{content:"";position:absolute;inset:-14px -60px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .row2>*{min-width:0}
 .pick{display:flex;gap:8px;flex-wrap:wrap}

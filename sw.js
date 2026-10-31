@@ -1,6 +1,7 @@
 // Noi quattro - service worker: app usabile offline + notifiche (Firebase Cloud Messaging).
 // A ogni pubblicazione alzare VERSIONE, altrimenti i telefoni restano sulla copia vecchia.
-const VERSIONE = 'noi4-v4';
+const VERSIONE = 'noi4-v5';
+const LIBRERIE = ['www.gstatic.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 const FILE = ['./', 'index.html', 'stile.css', 'app.js', 'dati.js', 'config.js', 'manifest.json', 'icona-180.png', 'icona-512.png'];
 
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js',
@@ -19,7 +20,13 @@ self.addEventListener('activate', e => {
 // Prima la rete (per avere sempre l'ultima versione), la copia solo se manca internet.
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
-  if (e.request.method !== 'GET' || u.origin !== location.origin) return;
+  if (e.request.method !== 'GET') return;
+  // Librerie e caratteri esterni (hanno la versione nell'indirizzo): prima la copia, così l'app si apre subito anche senza rete.
+  if (LIBRERIE.includes(u.hostname)) {
+    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(n => { const c = n.clone(); caches.open(VERSIONE).then(x => x.put(e.request, c)); return n; })));
+    return;
+  }
+  if (u.origin !== location.origin) return;
   e.respondWith(fetch(e.request).then(r => { const c = r.clone(); caches.open(VERSIONE).then(x => x.put(e.request, c)); return r; })
     .catch(() => caches.match(e.request).then(r => r || caches.match('index.html'))));
 });
