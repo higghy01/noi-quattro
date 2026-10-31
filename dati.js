@@ -40,7 +40,6 @@
        ev('Compleanno della nonna', 4, '', tutti, '', { ripeti: 'annuale' }),
        ev('Revisione auto', 5, '09:00', ['p4'], 'Portare il libretto'),
        ev('Riunione di condominio', 1, '19:00', ['p1'], ''), ev('Matrimonio di Chiara', 12, '11:00', ['p1', 'p2'], 'In comune')].forEach(e => o.impegni[uid()] = e);
-      o.note[uid()] = { by: 'p3', x: 'Qualcuno ha visto le mie cuffie bianche?', pin: false, creato: now - 9e7 };
       // Proposte: una aperta con voti, una appena fatta senza idee, una già decisa.
       const op = (x, by, k) => ({ x, by, creato: now - 5e6 + k });
       o.proposte = {

@@ -33,11 +33,11 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme=light])[data-page=cal]{--acc:#4FC3D1}
   :root:not([data-theme=light])[data-page=note]{--acc:#F2C230}
-  :root:not([data-theme=light])[data-page=spesa]{--acc:#F7AE45}
+  :root:not([data-theme=light])[data-page=spesa]{--acc:#FF8F3A}
   :root:not([data-theme=light])[data-page=viaggi]{--acc:#E879B9}}
 :root[data-theme=dark][data-page=cal]{--acc:#4FC3D1}
 :root[data-theme=dark][data-page=note]{--acc:#F2C230}
-:root[data-theme=dark][data-page=spesa]{--acc:#F7AE45}
+:root[data-theme=dark][data-page=spesa]{--acc:#FF8F3A}
 :root[data-theme=dark][data-page=viaggi]{--acc:#E879B9}
 /* "Fatto / ok" (--ok) prende il colore della scheda: il verde è di una persona. */
 
@@ -48,7 +48,7 @@ html,body{overflow-x:clip;overscroll-behavior:none}
 html,body{width:100%;max-width:100%;overscroll-behavior-x:none;scrollbar-width:none}
 body{touch-action:pan-y;position:relative}
 .screen,.sheet{touch-action:pan-y;scrollbar-width:none}
-.storie,.filters{touch-action:pan-x pan-y}
+.storie{touch-action:pan-x pan-y}
 ::-webkit-scrollbar{display:none;width:0;height:0}
 html{background:var(--bg)}
 html{touch-action:manipulation}
@@ -128,7 +128,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .ev{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:start;padding:10px 0;border-top:1px solid var(--line);width:100%;text-align:left}
 .ev:first-of-type{border-top:0;padding-top:0}
 .ev .h{font:600 15px var(--f-body);font-variant-numeric:tabular-nums}
-.ev .h small{display:block;font-size:12px;color:var(--muted);font-weight:500}
+.ev .h small{display:block;font-size:12px;line-height:1.25;color:var(--muted);font-weight:500}
 .ev .t{font-weight:600;overflow-wrap:anywhere}
 .ev .n{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .dots{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
@@ -149,11 +149,13 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .wnav{display:flex;align-items:center;justify-content:space-between}
 .wnav button{min-width:44px;min-height:44px;color:var(--muted);font-size:20px}
 .wnav b{font:600 15px var(--f-body)}
-.filters{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.filters{display:flex;gap:6px;padding-bottom:2px;min-width:0;width:100%}
 .filters::-webkit-scrollbar{display:none}
-.fb{flex:none;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);font-size:13px;display:inline-flex;align-items:center;gap:6px;transition:background .24s,color .24s,border-color .24s}
-.fb i{width:10px;height:10px;border-radius:999px;background:var(--pc)}
-.fb.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+/* Filtri persone: tutti su una riga, niente scorrimento laterale; ogni bottone tinto del colore della persona */
+.fb{flex:1 1 auto;min-width:0;justify-content:center;min-height:36px;padding:0 6px;white-space:nowrap;overflow:hidden;border-radius:999px;border:1px solid color-mix(in srgb,var(--pc) 35%,transparent);background:color-mix(in srgb,var(--pc) 10%,transparent);font-size:13px;font-weight:500;display:inline-flex;align-items:center;transition:background-color .24s,color .24s,border-color .24s,transform .12s var(--ease)}
+.fb i{display:none}
+.fb span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.fb.on{background:var(--pc);color:var(--acc-ink);border-color:var(--pc);font-weight:600}
 
 /* Bacheca */
 .notes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -349,6 +351,8 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .seg[style*="--n:5"] button{font-size:12.5px}
 /* Ricordi: gruppi per tipo, etichetta del tipo, video */
 .gruppi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+/* Righe sempre piene: mai un bottone da solo sotto */
+.gruppi[data-n="2"]{grid-template-columns:repeat(2,1fr)}.gruppi[data-n="3"],.gruppi[data-n="6"]{grid-template-columns:repeat(3,1fr)}.gruppi[data-n="5"]{grid-template-columns:repeat(5,1fr)}
 .gr{display:grid;justify-items:center;gap:2px;padding:10px 4px;border-radius:16px;background:var(--panel);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);box-shadow:var(--shadow);min-width:0;transition:background-color .24s,border-color .24s,transform .12s var(--ease)}
 .gr b{font-size:24px;line-height:1.2;font-weight:400}
 .gr span{font-size:11.5px;font-weight:600;line-height:1.2;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
@@ -390,7 +394,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .phero h1{margin:0;font:700 26px var(--f-disp)}.phero h1 small{font-size:15px;color:var(--muted);font-weight:500}
 .riass{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .riass span{font-size:13px;padding:4px 10px;border-radius:999px;background:color-mix(in srgb,var(--pc) 14%,var(--panel))}
-.pg>small{display:block;margin:10px 0 -2px;font:600 12px var(--f-body);color:var(--muted);text-transform:capitalize}
+.pg>small{display:block;margin:10px 0 -2px;font:600 12px var(--f-body);color:var(--muted)}
 .pg:first-child>small{margin-top:0}
 .pn{margin:0;padding:8px 0;border-top:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere}.pn:first-child{border-top:0;padding-top:0}
 .pdes{display:grid;gap:6px;margin-bottom:8px}.pdes span{overflow-wrap:anywhere}
