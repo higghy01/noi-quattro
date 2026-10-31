@@ -425,6 +425,7 @@
         <span class="tinfo"><b>${esc(v.t)}</b><span class="muted">${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</span></button>`;
     });
     $('#p-viaggi').innerHTML = `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">📸</i>I nostri ricordi</span> <small>${tutti.length}</small></h2>
+      <label class="auto-album tap${ri(1)}"><input type="file" id="autoIn" accept="image/*,video/*" multiple hidden><span class="aa-ic">🪄</span><span><b>Aggiungi foto e video</b><small>Vanno da soli nel ricordo del giorno giusto</small></span></label>
       ${gruppi.length > 1 ? `<div data-n="${gruppi.length + 1}" class="gruppi${ri(1)}"><button class="gr tap${filtroR === 'tutti' ? ' on' : ''}" data-filtror="tutti"><b>🗂️</b><span>Tutti</span><small>${tutti.length}</small></button>${gruppi.map(([k, e, n, c]) => `<button class="gr tap${filtroR === k ? ' on' : ''}" data-filtror="${k}" aria-label="${esc(n)}"><b>${e}</b><span>${esc(c)}</span><small>${conta(k)}</small></button>`).join('')}</div>` : ''}
       ${html || '<div class="empty big"><b>📸</b><span>Ancora nessun ricordo. Tocca + per aggiungerne uno: un viaggio, un pranzo, una sera al cinema, il Natale… Poi caricate foto e video tutti insieme.</span></div>'}</div>`;
   }
@@ -707,16 +708,84 @@
       const t = new TextDecoder('latin1').decode(await file.slice(0, 131072).arrayBuffer());
       const m = t.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
       if (m) { const d = new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(); if (m[1] > 1990 && d < Date.now() + 864e5) return d; }
+      // Video dell'iPhone: la data di ripresa è scritta come "2026-10-03T18:42:10+0200", spesso in fondo al file.
+      if (/^video\//.test(file.type) || /\.(mov|mp4)$/i.test(file.name)) {
+        const coda = file.size > 262144 ? new TextDecoder('latin1').decode(await file.slice(file.size - 262144).arrayBuffer()) : '';
+        const v = (t + coda).match(/(20\d\d)-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)([+-]\d\d:?\d\d|Z)?/);
+        if (v) { const d = new Date(v[7] ? `${v[1]}-${v[2]}-${v[3]}T${v[4]}:${v[5]}:${v[6]}${v[7].length === 5 ? v[7].slice(0, 3) + ':' + v[7].slice(3) : v[7]}` : new Date(+v[1], v[2] - 1, +v[3], +v[4], +v[5], +v[6])).getTime(); if (d > 0 && d < Date.now() + 864e5) return d; }
+      }
     } catch (e) {}
     return file.lastModified || Date.now();
+  }
+  /* Album automatici (Sasha, 31/10/2026): si scelgono tante foto e video insieme e ognuno va da solo nel ricordo
+     del giorno in cui è stato scattato. Per un giorno senza ricordo se ne crea uno nuovo, col nome dell'impegno
+     di famiglia di quel giorno se c'era (es. "Cena di compleanno"), altrimenti con la data. Prima di caricare si vede il piano. */
+  const TIPO_DA = [[/cinema|film|teatro|concerto|spettacolo/i, 'cinema'], [/compleann|birthday/i, 'compleanno'], [/natale|capodanno|pasqua|festa/i, 'feste'],
+    [/cena|pranzo|aperitivo|ristorante|pizza|grigliata/i, 'pranzo'], [/viaggio|vacanza|ferie|volo/i, 'viaggio'], [/gita|uscita|passeggiata|mare|montagna|lago|parco/i, 'uscita']];
+  const NON_RICORDO = /medic|dottor|dentist|visita|analisi|esam|prelievo|ospedal|terapi|psicolog|fisioterap|banca|avvocat|notai|commercialist|colloqui|riunione|condominio|scuola|lezione|lavoro|turno|revisione|tagliando|spesa grande|occupato/i;
+  let piano = null; // [{ giorno, v (id esistente) | nuovo {t, tipo, who}, files }]
+  async function preparaAlbum(files) {
+    if (!DATI.fotoPronte()) return toast('Lo spazio delle foto non è ancora attivo.');
+    const list = [...files].filter(f => /^(image|video)\//.test(f.type) || /\.(heic|heif|jpe?g|png|mov|mp4)$/i.test(f.name)).slice(0, 120);
+    if (!list.length) return;
+    if (files.length > 120) toast('Ne metto a posto 120 alla volta: poi scegli gli altri');
+    toast('Guardo le date delle foto…');
+    const perGiorno = {};
+    for (const f of list) { const g = iso(new Date(await dataScatto(f))); (perGiorno[g] = perGiorno[g] || []).push(f); }
+    piano = Object.keys(perGiorno).sort().map(g => {
+      const dentro = S.viaggi.filter(v => v.da && g >= v.da && g <= (v.a && v.a >= v.da ? v.a : v.da))
+        .sort((a, b) => ((a.a || a.da) > a.da ? 1 : 0) - ((b.a || b.da) > b.da ? 1 : 0)); // prima quelli di un giorno solo
+      if (dentro.length) return { giorno: g, v: dentro[0].id, files: perGiorno[g] };
+      // L'impegno con più persone di quel giorno, ma non visite, lavoro, scuola e simili (non sono ricordi).
+      const adatto = (e) => !e.nascosto && !/^orario:/.test(e.fonte || '') && !NON_RICORDO.test(e.t || '');
+      const ev = delGiorno(g, e => adatto(e) && ((e.who || []).length >= 2 || (e.who || []).includes(S.me)))
+        .sort((a, b) => (b.who || []).length - (a.who || []).length)[0];
+      const t = ev ? ev.t.slice(0, 60) : 'Ricordo del ' + fmt(g, { day: 'numeric', month: 'long' });
+      const tipo = ev ? ((TIPO_DA.find(([re]) => re.test(ev.t)) || [])[1] || 'uscita') : 'altro';
+      return { giorno: g, nuovo: { t, tipo, who: ev && ev.who && ev.who.length ? ev.who.filter(i => S.persone[i]) : [S.me] }, files: perGiorno[g] };
+    });
+    // Più giorni di fila senza ricordo e senza impegni (es. un weekend) diventano un ricordo solo.
+    const uniti = [];
+    piano.forEach(x => {
+      const u = uniti[uniti.length - 1];
+      if (u && u.nuovo && x.nuovo && u.nuovo.tipo === 'altro' && x.nuovo.tipo === 'altro' && iso(addDays(new Date((u.fino || u.giorno) + 'T12:00:00'), 1)) === x.giorno) {
+        u.fino = x.giorno; u.files.push(...x.files); u.nuovo.t = u.giorno.slice(0, 7) === x.giorno.slice(0, 7) ? `Ricordo del ${+u.giorno.slice(8)}–${fmt(x.giorno, { day: 'numeric', month: 'long' })}`
+          : `Ricordo dal ${fmt(u.giorno, { day: 'numeric', month: 'long' })} al ${fmt(x.giorno, { day: 'numeric', month: 'long' })}`;
+      } else uniti.push(x);
+    });
+    piano = uniti;
+    sheetAlbum();
+  }
+  function sheetAlbum() {
+    if (!piano) return;
+    const conta = (fs) => { const nv = fs.filter(f => /^video\//.test(f.type) || /\.(mov|mp4)$/i.test(f.name)).length; return `${fs.length - nv} foto${nv ? ` · ${nv} video` : ''}`; };
+    openSheet(`<h3>Metto a posto ${piano.reduce((a, x) => a + x.files.length, 0)} file</h3>
+      <div class="empty">Ognuno va nel ricordo del giorno in cui è stato scattato.</div>
+      <div class="piano">${piano.map((x, i) => { const v = x.v && S.viaggi.find(y => y.id === x.v), t = TIPO[v ? tipoDi(v) : x.nuovo.tipo];
+        return `<div class="abr"><span class="abe">${t.e}</span><span class="abt"><b>${esc(v ? v.t : x.nuovo.t)}</b><small>${v ? 'Ricordo che c\'è già' : '✨ Ricordo nuovo'} · ${fmt(x.giorno, { day: 'numeric', month: 'short' })}${x.fino ? ' – ' + fmt(x.fino, { day: 'numeric', month: 'short' }) : ''}</small></span><span class="abn">${conta(x.files)}</span></div>`; }).join('')}</div>
+      <button class="btn tap" id="albumVai">Metti tutto a posto</button>
+      <div class="empty">I ricordi nuovi si possono rinominare dopo, dal loro tasto Modifica.</div>`);
+  }
+  async function caricaAlbum() {
+    const p = piano; piano = null; if (!p) return;
+    closeSheet();
+    for (const x of p) {
+      let v = x.v;
+      if (!v) {
+        try { v = await DATI.aggiungi('viaggi', { t: x.nuovo.t, dove: '', da: x.giorno, a: x.fino || '', who: x.nuovo.who.length ? x.nuovo.who : [S.me], tipo: x.nuovo.tipo, creatoDa: S.me, creato: Date.now() }); }
+        catch (er) { sbaglio(er); continue; }
+      }
+      openTrip(v);
+      await caricaFoto(x.files, v);
+    }
   }
   const MOSTRABILI = /^image\/(jpeg|png|webp|gif)$/;
   /* Caricamento: 3 file alla volta. Per ogni file l'originale parte subito, l'anteprima si prepara intanto.
      Ogni file compare subito nella griglia (copia sul telefono con la sua barretta) e la pagina non si ridisegna:
      cambiano solo i pezzi diversi. */
-  async function caricaFoto(files) {
+  async function caricaFoto(files, perV) {
     if (!DATI.fotoPronte()) return toast('Lo spazio delle foto non è ancora attivo.');
-    const v = tripId, list = [...files].filter(f => /^(image|video)\//.test(f.type) || /\.(heic|heif|jpe?g|png|mov|mp4)$/i.test(f.name)).slice(0, 60); let ok = 0, rotto = false;
+    const v = perV || tripId, list = [...files].filter(f => /^(image|video)\//.test(f.type) || /\.(heic|heif|jpe?g|png|mov|mp4)$/i.test(f.name)).slice(0, 60); let ok = 0, rotto = false;
     if (files.length > 60) toast('Ne carico 60 alla volta: poi aggiungi gli altri');
     const totB = list.reduce((a, f) => a + f.size, 0) || 1, fatti = {};
     const items = list.map((file, k) => {
@@ -1343,6 +1412,7 @@
     const t = ev.target.closest('button'); if (!t) return;
     const d = t.dataset;
     if (t.classList.contains('tab')) return go(d.p);
+    if (t.id === 'albumVai') return caricaAlbum();
     if (t.id === 'legoOn') {
       t.hidden = true; $('#legoBox').hidden = false; $('#legoQ').focus(); risLego();
       try { await catalogoLego(); risLego(); } catch (er) { $('#legoRis').innerHTML = '<div class="empty">Il catalogo LEGO non si apre: serve internet. Riprova tra poco.</div>'; }
@@ -1587,6 +1657,7 @@
     if (t.id === 'icsFile' && t.files[0]) importaIcs(t.files[0]);
     if (t.id === 'orarioFile' && t.files[0]) importaOrario(t.files[0]);
     if (t.id === 'fotoIn' && t.files.length) caricaFoto(t.files);
+    if (t.id === 'autoIn' && t.files.length) { const fs = [...t.files]; t.value = ''; preparaAlbum(fs); }
     if (t.id === 'avIn' && t.files[0]) caricaAvatar(t.files[0]);
   });
   document.addEventListener('submit', async (ev) => {
