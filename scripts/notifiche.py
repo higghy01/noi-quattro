@@ -4,7 +4,9 @@
 - nuovi: quando qualcuno ti aggiunge a un impegno;
 - riepilogo: la sera (alle 21, o all'ora scelta nelle Impostazioni), gli impegni di domani;
 - cena: il pomeriggio (alle 17, o all'ora scelta), "A cena stasera?" a chi non ha ancora risposto;
-- note: quando una nota nuova è messa in evidenza.
+- proposte: una proposta nuova (a tutti tranne chi l'ha fatta), "hanno votato tutti" (a chi l'ha fatta)
+  e cosa si è deciso (a tutti tranne chi ha deciso);
+- note: quando una nota nuova è messa in evidenza (le note non si scrivono più, restano le vecchie).
 Ognuno sceglie quali ricevere dall'app (persone/<id>.notifiche). Cosa è già stato mandato
 si ricorda in sistema/notifiche, così niente arriva due volte.
 """
@@ -111,6 +113,31 @@ def main():
             for p in persone:
                 if p != n.get("by"):
                     manda(p, "note", f"Nota di {nome(n.get('by'))}", n.get("x", "")[:120], f"nota|{d.id}|{p}")
+
+    # Proposte: nuove, "hanno votato tutti", decise.
+    for d in db.collection("proposte").stream():
+        pr = d.to_dict() or {}
+        chi, q = pr.get("by"), pr.get("q", "")
+        opz = {k: v for k, v in (pr.get("opzioni") or {}).items() if isinstance(v, dict) and v.get("x")}
+        if pr.get("chiusa"):
+            decisa = int(pr.get("decisa") or 0)
+            if decisa > recente:
+                for p in persone:
+                    if p != chi:
+                        manda(p, "proposte", f"Deciso: {pr.get('scelta', '')}", f"{q} · ha deciso {nome(chi)}", f"deciso|{d.id}|{decisa}|{p}")
+            continue
+        if int(pr.get("creato") or 0) > recente:
+            idee = " · ".join(v["x"] for v in sorted(opz.values(), key=lambda v: v.get("creato", 0))[:4])
+            for p in persone:
+                if p != chi:
+                    manda(p, "proposte", f"{nome(chi)} propone: {q}", (idee + " · " if idee else "") + "Vota nella Bacheca", f"proposta|{d.id}|{p}")
+        voti = pr.get("voti") or {}
+        # Solo per le proposte degli ultimi due giorni: così l'avviso non torna quando "inviati" dimentica.
+        due_giorni = int((ora - dt.timedelta(days=2)).timestamp() * 1000)
+        if chi in persone and opz and int(pr.get("creato") or 0) > due_giorni and all(voti.get(p) for p in persone):
+            conta = {k: sum(1 for p in persone if k in (voti.get(p) or [])) for k in opz}
+            testa = max(sorted(opz, key=lambda k: opz[k].get("creato", 0)), key=lambda k: conta[k])
+            manda(chi, "proposte", f"Hanno votato tutti: {q}", f"In testa: {opz[testa]['x']} ({conta[testa]} voti). Decidi nella Bacheca.", f"tutti|{d.id}|{chi}")
 
     # Invio a tutti i telefoni iscritti di ogni persona; i telefoni non più validi si tolgono.
     mandate = 0

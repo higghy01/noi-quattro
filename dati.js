@@ -30,7 +30,7 @@
       const tutti = ['p1', 'p2', 'p3', 'p4'];
       const o = { persone: {}, impegni: {}, note: {}, spesa: {}, cena: {} };
       [['p1', 'Marco', 'blu'], ['p2', 'Giulia', 'rosa'], ['p3', 'Elena', 'ambra'], ['p4', 'Paolo', 'verde']]
-        .forEach(([id, nome, colore], i) => o.persone[id] = { nome, colore, ordine: i, notifiche: { promemoria: true, nuovi: true, riepilogo: true, cena: true, note: true } });
+        .forEach(([id, nome, colore], i) => o.persone[id] = { nome, colore, ordine: i, notifiche: { promemoria: true, nuovi: true, riepilogo: true, cena: true, proposte: true } });
       [ev('Turno al lavoro', 0, '06:30', ['p1'], 'Fino alle 11:30', { fonte: 'calendario:p1' }),
        ev('Dentista', 0, '15:00', ['p3', 'p2'], 'Studio in centro'),
        ev('Cena tutti insieme', 0, '20:00', tutti, 'Pizza fatta in casa'),
@@ -39,9 +39,16 @@
        ev('Spesa grande', 2, '10:00', ['p2'], 'Chi vuole qualcosa lo scrive in Spesa'),
        ev('Compleanno della nonna', 4, '', tutti, '', { ripeti: 'annuale' }),
        ev('Revisione auto', 5, '09:00', ['p4'], 'Portare il libretto')].forEach(e => o.impegni[uid()] = e);
-      [['p2', 'Domenica pranzo dalla nonna, ci siamo tutti?', true], ['p4', 'Il wifi nuovo ha la stessa password di prima.', false],
-       ['p3', 'Qualcuno ha visto le mie cuffie bianche?', false], ['p1', 'Ho pagato io la bolletta della luce.', false]]
-        .forEach(([by, x, pin], i) => o.note[uid()] = { by, x, pin, creato: now - i * 1000 });
+      o.note[uid()] = { by: 'p3', x: 'Qualcuno ha visto le mie cuffie bianche?', pin: false, creato: now - 9e7 };
+      // Proposte: una aperta con voti, una appena fatta senza idee, una già decisa.
+      const op = (x, by, k) => ({ x, by, creato: now - 5e6 + k });
+      o.proposte = {
+        a1: { q: 'Cosa si mangia stasera?', tipo: 'cena', by: 'p2', creato: now - 5e6, chiusa: false, scelta: '', decisa: 0,
+          opzioni: { o1: op('Pizza', 'p2', 1), o2: op('Pasta al pesto', 'p2', 2), o3: op('Sushi', 'p3', 3) }, voti: { p2: ['o1'], p3: ['o3', 'o1'], p4: ['o2'] } },
+        a2: { q: 'Cosa facciamo questo weekend?', tipo: 'weekend', by: 'p4', creato: now - 6e5, chiusa: false, scelta: '', decisa: 0, opzioni: {}, voti: {} },
+        a3: { q: 'Dove si pranza domani?', tipo: 'pranzo', by: 'p1', creato: now - 3e7, chiusa: true, scelta: 'Dalla nonna', decisa: now - 2e6,
+          opzioni: { o4: op('Dalla nonna', 'p1', 4), o5: op('Fuori', 'p3', 5) }, voti: { p1: ['o4'], p2: ['o4'], p3: ['o5', 'o4'], p4: ['o4'] } }
+      };
       [['Latte', 'p2', false], ['Pane', 'p4', false], ['Mozzarella per la pizza', 'p1', false], ['Mele', 'p3', true], ['Detersivo piatti', 'p2', false]]
         .forEach(([x, by, done], i) => o.spesa[uid()] = { x, by, done, creato: now - i * 1000 });
       o.cena[iso(0)] = { p1: 'si', p2: 'si', p4: 'no' };

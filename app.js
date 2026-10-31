@@ -10,7 +10,7 @@
   // [chiave, testo, orario scelto (facoltativo), ore possibili, ora solita]
   const NOTIF = [['promemoria', 'Promemoria un\'ora prima dei miei impegni'], ['nuovi', 'Quando qualcuno mi aggiunge a un impegno'],
     ['riepilogo', 'La sera: gli impegni di domani', 'oraRiepilogo', [19, 20, 21, 22], 21],
-    ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['note', 'Note messe in evidenza']];
+    ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['proposte', 'Nuove proposte, quando hanno votato tutti e cosa si è deciso']];
   const SCHEDE = ['oggi', 'cal', 'note', 'viaggi', 'spesa'];
   const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', viaggi: 'Ricordi', spesa: 'Spesa' };
   const NOMI_COLORI = { blu: 'blu', rosa: 'rosa', ambra: 'ambra', verde: 'verde', viola: 'viola', corallo: 'corallo', rosso: 'rosso', grigio: 'grigio' };
@@ -24,8 +24,8 @@
 
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
-  const S = { me: null, persone: {}, impegni: [], note: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [] };
-  let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = LS.get('noi4-bacheca', 'note');
+  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [] };
+  let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = LS.get('noi4-bacheca', 'proposte') === 'regali' ? 'regali' : 'proposte';
   const seen = new Set(); let fresh = null; let avviato = false;
 
   function inizioSettimana(d) { const x = new Date(d); return addDays(x, -((x.getDay() + 6) % 7)); }
@@ -167,7 +167,6 @@
   /* ---------- Pagine ---------- */
   function rOggi() {
     const tom = iso(addDays(TODAY, 1));
-    const pinned = S.note.filter(n => n.pin);
     const left = S.spesa.filter(x => !x.done).length;
     const ids = IDS();
     const yes = ids.filter(i => S.cena[i] === 'si').length;
@@ -176,10 +175,10 @@
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🍽️</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
        <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = S.cena[i] || '?'; return `<button class="cv tap" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${esc(P(i).nome)}</span></button>`; }).join('')}</div>
        <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.</div></div>
+     ${propOggi(ri(1))}
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.')}</div>
      <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.')}</div>
      ${ricordo(ri(3))}
-     ${pinned.length ? `<div class="card${ri(3)}"><h2><span class="ttl"><i class="ic">📌</i>In evidenza</span></h2>${pinned.map(n => `<div style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><p style="margin:6px 0 0;white-space:pre-wrap">${esc(n.x)}</p></div>`).join('')}</div>` : ''}
      <button class="card tap${ri(4)}" data-go="spesa"><h2><span class="ttl"><i class="ic">🛒</i>Lista della spesa</span> <small>${left ? `${left} da prendere ›` : 'tutto preso ›'}</small></h2></button>
     </div>`;
   }
@@ -203,16 +202,70 @@
   function rNote() {
     const el = $('#p-note');
     // Il selettore resta fermo (così la pillola scorre), cambia solo il contenuto sotto.
-    if (!$('#segNote')) el.innerHTML = `<div class="seg" id="segNote" style="--n:2"><i class="spill"></i><button class="tap" data-seg="note">Note</button><button class="tap" data-seg="regali">Regali 🎁</button></div><div id="noteBody"></div>`;
+    if (!$('#segNote')) el.innerHTML = `<div class="seg" id="segNote" style="--n:2"><i class="spill"></i><button class="tap" data-seg="proposte">Proposte 🗳️</button><button class="tap" data-seg="regali">Regali 🎁</button></div><div id="noteBody"></div>`;
     segSet($('#segNote'), seg === 'regali' ? 1 : 0);
-    $('#noteBody').innerHTML = seg === 'regali' ? rRegali() : rBacheca();
+    $('#noteBody').innerHTML = seg === 'regali' ? rRegali() : rProposte();
   }
   function segSet(el, k) { el.style.setProperty('--k', k); el.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === k)); }
-  function rBacheca() {
-    const list = [...S.note].sort((a, b) => (b.pin - a.pin) || ((b.creato || 0) - (a.creato || 0)));
+  /* ---------- Proposte: piccoli sondaggi aperti ----------
+     Uno chiede ("Cosa si mangia stasera?"), tutti possono aggiungere idee e votarne quante vogliono.
+     Chi ha proposto decide quando vuole; le notifiche le manda il programma su GitHub. */
+  const PTIPI = [['cena', '🍽️', 'Cena', 'Cosa si mangia stasera?', ['Pizza', 'Pasta', 'Sushi']],
+    ['pranzo', '🥪', 'Pranzo', 'Dove si pranza domani?', ['A casa', 'Dalla nonna', 'Fuori']],
+    ['weekend', '🎉', 'Weekend', 'Cosa facciamo questo weekend?', ['Gita', 'Cinema', 'Relax a casa']],
+    ['altro', '✍️', 'Altro', '', ['Prima idea', 'Seconda idea', 'Terza idea']]];
+  const PTIPO = Object.fromEntries(PTIPI.map(([k, e, n, q, es]) => [k, { e, n, q, es }]));
+  const opzioniDi = (p) => Object.entries(p.opzioni || {}).filter(([, o]) => o && o.x).map(([id, o]) => Object.assign({ id }, o)).sort((a, b) => (a.creato || 0) - (b.creato || 0));
+  const votiDi = (p, oid) => IDS().filter(q => ((p.voti || {})[q] || []).includes(oid));
+  const haVotato = (p, q) => ((p.voti || {})[q] || []).length > 0;
+  // L'idea in testa: più voti; a parità, la prima scritta. Nessun voto: nessuna.
+  function inTesta(p) {
+    let best = null, n = 0;
+    for (const o of opzioniDi(p)) { const v = votiDi(p, o.id).length; if (v > n) { best = o; n = v; } }
+    return best;
+  }
+  function rProposte() {
     const nuova = !seen.has(vista());
-    return `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">📝</i>Bacheca di casa</span> <small>${S.note.length} note</small></h2>
-    ${list.length ? `<div class="notes">${list.map((n, i) => `<div class="note${n.id === fresh ? ' pop' : nuova ? ' rise' : ''}" style="--pc:${col(n.by)};--i:${Math.min(i + 1, 6)}"><p>${esc(n.x)}</p><div class="by"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="acts">${n.by === S.me ? `<button class="del tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}<button class="pin tap${n.pin ? ' on' : ''}" data-pin="${n.id}" aria-label="Metti in evidenza">📌</button></span></div></div>`).join('')}</div>` : '<div class="empty big"><b>📝</b><span>Ancora nessuna nota. Tocca + per scriverne una.</span></div>'}</div>`;
+    const aperte = S.proposte.filter(p => !p.chiusa).sort((a, b) => (b.creato || 0) - (a.creato || 0));
+    const decise = S.proposte.filter(p => p.chiusa).sort((a, b) => (b.decisa || 0) - (a.decisa || 0)).slice(0, 6);
+    let k = 0;
+    const card = (p) => propCard(p, nuova ? ++k : 0);
+    const vecchie = [...S.note].sort((a, b) => (b.creato || 0) - (a.creato || 0));
+    return `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">🗳️</i>Proposte</span> <small>${aperte.length ? `${aperte.length} ${aperte.length === 1 ? 'aperta' : 'aperte'}` : ''}</small></h2>
+    ${aperte.length ? aperte.map(card).join('') : `<div class="empty big${ri(1)}"><b>🗳️</b><span>Nessuna proposta aperta. Tocca + per chiedere cosa si mangia, dove si va, cosa si fa.</span></div>`}
+    ${decise.length ? `<div class="sec">Già decise</div>${decise.map(card).join('')}` : ''}
+    ${vecchie.length ? `<div class="sec">Vecchie note</div><div class="card">${vecchie.map(n => `<div class="pn vn" style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="vnx">${esc(n.x)}</span>${n.by === S.me ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div>`).join('')}</div>` : ''}</div>`;
+  }
+  function propCard(p, k) {
+    const ops = opzioniDi(p), ids = IDS(), mio = p.by === S.me, t = PTIPO[p.tipo] || PTIPO.altro;
+    const miei = (p.voti || {})[S.me] || [], testa = inTesta(p), votanti = ids.filter(q => haVotato(p, q)).length;
+    const anim = p.id === fresh ? ' pop' : k ? ' rise' : '';
+    const riga = (o) => {
+      const chi = votiDi(p, o.id), io = miei.includes(o.id), vince = p.chiusa && p.scelta === o.x;
+      const dentro = `<i class="bar" style="transform:scaleX(${ids.length ? chi.length / ids.length : 0})"></i><span class="ck">${io ? '✓' : ''}</span><span class="ox">${esc(o.x)}</span><span class="ow">${chi.map(q => `<i style="--pc:${col(q)}">${avt(q)}</i>`).join('')}</span>`;
+      return p.chiusa ? `<div class="op${vince ? ' win' : ''}${io ? ' on' : ''}">${dentro}</div>`
+        : `<button class="op tap${io ? ' on' : ''}" data-vota="${p.id}" data-op="${o.id}" aria-pressed="${io}">${dentro}</button>`;
+    };
+    let az = '';
+    if (mio && p.chiusa) az = `<button class="link tap" data-riapri="${p.id}">Riapri</button>`;
+    else if (mio && testa) az = `<button class="deci tap" data-decidi="${p.id}">Decidi: ${esc(testa.x)}</button>`;
+    if (mio) az += `<button class="gx tap" data-delprop="${p.id}" aria-label="Togli la proposta">✕</button>`;
+    return `<div class="card prop${p.chiusa ? ' chiusa' : ''}${anim}" style="--pc:${col(p.by)};--i:${Math.min(k, 6)}">
+      <div class="pt"><span class="pra">${avt(p.by)}</span><div class="pq"><b>${t.e} ${esc(p.q)}</b><small>${mio ? 'La tua proposta' : esc(P(p.by).nome)} · ${fa(p.creato || Date.now())}</small></div></div>
+      ${p.chiusa ? `<div class="deciso">✅ Deciso: <b>${esc(p.scelta)}</b></div>` : ''}
+      ${ops.length ? `<div class="ops">${ops.map(riga).join('')}</div>` : `<div class="empty">Ancora nessuna idea: scrivi la prima qui sotto.</div>`}
+      ${p.chiusa ? '' : `<form class="addop" data-prop="${p.id}"><input maxlength="60" placeholder="+ Aggiungi un'idea" enterkeyhint="done" aria-label="Nuova idea"><button class="tap" aria-label="Aggiungi l'idea">＋</button></form>`}
+      <div class="pf"><small>${votanti} su ${ids.length} ${votanti === 1 ? 'ha votato' : 'hanno votato'}${p.chiusa || !ops.length ? '' : ' · puoi sceglierne più di una'}</small><span class="pfa">${az}</span></div></div>`;
+  }
+  // Scheda Oggi: le proposte che aspettano il mio voto e quelle decise nelle ultime ore.
+  function propOggi(cls) {
+    const ieri = Date.now() - 20 * 36e5;
+    const da = S.proposte.filter(p => !p.chiusa && !haVotato(p, S.me) && (opzioniDi(p).length || p.by !== S.me)).sort((a, b) => (b.creato || 0) - (a.creato || 0));
+    const dec = S.proposte.filter(p => p.chiusa && (p.decisa || 0) > ieri);
+    if (!da.length && !dec.length) return '';
+    return `<button class="card tap${cls}" data-vaiprop="1"><h2><span class="ttl"><i class="ic">🗳️</i>Proposte</span> <small>${da.length ? `${da.length} da votare ›` : 'vedi ›'}</small></h2>
+      ${da.slice(0, 3).map(p => `<div class="po" style="--pc:${col(p.by)}"><span class="gav">${avt(p.by)}</span><span>${(PTIPO[p.tipo] || PTIPO.altro).e} ${esc(p.q)}</span></div>`).join('')}
+      ${dec.slice(0, 2).map(p => `<div class="po" style="--pc:${col(p.by)}"><span class="gav">${avt(p.by)}</span><span>✅ ${esc(p.q)} <b>${esc(p.scelta)}</b></span></div>`).join('')}</button>`;
   }
 
   /* Regali: ognuno scrive la sua lista; gli altri segnano cosa prendono e possono lasciare idee segrete.
@@ -337,7 +390,7 @@
     const pezzi = [statoOra(id).t,
       sett === 0 ? 'Settimana tranquilla' : sett >= 6 ? `Settimana piena: ${sett} impegni` : `${sett} ${sett === 1 ? 'impegno' : 'impegni'} in 7 giorni`,
       c === 'si' ? 'Stasera a cena 🍝' : c === 'no' ? 'Stasera non a cena' : 'Per la cena non ha ancora risposto'];
-    const note = S.note.filter(n => n.by === id).sort((a, b) => (b.creato || 0) - (a.creato || 0)).slice(0, 3);
+    const prop = S.proposte.filter(p => p.by === id).sort((a, b) => (b.creato || 0) - (a.creato || 0)).slice(0, 3);
     const desideri = S.regali.filter(r => r.per === id).sort((a, b) => (b.creato || 0) - (a.creato || 0));
     const ricordi = S.viaggi.filter(v => suoi(v)).sort((a, b) => (b.da || '').localeCompare(a.da || ''));
     const fileN = S.foto.filter(f => f.by === id).length;
@@ -348,8 +401,8 @@
        <div class="riass">${pezzi.map(x => `<span>${esc(x)}</span>`).join('')}</div></div></div>
      <div class="sec${sr(1)}">Prossimi impegni</div>
      <div class="card${sr(1)}">${per.length ? per.slice(0, 5).map(([d, l]) => `<div class="pg"><small>${d === T ? 'Oggi' : d === dom ? 'Domani' : fmt(d, { weekday: 'long', day: 'numeric', month: 'short' })}</small>${evList(l)}</div>`).join('') : '<div class="empty">Niente nei prossimi 14 giorni.</div>'}</div>
-     <div class="sec${sr(2)}">In bacheca</div>
-     <div class="card${sr(2)}">${note.length ? note.map(n => `<p class="pn">${n.pin ? '📌 ' : ''}${esc(n.x)}</p>`).join('') : `<div class="empty">${mio ? 'Non hai' : 'Non ha'} ancora scritto note.</div>`}</div>
+     <div class="sec${sr(2)}">${mio ? 'Le tue proposte' : 'Le sue proposte'}</div>
+     <div class="card${sr(2)}">${prop.length ? prop.map(p => { const v = inTesta(p); return `<p class="pn">${(PTIPO[p.tipo] || PTIPO.altro).e} ${esc(p.q)}<small>${p.chiusa ? `✅ Deciso: ${esc(p.scelta)}` : v ? `In testa: ${esc(v.x)}` : 'Ancora senza voti'}</small></p>`; }).join('') : `<div class="empty">${mio ? 'Non hai' : 'Non ha'} ancora fatto proposte.</div>`}</div>
      <div class="sec${sr(3)}">Lista dei desideri</div>
      <div class="card${sr(3)}">${desideri.length ? `<div class="pdes">${desideri.slice(0, 5).map(r => `<span>🎁 ${esc(r.x)}</span>`).join('')}</div>` : `<div class="empty">${mio ? 'La tua lista è ancora vuota.' : 'La sua lista è ancora vuota.'}</div>`}
        <button class="link tap" data-listareg="${id}">${mio ? 'Apri la tua lista' : 'Apri la lista' + (desideri.length ? ' e scegli cosa prendere' : '')} ›</button></div>
@@ -701,7 +754,7 @@
     fresh = null;
     if (a === 'itemTx' && $('#itemTx')) $('#itemTx').focus();
     $('#fab').hidden = page === 'spesa';
-    $('#fab').setAttribute('aria-label', page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : 'Nuova nota') : page === 'viaggi' ? 'Nuovo ricordo' : 'Nuovo impegno');
+    $('#fab').setAttribute('aria-label', page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : 'Nuova proposta') : page === 'viaggi' ? 'Nuovo ricordo' : 'Nuovo impegno');
   }
   function banner() {
     const b = $('#banner');
@@ -791,8 +844,15 @@
         <div class="empty" id="visPerche">${regolaCal(e.t, regole()).perche} La scelta vale anche per gli altri impegni «${esc(e.t)}».</div></div>` : ''}
       ${modificabile(e) ? `<div class="row2"><button class="btn ghost tap" data-modifica="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">Elimina</button></div>` : `<div class="empty">Si cambia dal calendario di chi l'ha scritto.</div>`}`);
   }
-  function sheetNota() {
-    openSheet(`<h3>Nuova nota</h3><form class="stack" id="fNo"><label>Messaggio per tutti<textarea id="noX" required maxlength="400" placeholder="Scrivi qui"></textarea></label><label class="sw">Metti in evidenza<input type="checkbox" id="noPin"></label><button class="btn tap">Attacca in bacheca</button></form>`, () => setTimeout(() => $('#noX').focus(), 380));
+  function sheetProposta(tp) {
+    const t = PTIPO[tp];
+    openSheet(`<h3>Nuova proposta</h3><form class="stack" id="fPr">
+     <div class="tipi">${PTIPI.map(([k, e, n]) => `<button type="button" class="tp tap${k === tp ? ' on' : ''}" data-ptipo="${k}"><b>${e}</b>${n}</button>`).join('')}</div>
+     <label>La domanda<input id="prQ" required maxlength="80" value="${esc(t.q)}" placeholder="Es. Cinema venerdì sera?"></label>
+     <label>Le prime idee <small class="opz">facoltative: poi tutti possono aggiungerne</small></label>
+     <div class="prOps" id="prOps">${t.es.map(x => `<input class="prO" maxlength="60" placeholder="Es. ${esc(x)}">`).join('')}</div>
+     <button type="button" class="link tap" id="prPiu">+ Un'altra idea</button>
+     <button class="btn tap">Proponi a tutti</button></form>`);
   }
   function sheetRegalo(per) {
     const mio = per === S.me;
@@ -1024,7 +1084,7 @@
     const d = t.dataset;
     if (t.classList.contains('tab')) return go(d.p);
     if (d.go) return go(d.go);
-    if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : sheetNota()) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
+    if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : sheetProposta('cena')) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
     if (d.filtror) { filtroR = d.filtror; return rViaggi(); }
     if (d.tipo) { t.parentElement.querySelectorAll('.tp').forEach(b => b.classList.toggle('on', b === t)); return; }
     if (d.viaggio) { openTrip(d.viaggio); if (d.apriFoto) setTimeout(() => openViewer(d.apriFoto), 300); return; }
@@ -1181,7 +1241,35 @@
       selDay = g.includes(T) ? T : g[0]; return rCal();
     }
     if (d.f) { filt = d.f; return rCal(); }
-    if (d.pin) { const n = S.note.find(x => x.id === d.pin); return n && DATI.aggiorna('note', n.id, { pin: !n.pin }).catch(sbaglio); }
+    if (d.vaiprop) { seg = 'proposte'; LS.set('noi4-bacheca', seg); return go('note'); }
+    if (d.ptipo) {
+      t.parentElement.querySelectorAll('.tp').forEach(b => b.classList.toggle('on', b === t));
+      const q = $('#prQ'), tp = PTIPO[d.ptipo];
+      if (!q.value.trim() || PTIPI.some(x => x[3] === q.value.trim())) q.value = tp.q;
+      document.querySelectorAll('.prO').forEach((el, i) => { el.placeholder = 'Es. ' + (tp.es[i] || 'un\'altra idea'); });
+      if (d.ptipo === 'altro') q.focus();
+      return;
+    }
+    if (t.id === 'prPiu') {
+      const box = $('#prOps'); if (box.children.length >= 8) return toast('Bastano 8 idee per cominciare');
+      const i = document.createElement('input'); i.className = 'prO'; i.maxLength = 60; i.placeholder = 'Es. un\'altra idea'; box.appendChild(i); i.focus(); return;
+    }
+    if (d.vota) {
+      const p = S.proposte.find(x => x.id === d.vota); if (!p || p.chiusa) return;
+      const miei = (p.voti || {})[S.me] || [], nuovo = miei.includes(d.op) ? miei.filter(x => x !== d.op) : [...miei, d.op];
+      t.classList.toggle('on'); if (navigator.vibrate) navigator.vibrate(8);
+      return DATI.aggiorna('proposte', p.id, { ['voti.' + S.me]: nuovo }).catch(sbaglio);
+    }
+    if (d.decidi) {
+      const p = S.proposte.find(x => x.id === d.decidi), v = p && inTesta(p); if (!v) return;
+      festa(t); await DATI.aggiorna('proposte', p.id, { chiusa: true, scelta: v.x, decisa: Date.now() }).catch(sbaglio);
+      return toast(`Deciso: ${v.x}. Lo diciamo a tutti 🔔`);
+    }
+    if (d.riapri) return DATI.aggiorna('proposte', d.riapri, { chiusa: false, scelta: '', decisa: 0 }).catch(sbaglio);
+    if (d.delprop) {
+      if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.style.opacity = 1; t.style.color = 'var(--bad)'; return toast('Tocca ancora ✕ per togliere la proposta'); }
+      return DATI.elimina('proposte', d.delprop).catch(sbaglio);
+    }
     if (d.delnote) {
       if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.style.opacity = 1; t.style.color = 'var(--bad)'; return toast('Tocca ancora ✕ per togliere la nota'); }
       return DATI.elimina('note', d.delnote).catch(sbaglio);
@@ -1249,9 +1337,24 @@
         }
         else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('Impegno salvato: lo vedono tutti'); }
       } catch (er) { sbaglio(er); }
-    } else if (f.id === 'fNo') {
-      const n = { by: S.me, x: $('#noX').value.trim(), pin: $('#noPin').checked, creato: Date.now() }; closeSheet();
-      try { fresh = await DATI.aggiungi('note', n); render(); toast('Nota attaccata'); } catch (er) { sbaglio(er); }
+    } else if (f.id === 'fPr') {
+      const q = $('#prQ').value.trim().slice(0, 80); if (!q) return toast('Scrivi la domanda');
+      const tp = (f.querySelector('.tp.on') || { dataset: {} }).dataset.ptipo || 'altro', opzioni = {}, visti = new Set(), ora = Date.now();
+      [...f.querySelectorAll('.prO')].map(i => i.value.trim()).filter(Boolean).forEach((x, i) => {
+        if (visti.has(x.toLowerCase())) return; visti.add(x.toLowerCase());
+        opzioni[rid()] = { x: (x.charAt(0).toUpperCase() + x.slice(1)).slice(0, 60), by: S.me, creato: ora + i };
+      });
+      closeSheet(); seg = 'proposte'; LS.set('noi4-bacheca', seg);
+      try { fresh = await DATI.aggiungi('proposte', { q, tipo: tp, by: S.me, creato: ora, opzioni, voti: {}, chiusa: false, scelta: '', decisa: 0 }); render(); toast('Proposta inviata: arriva una notifica a tutti 🔔'); } catch (er) { sbaglio(er); }
+    } else if (f.classList.contains('addop')) {
+      const inp = f.querySelector('input'), x = inp.value.trim().slice(0, 60); if (!x) return;
+      const p = S.proposte.find(y => y.id === f.dataset.prop); if (!p || p.chiusa) return;
+      const miei = (p.voti || {})[S.me] || [], c = opzioniDi(p).find(o => o.x.toLowerCase() === x.toLowerCase());
+      inp.value = ''; inp.blur();
+      // Un'idea che c'è già diventa un voto; una nuova si aggiunge e prende subito il mio voto.
+      if (c) { if (!miei.includes(c.id)) await DATI.aggiorna('proposte', p.id, { ['voti.' + S.me]: [...miei, c.id] }).catch(sbaglio); return toast('C\'era già: ho messo il tuo voto'); }
+      const oid = rid();
+      try { await DATI.aggiorna('proposte', p.id, { ['opzioni.' + oid]: { x: x.charAt(0).toUpperCase() + x.slice(1), by: S.me, creato: Date.now() }, ['voti.' + S.me]: [...miei, oid] }); toast('Idea aggiunta, con il tuo voto'); } catch (er) { sbaglio(er); }
     } else if (f.id === 'fVi') {
       const who = [...f.querySelectorAll('.pk.on')].map(b => b.dataset.pk);
       const da = $('#viDa').value, a = $('#viA').value;
@@ -1319,7 +1422,7 @@
     if (stopCena) { stopCena(); stopCena = null; }
     if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
     for (const k in stopSorp) { stopSorp[k](); delete stopSorp[k]; }
-    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], note: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [] });
+    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [] });
     seen.clear();
   }
   DATI.avvia((persona, errore) => {
@@ -1336,6 +1439,7 @@
       a(DATI.ascolta('foto', l => { S.foto = l; render(); }));
       a(DATI.ascolta('impegni', l => { S.impRaw = l; mappaImpegni(); render(); }));
       a(DATI.ascolta('note', l => { S.note = l; render(); }));
+      a(DATI.ascolta('proposte', l => { S.proposte = l; render(); }));
       a(DATI.ascolta('spesa', l => { S.spesa = l; render(); }));
       ascoltaCena();
       const ap = LS.get('noi4-apertura', 'oggi'); if (ap !== 'oggi' && R[ap]) go(ap);
