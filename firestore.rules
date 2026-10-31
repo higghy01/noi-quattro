@@ -101,7 +101,9 @@ service cloud.firestore {
     match /foto/{id} {
       allow read: if membro();
       allow create: if membro() && request.resource.data.by == io();
-      allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cuori']);
+      allow update: if membro() && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cuori'])
+        // chi ha caricato un video può rifarne l'anteprima
+        || (resource.data.by == io() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prev', 'pathP', 'prevOk'])));
       allow delete: if membro() && resource.data.by == io();
     }
 

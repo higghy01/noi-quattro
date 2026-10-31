@@ -365,6 +365,7 @@
     tripId = id; tripHtml = '';
     if (!tripAperto()) history.pushState({ schermo: 'viaggio' }, '');
     rTrip(); $('#trip').scrollTop = 0; $('#trip').classList.add('on'); $('#fab').classList.add('via');
+    setTimeout(() => riparaAnteprime(fotoDi(id)), 900);
   }
   function closeTrip(daIndietro) {
     if (!tripAperto()) return;
@@ -433,16 +434,69 @@
     return { blob, w: c.width, h: c.height };
   }
   // Fotogramma del video per l'anteprima (se il telefono non ci riesce, il video entra lo stesso).
+  // Vero se l'immagine è quasi tutta nera (succede su iPhone quando il fotogramma non è ancora pronto).
+  async function nero(src) {
+    try {
+      const im = src instanceof Blob ? await createImageBitmap(src) : src;
+      const c = document.createElement('canvas'); c.width = c.height = 16;
+      const x = c.getContext('2d'); x.drawImage(im, 0, 0, 16, 16);
+      const d = x.getImageData(0, 0, 16, 16).data; let l = 0;
+      for (let k = 0; k < d.length; k += 4) l += d[k] * .3 + d[k + 1] * .59 + d[k + 2] * .11;
+      return l / 256 < 10;
+    } catch (e) { return false; }
+  }
+  /* Fotogramma del video per l'anteprima. Su iPhone il fotogramma va prima "svegliato": il video sta nella pagina
+     (invisibile), parte e si ferma, poi si salta al punto voluto e si aspetta che sia disegnato.
+     Se esce nero si riprova più avanti nel video. Se il telefono non ci riesce, il video entra lo stesso. */
   function fotogramma(file) {
     return new Promise((ok) => {
-      const u = URL.createObjectURL(file), vd = document.createElement('video'); let fatto = false;
-      const fine = (r) => { if (fatto) return; fatto = true; URL.revokeObjectURL(u); ok(r); };
-      vd.muted = true; vd.playsInline = true; vd.preload = 'auto';
-      vd.onloadedmetadata = () => { vd.currentTime = Math.min(0.6, (vd.duration || 1) / 3); };
-      vd.onseeked = async () => { try { const r = await rimpicciolisci(vd, 520, 0.8); fine(Object.assign(r, { durata: vd.duration, W: vd.videoWidth, H: vd.videoHeight })); } catch (e) { fine({ durata: vd.duration }); } };
-      vd.onerror = () => fine({}); setTimeout(() => fine({ durata: vd.duration }), 8000);
-      vd.src = u; vd.load();
+      const u = URL.createObjectURL(file), vd = document.createElement('video'); let fatto = false, prove = 0;
+      vd.style.cssText = 'position:fixed;left:0;top:0;width:4px;height:4px;opacity:.01;pointer-events:none;z-index:-1';
+      const dati = () => ({ durata: vd.duration, W: vd.videoWidth, H: vd.videoHeight });
+      const fine = (r) => { if (fatto) return; fatto = true; try { vd.pause(); } catch (e) {} vd.remove(); URL.revokeObjectURL(u); ok(r); };
+      const disegnato = () => new Promise(res => { if (vd.requestVideoFrameCallback) vd.requestVideoFrameCallback(() => res()); setTimeout(res, 450); });
+      const salta = () => { const dur = vd.duration || 3; vd.currentTime = Math.min(dur * 0.9, [0.6, 1.5, 3][prove] || 0.6); };
+      vd.muted = true; vd.defaultMuted = true; vd.playsInline = true; vd.setAttribute('playsinline', ''); vd.setAttribute('muted', ''); vd.preload = 'auto';
+      vd.onloadeddata = async () => {
+        if (vd._via) return; vd._via = 1;
+        try { await vd.play(); vd.pause(); } catch (e) {}
+        salta();
+      };
+      vd.onseeked = async () => {
+        await disegnato();
+        try {
+          const r = await rimpicciolisci(vd, 520, 0.8);
+          if (await nero(r.blob) && ++prove < 3) return salta();
+          r.buona = !(await nero(r.blob));
+          fine(Object.assign(r, dati()));
+        } catch (e) { fine(dati()); }
+      };
+      vd.onerror = () => fine({}); setTimeout(() => fine(dati()), 12000);
+      document.body.appendChild(vd); vd.src = u; vd.load();
     });
+  }
+  /* Le anteprime nere dei video già caricati (prima della correzione): chi ha caricato il video, aprendo il ricordo,
+     le rifà da solo dall'originale. Una volta controllata, l'anteprima è segnata "prevOk" e non si guarda più. */
+  const controllate = new Set();
+  async function riparaAnteprime(fs) {
+    for (const f of fs) {
+      if (!f.video || f.by !== S.me || f.prevOk || controllate.has(f.id) || !f.url) continue;
+      controllate.add(f.id);
+      try {
+        let buio = true;
+        if (f.prev) { const im = new Image(); im.crossOrigin = 'anonymous'; im.src = f.prev; await im.decode(); buio = await nero(im); }
+        if (!buio) { await DATI.aggiorna('foto', f.id, { prevOk: true }); continue; }
+        if ((f.size || 0) > 400 * 1024 * 1024) continue; // troppo grande da riscaricare sul telefono
+        const blob = await (await fetch(f.url)).blob();
+        const r = await fotogramma(new File([blob], f.nome || 'video', { type: f.tipoFile || blob.type }));
+        if (!r.blob || !r.buona) continue;
+        const base = (f.path || `foto/${f.v}/${f.id}`).replace(/\.[^./]+$/, '');
+        const b = await DATI.carica(`${base}_p${rid().slice(0, 5)}.jpg`, r.blob, S.me);
+        const vecchia = f.pathP;
+        await DATI.aggiorna('foto', f.id, { prev: b.url, pathP: b.path, prevOk: true });
+        if (vecchia) DATI.eliminaFile(vecchia);
+      } catch (e) { console.warn('anteprima', e); }
+    }
   }
   async function dataScatto(file) {
     try {
@@ -478,7 +532,7 @@
         }
         const doc = { v, by: S.me, video, nome: (file.name || `ricordo.${ext}`).slice(0, 80), tipoFile: file.type || '', size: file.size, w: anteprima.W || 0, h: anteprima.H || 0, quando, creato: Date.now(), cuori: {} };
         if (video && anteprima.durata) doc.durata = Math.round(anteprima.durata);
-        if (anteprima.blob) { const b = await DATI.carica(`foto/${v}/${id}_p.jpg`, anteprima.blob, S.me); doc.prev = b.url; doc.pathP = b.path; }
+        if (anteprima.blob) { const b = await DATI.carica(`foto/${v}/${id}_p.jpg`, anteprima.blob, S.me); doc.prev = b.url; doc.pathP = b.path; if (!video || anteprima.buona) doc.prevOk = true; }
         if (vista) { const d = await DATI.carica(`foto/${v}/${id}_v.jpg`, vista.blob, S.me); doc.disp = d.url; doc.pathD = d.path; }
         if (DATI.modo === 'prova') { doc.url = video ? URL.createObjectURL(file) : doc.prev; doc.path = ''; }
         else { const a = await DATI.carica(`foto/${v}/${id}.${ext}`, file, S.me, avanti); doc.url = a.url; doc.path = a.path; }
