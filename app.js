@@ -90,12 +90,13 @@
   function statoOra(id) {
     const ora = oraAdesso(), oggi = delGiorno(T, e => (e.who || []).includes(id));
     const ades = oggi.find(e => e.h && e.h <= ora && e.fine && e.fine > ora);
-    if (ades) return { t: `Ora: ${ades.t}, fino alle ${ades.fine}`, k: 'occ' };
+    // t = frase intera (pagina della persona), c = versione corta (sotto il cerchio in Oggi)
+    if (ades) return { t: `Ora: ${ades.t}, fino alle ${ades.fine}`, c: `Ora · ${ades.t}`, k: 'occ' };
     const pros = oggi.find(e => e.h && e.h > ora);
-    if (pros) return { t: `Alle ${pros.h}: ${pros.t}`, k: 'dopo' };
+    if (pros) return { t: `Alle ${pros.h}: ${pros.t}`, c: `${pros.h} · ${pros.t}`, k: 'dopo' };
     const tutto = oggi.find(e => !e.h);
-    if (tutto) return { t: `Oggi: ${tutto.t}`, k: 'dopo' };
-    return { t: oggi.length ? 'Impegni di oggi finiti' : 'Oggi niente in programma', k: 'lib' };
+    if (tutto) return { t: `Oggi: ${tutto.t}`, c: tutto.t, k: 'dopo' };
+    return oggi.length ? { t: 'Impegni di oggi finiti', c: 'Finito per oggi', k: 'lib' } : { t: 'Oggi niente in programma', c: 'Giornata libera', k: 'lib' };
   }
 
   function capita(e, d) {
@@ -147,7 +148,12 @@
   }
   ['#p-oggi', '#p-cal', '#noteBody', '#p-viaggi', '#p-spesa', '#impIn', '#persIn'].forEach(fluido);
   // A fine entrata la classe si toglie: così non riparte quando si torna sulla scheda.
-  document.addEventListener('animationend', (ev) => { const t = ev.target; if (t.classList && /^fm-(rise|pop)$/.test(ev.animationName)) t.classList.remove('rise', 'pop'); });
+  document.addEventListener('animationend', (ev) => {
+    const t = ev.target; if (!t.classList || !/^fm-(rise|pop)$/.test(ev.animationName)) return;
+    t.classList.remove('rise', 'pop');
+    // Le storie in alto entrano una alla volta: la classe del contenitore si toglie quando ha finito l'ultima.
+    if (t.parentElement && t.parentElement.classList.contains('storie') && !t.nextElementSibling) t.parentElement.classList.remove('rise');
+  });
 
   /* ---------- Pagine ---------- */
   function rOggi() {
@@ -157,7 +163,7 @@
     const ids = IDS();
     const yes = ids.filter(i => S.cena[i] === 'si').length;
     $('#p-oggi').innerHTML = `<div class="stack">
-     <div class="card${ri(0)}"><div class="fl">${ids.map(i => { const st = statoOra(i); return `<button class="pr tap" data-persona="${i}" style="--pc:${col(i)}"><span class="pa">${avt(i)}</span><span class="pt"><b>${esc(P(i).nome)}${i === S.me ? ' <small>(tu)</small>' : ''}</b><small class="st-${st.k}">${esc(st.t)}</small></span><span class="chev">›</span></button>`; }).join('')}</div></div>
+     <div class="storie${ri(0)}" role="list">${ids.map((i, k) => { const st = statoOra(i); return `<button class="st tap" role="listitem" data-persona="${i}" style="--pc:${col(i)};--k:${k}" aria-label="${esc(P(i).nome)}: ${esc(st.t)}"><span class="ring ${st.k}"><span>${avt(i)}</span></span><b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b><small>${esc(st.c)}</small></button>`; }).join('')}</div>
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🍽️</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
        <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = S.cena[i] || '?'; return `<button class="cv tap" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${esc(P(i).nome)}</span></button>`; }).join('')}</div>
        <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.</div></div>
