@@ -65,7 +65,7 @@
   // Le stesse parole le usa il programma dei calendari (scripts/sincronizza_calendari.py): tenerle uguali.
   const COMPL = /b[iy]r?t?h?d[ae]y|byrt|\bb-?day\b|compl?ean+o|cumplea|geburtstag|anniversaire|🎂/i;
   const FESTA_C = /festa|party|cena|pranzo|aperitivo/i;
-  const RICORR = /festa|party|cena|pranzo|aperitivo|natale|vigilia|pasqua|capodanno|ferragosto|anniversario|onomastico|ferie|vacanza/i;
+  const RICORR = /festa|party|cena|pranzo|aperitivo|natale|vigilia|pasqua|pasquetta|capodanno|ferragosto|ognissanti|immacolata|santo stefano|epifania|befana|liberazione|repubblica|halloween|san valentino|anniversario|onomastico|ferie|vacanza/i;
   const compleanno = (t, annuale) => !FESTA_C.test(t) && (COMPL.test(t) || (!!annuale && !RICORR.test(t)));
   const daCalendario = (e) => /^(calendario|import):/.test(e.fonte || '');
   // I miei impegni nascosti: io vedo il titolo vero (sta nella mia parte privata), gli altri "Occupato".
