@@ -18,6 +18,7 @@
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{overflow-x:clip;overscroll-behavior:none}
+html{background:var(--bg)}
 html{touch-action:manipulation}
 /* Come un'app: niente selezione del testo né menu a pressione lunga sui comandi (i campi e le note restano selezionabili) */
 body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -150,8 +151,9 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .fab{position:fixed;right:max(16px,calc(env(safe-area-inset-right,0px) + 16px));bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:21;width:56px;height:56px;border-radius:18px;background:var(--acc);color:var(--acc-ink);font-size:28px;line-height:1;display:grid;place-items:center;box-shadow:0 8px 24px color-mix(in srgb,var(--acc) 40%,transparent);transition:transform .3s var(--pop),opacity .24s}
 
 /* Foglio dal basso */
-.veil{position:fixed;inset:0;z-index:30;background:rgb(10 8 20 / .38);opacity:0;pointer-events:none;transition:opacity .3s var(--ease)}
-.veil.on{opacity:1;pointer-events:auto}
+/* Il velo spento è anche invisibile: su iPhone (iOS 26) un elemento fisso in alto, anche trasparente, colora la barra dell'orario. */
+.veil{position:fixed;inset:0;z-index:30;background:rgb(10 8 20 / .38);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .3s var(--ease),visibility 0s linear .3s}
+.veil.on{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .3s var(--ease),visibility 0s}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;background:var(--panel);border-radius:22px 22px 0 0;transform:translateY(105%);transition:transform .42s var(--ease);
   padding:8px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-height:88vh;max-height:88dvh;overflow:auto;overscroll-behavior:contain}
 .sheet.drag{transition:none}

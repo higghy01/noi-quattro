@@ -14,6 +14,9 @@ from firebase_admin import auth
 
 from comune import database
 
+# Colori scelti da Sasha il 31/10/2026: valgono sopra quelli del segreto.
+COLORI_SCELTI = {"p1": "rosso", "p2": "grigio", "p3": "blu", "p4": "verde"}
+VALIDI = {"rosso", "blu", "verde", "grigio", "rosa", "ambra", "viola", "corallo"}
 PREF = {"promemoria": True, "nuovi": True, "riepilogo": True, "cena": True, "note": True}
 
 
@@ -28,7 +31,10 @@ def main():
             auth.create_user(email=email)
         ref = db.collection("persone").document(p["id"])
         vecchio = ref.get().to_dict() or {}
-        ref.set({"nome": p["nome"], "colore": p.get("colore", "viola"), "ordine": i,
+        colore = COLORI_SCELTI.get(p["id"]) or str(p.get("colore", "")).strip().lower()
+        if colore not in VALIDI:
+            colore = "viola"
+        ref.set({"nome": p["nome"], "colore": colore, "ordine": i,
                  "notifiche": vecchio.get("notifiche", PREF)})
         db.collection("membri").document(email).set({"persona": p["id"]})
         print(f"Persona {i + 1} pronta")
