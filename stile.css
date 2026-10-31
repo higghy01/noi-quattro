@@ -405,3 +405,16 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .vt.on.si{background:color-mix(in srgb,var(--ok) 18%,transparent);border-color:var(--ok)}
 .vt.on.no{background:color-mix(in srgb,var(--bad) 16%,transparent);border-color:var(--bad)}
 .mze{font-size:20px;line-height:1}
+/* La famiglia in alto, come le storie di Instagram */
+.storie{display:flex;gap:10px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;margin:0 -16px;padding:2px 16px 4px;scroll-snap-type:x proximity}
+.storie::-webkit-scrollbar{display:none}
+.st{flex:1 0 74px;max-width:96px;display:grid;justify-items:center;align-content:start;gap:3px;text-align:center;scroll-snap-align:start;min-width:0}
+.st .ring{width:70px;height:70px;border-radius:999px;padding:3px;display:grid;background:conic-gradient(from 200deg,var(--pc),color-mix(in srgb,var(--pc) 35%,#fff),var(--pc));box-shadow:0 6px 16px color-mix(in srgb,var(--pc) 22%,transparent)}
+.st .ring.lib{background:var(--line);box-shadow:none}
+.st .ring>span{position:relative;border-radius:999px;background:var(--pc);color:#fff;display:grid;place-items:center;font:650 25px var(--f-disp);border:3px solid var(--bg);overflow:hidden}
+.st .ring.occ{animation:fm-respira 2.6s ease-in-out infinite}
+.st b{margin-top:3px;font-size:13px;font-weight:600;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st small{font-size:11.5px;color:var(--muted);line-height:1.25;max-width:100%;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.storie.rise{animation:none}.storie.rise .st{animation:fm-pop .5s var(--pop) both;animation-delay:calc(var(--k)*70ms)}
+@keyframes fm-respira{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@media (prefers-reduced-motion: reduce){.st .ring.occ{animation:none}}
