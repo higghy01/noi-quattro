@@ -1,4 +1,4 @@
-"""Pezzi in comune ai programmi automatici di Noi quattro (girano su GitHub)."""
+"""Pezzi in comune ai programmi automatici di NDSZ (girano su GitHub)."""
 import calendar
 import datetime as dt
 import json

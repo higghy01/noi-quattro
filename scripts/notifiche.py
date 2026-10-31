@@ -1,4 +1,4 @@
-"""Manda le notifiche di Noi quattro. Gira su GitHub ogni 15 minuti.
+"""Manda le notifiche di NDSZ. Gira su GitHub ogni 15 minuti.
 
 - promemoria: circa un'ora prima di un impegno, a chi partecipa;
 - nuovi: quando qualcuno ti aggiunge a un impegno;
