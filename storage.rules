@@ -1,0 +1,18 @@
+// Regole dello spazio foto (Storage) di "Noi quattro". Si pubblicano da sole come firestore.rules.
+// "persona" è dentro l'accesso di ognuno (la mette il programma Prepara famiglia): senza, niente foto.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function io() { return request.auth != null ? request.auth.token.get('persona', '') : ''; }
+
+    // foto/<viaggio>/<nome>.jpg : le vedono solo i 4; ognuno carica e toglie solo le sue.
+    match /foto/{viaggio}/{nome} {
+      allow read: if io() != '';
+      allow create: if io() != '' && request.resource.metadata.by == io()
+        && request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if io() != '' && resource.metadata.by == io();
+    }
+
+    match /{tutto=**} { allow read, write: if false; }
+  }
+}
