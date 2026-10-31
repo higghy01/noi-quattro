@@ -47,6 +47,13 @@ def main():
     errore = pubblica("storage.rules", f"firebase.storage/{secchio}")
     if errore:
         print("Spazio foto non ancora pronto o regole non attivate:", errore)
+        return
+    # Permesso al sito di scaricare i file originali (tasto "Scarica" dell'app).
+    url_app = os.environ.get("URL_APP") or "https://higghy01.github.io"
+    origine = "/".join(url_app.split("/")[:3])
+    r = s.patch(f"https://storage.googleapis.com/storage/v1/b/{secchio}?fields=cors",
+                json={"cors": [{"origin": [origine], "method": ["GET", "HEAD"], "responseHeader": ["Content-Type", "Content-Length"], "maxAgeSeconds": 3600}]})
+    print("Scaricamento dal sito: permesso." if r.ok else f"Scaricamento dal sito non impostato ({r.status_code}): {r.text[:300]}")
 
 
 

@@ -12,7 +12,7 @@
     ['riepilogo', 'La sera: gli impegni di domani', 'oraRiepilogo', [19, 20, 21, 22], 21],
     ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['note', 'Note messe in evidenza']];
   const SCHEDE = ['oggi', 'cal', 'note', 'viaggi', 'spesa'];
-  const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', viaggi: 'Viaggi', spesa: 'Spesa' };
+  const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', viaggi: 'Ricordi', spesa: 'Spesa' };
   const NOMI_COLORI = { blu: 'blu', rosa: 'rosa', ambra: 'ambra', verde: 'verde', viola: 'viola', corallo: 'corallo', rosso: 'rosso', grigio: 'grigio' };
   // Preferenze di questo telefono (aspetto, scheda di apertura): restano solo qui.
   const LS = {
@@ -142,7 +142,16 @@
     return `<div class="stack">${[S.me, ...IDS().filter(i => i !== S.me)].map(card).join('')}</div>`;
   }
 
-  /* ---------- Viaggi e foto ---------- */
+  /* ---------- Ricordi: viaggi, pranzi, cinema, feste… con foto e video originali ----------
+     (nel database restano le raccolte "viaggi" e "foto": ogni ricordo ha un "tipo") */
+  // [chiave, emoji, nome (uno), nome corto per i gruppi]
+  const TIPI = [['viaggio', '✈️', 'Viaggio', 'Viaggi'], ['pranzo', '🍝', 'Pranzo o cena', 'Pranzi'], ['cinema', '🎬', 'Cinema o spettacolo', 'Cinema'], ['feste', '🎄', 'Natale o festa', 'Feste'],
+    ['compleanno', '🎂', 'Compleanno', 'Compleanni'], ['uscita', '🚶', 'Uscita o gita', 'Uscite'], ['altro', '✨', 'Altro', 'Altro']];
+  const TIPO = Object.fromEntries(TIPI.map(([k, e, n, c]) => [k, { e, n, c }]));
+  const tipoDi = (v) => TIPO[v.tipo] ? v.tipo : 'viaggio';
+  let filtroR = 'tutti';
+  const mb = (n) => n > 1048576 * 1024 ? (n / 1073741824).toFixed(1).replace('.', ',') + ' GB' : Math.max(0.1, n / 1048576).toFixed(1).replace('.', ',') + ' MB';
+  const durata = (s) => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '';
   const fotoDi = (v) => S.foto.filter(f => f.v === v).sort((a, b) => (a.quando || 0) - (b.quando || 0));
   const cuoriN = (f) => Object.values(f.cuori || {}).filter(Boolean).length;
   function periodo(v) {
@@ -151,34 +160,40 @@
     if (v.da.slice(0, 7) === v.a.slice(0, 7)) return `${+v.da.slice(8)}–${fmt(v.a, o)}`;
     return `${fmt(v.da, { day: 'numeric', month: 'short' })} – ${fmt(v.a, { day: 'numeric', month: 'short', year: 'numeric' })}`;
   }
-  const copertina = (v) => S.foto.find(f => f.id === v.cop && f.v === v.id) || fotoDi(v.id)[0];
+  const copertina = (v) => S.foto.find(f => f.id === v.cop && f.v === v.id && f.prev) || fotoDi(v.id).find(f => f.prev);
   const avs = (who) => `<span class="avs">${(who || []).filter(p => S.persone[p]).map(p => `<i style="--pc:${col(p)}">${ini(p)}</i>`).join('')}</span>`;
   function rViaggi() {
-    const list = [...S.viaggi].sort((a, b) => (b.da || '').localeCompare(a.da || ''));
+    const tutti = [...S.viaggi].sort((a, b) => (b.da || '').localeCompare(a.da || ''));
+    const conta = (k) => tutti.filter(v => tipoDi(v) === k).length;
+    if (filtroR !== 'tutti' && !conta(filtroR)) filtroR = 'tutti';
+    const list = filtroR === 'tutti' ? tutti : tutti.filter(v => tipoDi(v) === filtroR);
+    const gruppi = TIPI.filter(([k]) => conta(k));
     let anno = null, html = '';
     list.forEach((v, i) => {
       const y = (v.da || '').slice(0, 4);
-      if (y !== anno) { anno = y; html += `<div class="anno${ri(i + 1)}">${esc(y)}</div>`; }
-      const cop = copertina(v), n = fotoDi(v.id).length;
-      html += `<button class="trip tap${v.id === fresh ? ' pop' : ri(i + 1)}" data-viaggio="${v.id}">
-        <span class="cov">${cop ? `<img src="${esc(cop.prev || cop.url)}" alt="" loading="lazy" decoding="async">` : '<span class="noimg">🧳</span>'}<span class="nf">${n} foto</span></span>
+      if (y !== anno) { anno = y; html += `<div class="anno${ri(i + 2)}">${esc(y)}</div>`; }
+      const cop = copertina(v), fs = fotoDi(v.id), nv = fs.filter(f => f.video).length, t = TIPO[tipoDi(v)];
+      html += `<button class="trip tap${v.id === fresh ? ' pop' : ri(i + 2)}" data-viaggio="${v.id}">
+        <span class="cov">${cop ? `<img src="${esc(cop.prev || cop.url)}" alt="" loading="lazy" decoding="async">` : `<span class="noimg">${t.e}</span>`}<span class="tb">${t.e} ${esc(t.n)}</span><span class="nf">${fs.length - nv} foto${nv ? ` · ${nv} video` : ''}</span></span>
         <span class="tinfo"><b>${esc(v.t)}</b><span class="muted">${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</span></button>`;
     });
-    $('#p-viaggi').innerHTML = `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">🧳</i>I nostri viaggi</span> <small>${list.length}</small></h2>
-      ${html || '<div class="empty big"><b>🧳</b><span>Ancora nessun viaggio. Tocca + per aggiungere una vacanza, poi caricate le foto tutti insieme.</span></div>'}</div>`;
+    $('#p-viaggi').innerHTML = `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">📸</i>I nostri ricordi</span> <small>${tutti.length}</small></h2>
+      ${gruppi.length > 1 ? `<div class="gruppi${ri(1)}"><button class="gr tap${filtroR === 'tutti' ? ' on' : ''}" data-filtror="tutti"><b>🗂️</b><span>Tutti</span><small>${tutti.length}</small></button>${gruppi.map(([k, e, n, c]) => `<button class="gr tap${filtroR === k ? ' on' : ''}" data-filtror="${k}" aria-label="${esc(n)}"><b>${e}</b><span>${esc(c)}</span><small>${conta(k)}</small></button>`).join('')}</div>` : ''}
+      ${html || '<div class="empty big"><b>📸</b><span>Ancora nessun ricordo. Tocca + per aggiungerne uno: un viaggio, un pranzo, una sera al cinema, il Natale… Poi caricate foto e video tutti insieme.</span></div>'}</div>`;
   }
   // "Un anno fa…": una foto di un viaggio passato nello stesso periodo, altrimenti una a caso (la stessa per tutto il giorno).
   function ricordo(cls) {
-    if (!S.foto.length) return '';
+    const conFoto = S.foto.filter(f => f.prev);
+    if (!conFoto.length) return '';
     const oggi = new Date(), md = (d) => (d.getMonth() * 31) + d.getDate();
-    const vicini = S.foto.filter(f => { const d = new Date(f.quando || 0); return d.getFullYear() < oggi.getFullYear() && Math.abs(md(d) - md(oggi)) <= 3; });
-    const pool = vicini.length ? vicini : S.foto;
+    const vicini = conFoto.filter(f => { const d = new Date(f.quando || 0); return d.getFullYear() < oggi.getFullYear() && Math.abs(md(d) - md(oggi)) <= 3; });
+    const pool = vicini.length ? vicini : conFoto;
     const seme = [...T].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
     const f = [...pool].sort((a, b) => (a.id < b.id ? -1 : 1))[seme % pool.length];
     const v = S.viaggi.find(x => x.id === f.v); if (!v) return '';
     const anni = oggi.getFullYear() - new Date(f.quando || 0).getFullYear();
     const titolo = vicini.length ? (anni === 1 ? 'Un anno fa' : `${anni} anni fa`) : 'Un ricordo';
-    return `<button class="card memo tap${cls}" data-viaggio="${v.id}" data-apri-foto="${f.id}"><img src="${esc(f.prev || f.url)}" alt="" loading="lazy" decoding="async"><span class="mtx"><small>${titolo}</small><b>${esc(v.t)}</b></span></button>`;
+    return `<button class="card memo tap${cls}" data-viaggio="${v.id}" data-apri-foto="${f.id}"><img src="${esc(f.prev)}" alt="" loading="lazy" decoding="async"><span class="mtx"><small>${titolo}</small><b>${esc(v.t)}</b></span></button>`;
   }
 
   /* Schermata di un viaggio (entra da destra come le Impostazioni) */
@@ -197,39 +212,54 @@
   function rTrip() {
     const v = S.viaggi.find(x => x.id === tripId);
     if (!v) { if (tripAperto()) closeTrip(); return; }
-    const fs = fotoDi(v.id), cop = copertina(v);
+    const fs = fotoDi(v.id), cop = copertina(v), t = TIPO[tipoDi(v)], nv = fs.filter(f => f.video).length;
     const html = `
-     <div class="imp-top"><button class="back tap" id="tripBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Viaggi</button><button class="link tap" data-modviaggio="${v.id}">Modifica</button></div>
-     <div class="hero">${cop ? `<img src="${esc(cop.url)}" alt="">` : '<span class="noimg">🧳</span>'}<div class="hinfo"><h1>${esc(v.t)}</h1><span>${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</div></div>
-     ${carico ? `<div class="prog" style="--p:${carico.fatte / carico.tot}"><span>Carico le foto… ${carico.fatte} di ${carico.tot}</span><i></i></div>`
-       : `<label class="btn tap filebtn add-foto">📷 Aggiungi foto<input type="file" id="fotoIn" accept="image/*" multiple hidden></label>`}
-     ${fs.length ? `<div class="sec">${fs.length} foto</div><div class="grid">${fs.map(f => { const n = cuoriN(f); return `<button class="ph tap${f.id === fresh ? ' pop' : ''}" data-foto="${f.id}" style="--pc:${col(f.by)}"><img src="${esc(f.prev || f.url)}" alt="" loading="lazy" decoding="async"><i></i>${n ? `<b>❤️ ${n}</b>` : ''}</button>`; }).join('')}</div>`
-       : '<div class="empty big"><b>📷</b><span>Ancora nessuna foto. Tocca "Aggiungi foto" e scegline quante vuoi dalla galleria: si caricano tutte insieme.</span></div>'}`;
+     <div class="imp-top"><button class="back tap" id="tripBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Ricordi</button><button class="link tap" data-modviaggio="${v.id}">Modifica</button></div>
+     <div class="hero">${cop ? `<img src="${esc(cop.disp || (cop.video ? cop.prev : cop.url))}" alt="">` : `<span class="noimg">${t.e}</span>`}<span class="tb">${t.e} ${esc(t.n)}</span><div class="hinfo"><h1>${esc(v.t)}</h1><span>${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</div></div>
+     ${carico ? `<div class="prog" style="--p:${carico.pct}"><span>Carico… ${carico.fatte + 1 > carico.tot ? carico.tot : carico.fatte + 1} di ${carico.tot} · ${Math.round(carico.pct * 100)}%</span><i></i></div>`
+       : `<label class="btn tap filebtn add-foto">📷 Aggiungi foto e video<input type="file" id="fotoIn" accept="image/*,video/*" multiple hidden></label>`}
+     ${fs.length ? `<div class="sec">${fs.length - nv} foto${nv ? ` · ${nv} video` : ''} · originali</div><div class="grid">${fs.map(f => { const n = cuoriN(f); return `<button class="ph tap${f.id === fresh ? ' pop' : ''}" data-foto="${f.id}" style="--pc:${col(f.by)}">${f.prev ? `<img src="${esc(f.prev)}" alt="" loading="lazy" decoding="async">` : '<span class="noimg">🎞️</span>'}<i></i>${f.video ? `<em>▶ ${durata(f.durata)}</em>` : ''}${n ? `<b>❤️ ${n}</b>` : ''}</button>`; }).join('')}</div>`
+       : '<div class="empty big"><b>📷</b><span>Ancora niente. Tocca "Aggiungi foto e video" e scegline quanti vuoi dalla galleria: entrano originali, a qualità piena.</span></div>'}`;
     if (html !== tripHtml) { tripHtml = html; $('#tripIn').innerHTML = html; }
   }
   function sheetViaggio(v) {
-    v = v || { t: '', dove: '', da: T, a: '', who: IDS() };
-    const fs = v.id ? fotoDi(v.id) : [], altrui = fs.some(f => f.by !== S.me);
-    openSheet(`<h3>${v.id ? 'Modifica il viaggio' : 'Nuovo viaggio'}</h3><form class="stack" id="fVi" data-id="${v.id || ''}">
-     <label>Nome<input id="viT" required maxlength="60" value="${esc(v.t)}" placeholder="Es. Mare in Puglia"></label>
-     <label>Dove<input id="viD" maxlength="60" value="${esc(v.dove)}" placeholder="Città o posto"></label>
-     <div class="row2"><label>Dal<input id="viDa" type="date" required value="${esc(v.da)}"></label><label>Al (facoltativo)<input id="viA" type="date" value="${esc(v.a || '')}"></label></div>
+    v = v || { t: '', dove: '', da: T, a: '', who: IDS(), tipo: filtroR !== 'tutti' ? filtroR : 'viaggio' };
+    const fs = v.id ? fotoDi(v.id) : [], altrui = fs.some(f => f.by !== S.me), tp = tipoDi(v);
+    openSheet(`<h3>${v.id ? 'Modifica il ricordo' : 'Nuovo ricordo'}</h3><form class="stack" id="fVi" data-id="${v.id || ''}">
+     <label>Che cos'è</label><div class="tipi">${TIPI.map(([k, e, n]) => `<button type="button" class="tp tap${k === tp ? ' on' : ''}" data-tipo="${k}"><b>${e}</b>${esc(n)}</button>`).join('')}</div>
+     <label>Nome<input id="viT" required maxlength="60" value="${esc(v.t)}" placeholder="Es. Natale dai nonni, Pizza del sabato"></label>
+     <label>Dove (facoltativo)<input id="viD" maxlength="60" value="${esc(v.dove)}" placeholder="Città, ristorante, cinema…"></label>
+     <div class="row2"><label>Quando<input id="viDa" type="date" required value="${esc(v.da)}"></label><label>Fino al (facoltativo)<input id="viA" type="date" value="${esc(v.a || '')}"></label></div>
      <label>Chi c'era</label>${pickHtml(v.who || [])}
-     <button class="btn tap">${v.id ? 'Salva' : 'Crea il viaggio'}</button>
-     ${v.id && v.creatoDa === S.me ? (altrui ? '<div class="empty">Si può eliminare solo quando dentro ci sono soltanto le tue foto.</div>' : `<button type="button" class="btn bad tap" data-delviaggio="${v.id}">Elimina il viaggio${fs.length ? ` e le ${fs.length} foto` : ''}</button>`) : ''}
+     <button class="btn tap">${v.id ? 'Salva' : 'Crea il ricordo'}</button>
+     ${v.id && v.creatoDa === S.me ? (altrui ? '<div class="empty">Si può eliminare solo quando dentro ci sono soltanto le tue foto e i tuoi video.</div>' : `<button type="button" class="btn bad tap" data-delviaggio="${v.id}">Elimina il ricordo${fs.length ? ` e i ${fs.length} file` : ''}</button>`) : ''}
     </form>`, () => { if (!v.id) setTimeout(() => $('#viT').focus(), 380); });
   }
 
-  /* Caricare foto: rimpicciolite sul telefono, con la data di scatto */
+  /* Caricare foto e video: il file ORIGINALE va nello spazio foto così com'è (qualità piena);
+     in più si fa sul telefono una piccola anteprima per la griglia (e per le foto HEIC una copia JPEG grande da guardare). */
   function apriImmagine(file) {
     return new Promise((ok, ko) => { const u = URL.createObjectURL(file), im = new Image(); im.onload = () => ok({ im, u }); im.onerror = () => { URL.revokeObjectURL(u); ko(new Error('immagine')); }; im.src = u; });
   }
-  async function rimpicciolisci(im, max, q) {
-    const k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
-    const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+  async function rimpicciolisci(im, max, q, w0, h0) {
+    w0 = w0 || im.naturalWidth || im.videoWidth; h0 = h0 || im.naturalHeight || im.videoHeight;
+    const k = Math.min(1, max / Math.max(w0, h0));
+    const c = document.createElement('canvas'); c.width = Math.round(w0 * k); c.height = Math.round(h0 * k);
     const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(im, 0, 0, c.width, c.height);
     const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
     return { blob, w: c.width, h: c.height };
+  }
+  // Fotogramma del video per l'anteprima (se il telefono non ci riesce, il video entra lo stesso).
+  function fotogramma(file) {
+    return new Promise((ok) => {
+      const u = URL.createObjectURL(file), vd = document.createElement('video'); let fatto = false;
+      const fine = (r) => { if (fatto) return; fatto = true; URL.revokeObjectURL(u); ok(r); };
+      vd.muted = true; vd.playsInline = true; vd.preload = 'auto';
+      vd.onloadedmetadata = () => { vd.currentTime = Math.min(0.6, (vd.duration || 1) / 3); };
+      vd.onseeked = async () => { try { const r = await rimpicciolisci(vd, 520, 0.8); fine(Object.assign(r, { durata: vd.duration, W: vd.videoWidth, H: vd.videoHeight })); } catch (e) { fine({ durata: vd.duration }); } };
+      vd.onerror = () => fine({}); setTimeout(() => fine({ durata: vd.duration }), 8000);
+      vd.src = u; vd.load();
+    });
   }
   async function dataScatto(file) {
     try {
@@ -239,32 +269,44 @@
     } catch (e) {}
     return file.lastModified || Date.now();
   }
+  const MOSTRABILI = /^image\/(jpeg|png|webp|gif)$/;
   async function caricaFoto(files) {
-    if (!DATI.fotoPronte()) return toast('Lo spazio delle foto non è ancora attivo: ci pensa Sasha.');
-    const v = tripId, list = [...files].slice(0, 60); let ok = 0;
-    if (files.length > 60) toast('Ne carico 60 alla volta: poi aggiungi le altre');
-    carico = { fatte: 0, tot: list.length }; rTrip();
+    if (!DATI.fotoPronte()) return toast('Lo spazio delle foto non è ancora attivo.');
+    const v = tripId, list = [...files].filter(f => /^(image|video)\//.test(f.type) || /\.(heic|heif|jpe?g|png|mov|mp4)$/i.test(f.name)).slice(0, 60); let ok = 0;
+    if (files.length > 60) toast('Ne carico 60 alla volta: poi aggiungi gli altri');
+    const totB = list.reduce((a, f) => a + f.size, 0) || 1; let fattiB = 0;
+    carico = { fatte: 0, tot: list.length, pct: 0 }; rTrip();
+    const avanti = (b) => { carico.pct = Math.min(1, (fattiB + b) / totB); const el = $('#tripIn .prog'); if (el) { el.style.setProperty('--p', carico.pct); el.querySelector('span').textContent = `Carico… ${Math.min(carico.fatte + 1, carico.tot)} di ${carico.tot} · ${Math.round(carico.pct * 100)}%`; } };
     for (const file of list) {
       try {
-        const quando = await dataScatto(file), { im, u } = await apriImmagine(file);
-        const piccola = await rimpicciolisci(im, 520, 0.78);
-        const grande = DATI.modo === 'prova' ? piccola : await rimpicciolisci(im, 2048, 0.85);
-        URL.revokeObjectURL(u);
-        const id = rid() + rid();
-        const b = await DATI.carica(`foto/${v}/${id}_p.jpg`, piccola.blob, S.me);
-        const a = DATI.modo === 'prova' ? b : await DATI.carica(`foto/${v}/${id}.jpg`, grande.blob, S.me);
-        fresh = await DATI.aggiungi('foto', { v, by: S.me, url: a.url, prev: b.url, path: a.path, pathP: b.path, w: grande.w, h: grande.h, quando, creato: Date.now(), cuori: {} });
+        const video = /^video\//.test(file.type) || /\.(mov|mp4)$/i.test(file.name);
+        const quando = await dataScatto(file), id = rid() + rid();
+        const ext = ((file.name.match(/\.([a-z0-9]{2,5})$/i) || [])[1] || (video ? 'mp4' : 'jpg')).toLowerCase();
+        let anteprima = {}, vista = null;
+        if (video) anteprima = await fotogramma(file);
+        else {
+          const { im, u } = await apriImmagine(file);
+          anteprima = await rimpicciolisci(im, 520, 0.8); anteprima.W = im.naturalWidth; anteprima.H = im.naturalHeight;
+          if (!MOSTRABILI.test(file.type) && DATI.modo !== 'prova') vista = await rimpicciolisci(im, 3000, 0.92); // HEIC: copia da guardare anche su Android
+          URL.revokeObjectURL(u);
+        }
+        const doc = { v, by: S.me, video, nome: (file.name || `ricordo.${ext}`).slice(0, 80), tipoFile: file.type || '', size: file.size, w: anteprima.W || 0, h: anteprima.H || 0, quando, creato: Date.now(), cuori: {} };
+        if (video && anteprima.durata) doc.durata = Math.round(anteprima.durata);
+        if (anteprima.blob) { const b = await DATI.carica(`foto/${v}/${id}_p.jpg`, anteprima.blob, S.me); doc.prev = b.url; doc.pathP = b.path; }
+        if (vista) { const d = await DATI.carica(`foto/${v}/${id}_v.jpg`, vista.blob, S.me); doc.disp = d.url; doc.pathD = d.path; }
+        if (DATI.modo === 'prova') { doc.url = video ? URL.createObjectURL(file) : doc.prev; doc.path = ''; }
+        else { const a = await DATI.carica(`foto/${v}/${id}.${ext}`, file, S.me, avanti); doc.url = a.url; doc.path = a.path; }
+        fresh = await DATI.aggiungi('foto', doc);
         ok++;
       } catch (e) {
         console.error(e);
-        // Spazio foto non ancora attivo o senza permesso: inutile provare con le altre.
-        if (!ok && e && /^storage\//.test(e.code || '')) { carico = null; rTrip(); return toast('Lo spazio delle foto non è ancora pronto. Riprova più tardi.'); }
+        if (!ok && e && /^storage\//.test(e.code || '')) { carico = null; rTrip(); return toast('Lo spazio delle foto non risponde. Chiudi e riapri l\'app, poi riprova.'); }
       }
-      carico.fatte++; rTrip();
+      fattiB += file.size; carico.fatte++; avanti(0);
     }
     carico = null; rTrip();
-    if (ok) { toast(ok === 1 ? 'Foto aggiunta 📷' : `${ok} foto aggiunte 📷`); festa($('#tripIn .hero')); }
-    if (ok < list.length) setTimeout(() => toast(`${list.length - ok} foto non sono entrate. Riprova.`), 2300);
+    if (ok) { toast(ok === 1 ? 'Aggiunto 📷' : `${ok} tra foto e video aggiunti 📷`); festa($('#tripIn .hero')); }
+    if (ok < list.length) setTimeout(() => toast(`${list.length - ok} file non sono entrati. Riprova.`), 2300);
   }
 
   /* Visore: foto a tutto schermo, si scorre di lato, doppio tocco per ingrandire, giù per chiudere */
@@ -279,7 +321,8 @@
   }
   function closeViewer(daIndietro) {
     if (!visAperto()) return;
-    $('#viewer').classList.remove('on'); vis = null;
+    $('#vtrack').querySelectorAll('video').forEach(x => x.pause());
+    $('#viewer').classList.remove('on'); vis = null; $('#vtrack').innerHTML = '';
     if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
   }
   function rViewer() {
@@ -287,21 +330,33 @@
     vis.lista = vis.lista.filter(id => S.foto.some(f => f.id === id));
     if (!vis.lista.length) return closeViewer();
     vis.i = Math.min(vis.i, vis.lista.length - 1);
-    const slide = (k, pos) => { const f = S.foto.find(x => x.id === vis.lista[k]); return f ? `<div class="vs" style="transform:translateX(${pos * 100}%)"><img class="vp" src="${esc(f.prev || f.url)}" alt=""><img class="vb" src="${esc(f.url)}" alt=""></div>` : ''; };
-    $('#vtrack').style.transition = 'none'; $('#vtrack').style.transform = '';
-    $('#vtrack').innerHTML = slide(vis.i - 1, -1) + slide(vis.i, 0) + slide(vis.i + 1, 1);
+    const slide = (k, pos) => {
+      const f = S.foto.find(x => x.id === vis.lista[k]); if (!f) return '';
+      const dentro = f.video ? `<video class="vv" src="${esc(f.url)}"${f.prev ? ` poster="${esc(f.prev)}"` : ''} controls playsinline preload="metadata"></video>`
+        : `${f.prev ? `<img class="vp" src="${esc(f.prev)}" alt="">` : ''}<img class="vb" src="${esc(f.disp || f.url)}" alt="">`;
+      return `<div class="vs" style="transform:translateX(${pos * 100}%)">${dentro}</div>`;
+    };
+    // Si ridisegna solo se cambia la foto (così un video non riparte quando arriva un cuore).
+    const chiave = vis.lista.slice(Math.max(0, vis.i - 1), vis.i + 2).join() + '|' + vis.i;
+    if (chiave !== vis.chiave) {
+      vis.chiave = chiave;
+      $('#vtrack').querySelectorAll('video').forEach(x => x.pause());
+      $('#vtrack').style.transition = 'none'; $('#vtrack').style.transform = '';
+      $('#vtrack').innerHTML = slide(vis.i - 1, -1) + slide(vis.i, 0) + slide(vis.i + 1, 1);
+    }
     const f = S.foto.find(x => x.id === vis.lista[vis.i]), mio = f.by === S.me, cuore = (f.cuori || {})[S.me], v = S.viaggi.find(x => x.id === f.v) || {};
     $('#vcount').textContent = `${vis.i + 1} di ${vis.lista.length}`;
-    $('#vbar').innerHTML = `<div class="vwho"><span class="chip" style="--pc:${col(f.by)}"><i></i>${esc(P(f.by).nome)}</span><small>${new Date(f.quando || f.creato).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</small></div>
+    $('#vbar').innerHTML = `<div class="vwho"><span class="chip" style="--pc:${col(f.by)}"><i></i>${esc(P(f.by).nome)}</span><small>${new Date(f.quando || f.creato).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}${f.size ? ` · originale ${mb(f.size)}` : ''}</small></div>
       <div class="vacts"><button class="vb-btn tap${cuore ? ' on' : ''}" data-cuore="${f.id}" aria-label="Mi piace">${cuore ? '❤️' : '🤍'}<span>${cuoriN(f) || ''}</span></button>
-      <button class="vb-btn tap" data-salva="${f.id}" aria-label="Salva sul telefono">⬇️</button>
-      ${v.cop !== f.id ? `<button class="vb-btn tap" data-cop="${f.id}" aria-label="Usa come copertina">🖼️</button>` : ''}
+      <button class="vb-btn tap" data-salva="${f.id}" aria-label="Scarica l'originale">⬇️</button>
+      ${v.cop !== f.id && f.prev ? `<button class="vb-btn tap" data-cop="${f.id}" aria-label="Usa come copertina">🖼️</button>` : ''}
       ${mio ? `<button class="vb-btn tap" data-delfoto="${f.id}" aria-label="Togli la foto">🗑️</button>` : ''}</div>`;
   }
   (() => {
     const vw = $('#viewer'), tr = $('#vtrack'); let x0 = null, y0 = 0, dx = 0, dy = 0, asse = null, t0 = 0, ultimoTap = 0;
     vw.addEventListener('touchstart', e => {
       if (e.touches.length > 1 || e.target.closest('.vbar,.vtop')) { x0 = null; return; }
+      const sotto = e.target.closest('video'); if (sotto && e.touches[0].clientY > innerHeight - 140) { x0 = null; return; } // barra dei comandi del video
       x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = dy = 0; asse = null; t0 = Date.now();
     }, { passive: true });
     vw.addEventListener('touchmove', e => {
@@ -318,9 +373,10 @@
       const dt = Date.now() - t0;
       if (!asse && dt < 250) { // tocco: doppio tocco = ingrandisci
         if (Date.now() - ultimoTap < 300) {
-          const im = vw.querySelector('.vs:nth-child(2) .vb') || vw.querySelector('.vs .vb');
-          const tt = e.changedTouches[0], r = im.getBoundingClientRect();
-          im.style.transformOrigin = `${tt.clientX - r.left}px ${tt.clientY - r.top}px`; im.classList.toggle('zoom'); ultimoTap = 0;
+          const im = [...vw.querySelectorAll('.vs')].find(x => x.style.transform === 'translateX(0%)');
+          const vb = im && im.querySelector('.vb'); if (!vb) return;
+          const tt = e.changedTouches[0], r = vb.getBoundingClientRect();
+          vb.style.transformOrigin = `${tt.clientX - r.left}px ${tt.clientY - r.top}px`; vb.classList.toggle('zoom'); ultimoTap = 0;
         } else ultimoTap = Date.now();
         return;
       }
@@ -330,6 +386,7 @@
         const k = vis.i + dir;
         if ((Math.abs(dx) > 80 || (veloce && Math.abs(dx) > 30)) && k >= 0 && k < vis.lista.length) {
           tr.style.transform = `translateX(${-dir * 100}%)`;
+          tr.querySelectorAll('video').forEach(x => x.pause());
           setTimeout(() => { vis.i = k; rViewer(); }, 260);
         } else tr.style.transform = '';
       } else if (asse === 'y') {
@@ -337,12 +394,15 @@
       }
     });
   })();
+  // Scarica l'ORIGINALE: su iPhone e Android si apre "Condividi" per salvarlo in Foto/Galleria.
   async function salvaFoto(f) {
+    const nome = f.nome || (f.video ? 'ricordo.mp4' : 'ricordo.jpg');
     try {
+      toast(f.size > 30 * 1048576 ? `Preparo il file (${mb(f.size)})…` : 'Preparo il file…');
       const blob = await (await fetch(f.url)).blob();
-      const file = new File([blob], 'noi-quattro.jpg', { type: blob.type || 'image/jpeg' });
+      const file = new File([blob], nome, { type: blob.type || f.tipoFile || 'application/octet-stream' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) return await navigator.share({ files: [file] });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'noi-quattro.jpg'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 8000);
     } catch (e) { if (e && e.name === 'AbortError') return; window.open(f.url, '_blank'); }
   }
 
@@ -378,7 +438,7 @@
     fresh = null;
     if (a === 'itemTx' && $('#itemTx')) $('#itemTx').focus();
     $('#fab').hidden = page === 'spesa';
-    $('#fab').setAttribute('aria-label', page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : 'Nuova nota') : page === 'viaggi' ? 'Nuovo viaggio' : 'Nuovo impegno');
+    $('#fab').setAttribute('aria-label', page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : 'Nuova nota') : page === 'viaggi' ? 'Nuovo ricordo' : 'Nuovo impegno');
   }
   function banner() {
     const b = $('#banner');
@@ -602,6 +662,8 @@
     if (t.classList.contains('tab')) return go(d.p);
     if (d.go) return go(d.go);
     if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : sheetNota()) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
+    if (d.filtror) { filtroR = d.filtror; return rViaggi(); }
+    if (d.tipo) { t.parentElement.querySelectorAll('.tp').forEach(b => b.classList.toggle('on', b === t)); return; }
     if (d.viaggio) { openTrip(d.viaggio); if (d.apriFoto) setTimeout(() => openViewer(d.apriFoto), 300); return; }
     if (t.id === 'tripBack') return closeTrip();
     if (d.modviaggio) return sheetViaggio(S.viaggi.find(x => x.id === d.modviaggio));
@@ -618,13 +680,13 @@
     if (d.delfoto) {
       if (!d.sicuro) { d.sicuro = '1'; t.classList.add('warn'); return toast('Tocca ancora 🗑️ per togliere la foto'); }
       const f = S.foto.find(x => x.id === d.delfoto); if (!f) return;
-      await DATI.elimina('foto', f.id).catch(sbaglio); DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); return toast('Foto tolta');
+      await DATI.elimina('foto', f.id).catch(sbaglio); DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); DATI.eliminaFile(f.pathD); return toast(f.video ? 'Video tolto' : 'Foto tolta');
     }
     if (d.delviaggio) {
       if (!d.sicuro) { d.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare tutto'; return; }
       const fs = fotoDi(d.delviaggio); closeSheet(); closeTrip();
-      for (const f of fs) { await DATI.elimina('foto', f.id).catch(() => {}); DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); }
-      await DATI.elimina('viaggi', d.delviaggio).catch(sbaglio); return toast('Viaggio eliminato');
+      for (const f of fs) { await DATI.elimina('foto', f.id).catch(() => {}); DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); DATI.eliminaFile(f.pathD); }
+      await DATI.elimina('viaggi', d.delviaggio).catch(sbaglio); return toast('Ricordo eliminato');
     }
     if (t.id === 'meBtn') return openImp();
     if (t.id === 'impBack') return closeImp();
@@ -731,11 +793,12 @@
     } else if (f.id === 'fVi') {
       const who = [...f.querySelectorAll('.pk.on')].map(b => b.dataset.pk);
       const da = $('#viDa').value, a = $('#viA').value;
-      const v = { t: $('#viT').value.trim().slice(0, 60), dove: $('#viD').value.trim().slice(0, 60), da, a: a && a >= da ? a : '', who };
+      const tipo = (f.querySelector('.tp.on') || {}).dataset ? f.querySelector('.tp.on').dataset.tipo : 'viaggio';
+      const v = { t: $('#viT').value.trim().slice(0, 60), dove: $('#viD').value.trim().slice(0, 60), da, a: a && a >= da ? a : '', who, tipo };
       closeSheet();
       try {
-        if (f.dataset.id) { await DATI.aggiorna('viaggi', f.dataset.id, v); toast('Viaggio aggiornato'); }
-        else { const id = await DATI.aggiungi('viaggi', Object.assign(v, { creatoDa: S.me, creato: Date.now() })); fresh = id; render(); setTimeout(() => openTrip(id), 250); toast('Viaggio creato: ora aggiungete le foto 📷'); }
+        if (f.dataset.id) { await DATI.aggiorna('viaggi', f.dataset.id, v); toast('Ricordo aggiornato'); }
+        else { const id = await DATI.aggiungi('viaggi', Object.assign(v, { creatoDa: S.me, creato: Date.now() })); fresh = id; render(); setTimeout(() => openTrip(id), 250); toast('Ricordo creato: ora aggiungete foto e video 📷'); }
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'fRe') {
       const per = f.dataset.per, x = $('#reX').value.trim().slice(0, 80), n = $('#reN').value.trim().slice(0, 300); if (!x) return;
