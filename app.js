@@ -24,7 +24,7 @@
 
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
-  const S = { me: null, persone: {}, impegni: [], note: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [] };
+  const S = { me: null, persone: {}, impegni: [], note: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {} };
   let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = LS.get('noi4-bacheca', 'note');
   const seen = new Set(); let fresh = null; let avviato = false;
 
@@ -561,6 +561,48 @@
     $('#imp').classList.remove('on'); $('#fab').classList.remove('via');
     if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
   }
+  const segHtml = (nome, voci, k) => `<div class="seg" style="--n:${voci.length};--k:${Math.max(0, voci.findIndex(v => v[0] === k))}"><i class="spill"></i>${voci.map(([v, t]) => `<button type="button" class="tap${v === k ? ' on' : ''}" data-${nome}="${v}">${t}</button>`).join('')}</div>`;
+  /* ---------- Collegare il proprio calendario ----------
+     Ognuno incolla il link del suo calendario; resta nella sua parte privata (privati/<persona>), che legge solo lui
+     e il programma automatico su GitHub, che ogni mezz'ora copia gli impegni e scrive com'è andata in persone/<id>.calStato. */
+  const linkCal = (x) => String(x || '').split(/\s+/).filter(u => /^(https|webcal):\/\/\S+$/i.test(u)).slice(0, 5);
+  const PASSI = {
+    iphone: [`Apri l'app <b>Calendario</b> e tocca <b>Calendari</b> in basso.`,
+      `Tocca la <b>ⓘ</b> accanto al tuo calendario, quello sotto <b>iCloud</b>.`,
+      `Accendi <b>Calendario pubblico</b>, poi tocca <b>Condividi link…</b> e <b>Copia</b>.`,
+      `Torna qui, tocca <b>Incolla</b> e poi <b>Collega</b>.`],
+    google: [`Apri <b>Chrome</b> (non l'app Calendar) e vai su <b>calendar.google.com</b>. Dal computer è più comodo: puoi entrare nell'app anche da lì.`,
+      `Sul telefono, dal menu <b>⋮</b> di Chrome scegli <b>Sito desktop</b>.`,
+      `Tocca l'ingranaggio <b>⚙️</b> e <b>Impostazioni</b>, poi a sinistra scegli il tuo calendario.`,
+      `Scendi fino a <b>Indirizzo segreto in formato iCal</b> e copialo.`,
+      `Torna qui, tocca <b>Incolla</b> e poi <b>Collega</b>.`]
+  };
+  const NOTA_PASSI = {
+    iphone: `Hai più calendari? Ripeti per ognuno e metti un link per riga. Se non vedi "Calendario pubblico", quel calendario non è di iCloud: dillo a Sasha.`,
+    google: `Quell'indirizzo è segreto: non darlo a nessuno. Qui lo vedi solo tu.`
+  };
+  const passiHtml = (g) => PASSI[g].map(x => `<li>${x}</li>`).join('');
+  function sheetCal() {
+    const g = LS.get('noi4-calguida', /android/i.test(navigator.userAgent) ? 'google' : 'iphone');
+    openSheet(`<h3>Collega il mio calendario</h3>
+     <div class="empty">Così i tuoi impegni entrano da soli nell'app e si aggiornano ogni mezz'ora. Il link lo vedi solo tu.</div>
+     ${segHtml('calg', [['iphone', 'Calendario iPhone'], ['google', 'Google Calendar']], g)}
+     <ol class="passi" id="calPassi">${passiHtml(g)}</ol><div class="empty" id="calNota">${NOTA_PASSI[g]}</div>
+     <form class="stack" id="fCal">
+       <label>Il link del calendario<textarea id="calU" rows="3" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="webcal://… oppure https://…">${esc(S.priv.calendario || '')}</textarea></label>
+       ${navigator.clipboard && navigator.clipboard.readText ? '<button type="button" class="btn ghost tap" id="calIncolla">Incolla</button>' : ''}
+       <button class="btn tap">Collega</button>
+     </form>`);
+  }
+  function statoCal(me, collegato) {
+    const links = linkCal(S.priv.calendario), st = me.calStato || {};
+    if (!links.length) return collegato ? `<span class="ok">✓</span>Collegato: si aggiorna da solo ogni mezz'ora` : `<span class="no">!</span>Non ancora collegato`;
+    if (!st.quando || st.quando < (S.priv.aggiornato || 0)) return `<span class="att">⏳</span>Link salvato: i tuoi impegni arrivano entro mezz'ora`;
+    if (!st.letti) return `<span class="no">!</span>Non riesco a leggere il calendario: ricontrolla il link`;
+    const ora = new Date(st.quando).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    if (st.letti < st.tot) return `<span class="no">!</span>Uno dei link non si legge: ricontrollali (ultimo controllo alle ${ora})`;
+    return `<span class="ok">✓</span>Collegato: ${st.n} ${st.n === 1 ? 'impegno' : 'impegni'} nei prossimi 60 giorni, aggiornato alle ${ora}`;
+  }
   function rImp() {
     const me = P(S.me), pref = me.notifiche || {};
     const sr = (i) => impNuova ? ` rise" style="--i:${Math.min(i, 8)}` : '';
@@ -568,7 +610,6 @@
     const tema = LS.get('noi4-tema', 'auto'), apri = LS.get('noi4-apertura', 'oggi');
     const collegato = S.impegni.some(e => e.fonte === 'calendario:' + S.me);
     const importati = S.impegni.filter(e => e.fonte === 'import:' + S.me).length;
-    const segHtml = (nome, voci, k) => `<div class="seg" style="--n:${voci.length};--k:${Math.max(0, voci.findIndex(v => v[0] === k))}"><i class="spill"></i>${voci.map(([v, t]) => `<button class="tap${v === k ? ' on' : ''}" data-${nome}="${v}">${t}</button>`).join('')}</div>`;
     $('#impIn').innerHTML = `
      <div class="imp-top"><button class="back tap" id="impBack" aria-label="Indietro"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Indietro</button></div>
      <h1 class="hello${sr(0)}">Impostazioni</h1>
@@ -592,9 +633,12 @@
 
      <div class="sec${sr(5)}">Il mio calendario</div>
      <div class="card${sr(5)}">
-       <div class="stato">${collegato ? `<span class="ok">✓</span>Collegato: si aggiorna da solo ogni mezz'ora` : `<span class="no">!</span>Non ancora collegato: chiedi a Sasha`}</div>
+       <div class="stato">${statoCal(me, collegato)}</div>
+       <button class="btn tap" id="calLink">${linkCal(S.priv.calendario).length ? 'Cambia il link' : 'Collega il mio calendario'}</button>
+       ${linkCal(S.priv.calendario).length ? '<button class="link tap" id="calVia">Scollega il calendario</button>' : ''}
        <label class="sw">Gli altri vedono solo "Occupato"<input type="checkbox" id="privOcc"${me.privacy === 'occupato' ? ' checked' : ''}></label>
        <div class="empty">Se è acceso, dei tuoi impegni dal calendario gli altri vedono solo l'orario, senza titolo né luogo.</div>
+       <div class="empty">Oppure, una volta sola:</div>
        <label class="btn ghost tap filebtn">Importa un file del calendario (.ics)<input type="file" id="icsFile" accept=".ics,text/calendar" hidden></label>
        <div class="empty">Entrano i tuoi impegni dei prossimi 12 mesi. Se lo rifai, quelli importati prima vengono sostituiti.</div>
        ${importati ? `<button class="link tap" id="togliImp">Togli i ${importati} impegni importati</button>` : ''}
@@ -702,6 +746,18 @@
       await DATI.elimina('viaggi', d.delviaggio).catch(sbaglio); return toast('Ricordo eliminato');
     }
     if (t.id === 'meBtn') return openImp();
+    if (t.id === 'calLink') return sheetCal();
+    if (d.calg) { LS.set('noi4-calguida', d.calg); segSet(t.parentElement, d.calg === 'google' ? 1 : 0); $('#calPassi').innerHTML = passiHtml(d.calg); $('#calNota').textContent = NOTA_PASSI[d.calg]; return; }
+    if (t.id === 'calIncolla') {
+      try { const x = await navigator.clipboard.readText(); if (x) { $('#calU').value = x.trim(); toast(linkCal(x).length ? 'Link incollato' : 'Quello copiato non sembra un link di calendario'); } }
+      catch (e) { toast('Tieni premuto nel riquadro e scegli Incolla'); }
+      return;
+    }
+    if (t.id === 'calVia') {
+      if (!t.dataset.sicuro) { t.dataset.sicuro = 1; t.textContent = 'Tocca di nuovo per scollegare'; return; }
+      await DATI.imposta('privati', S.me, { calendario: '', aggiornato: Date.now() }).catch(sbaglio);
+      return toast('Scollegato: i suoi impegni spariscono entro mezz\'ora');
+    }
     if (t.id === 'impBack') return closeImp();
     if (d.me) { DATI.cambiaPersona(d.me); return toast('Ora guardi l\'app come ' + P(d.me).nome); }
     if (t.id === 'reset') { DATI.ricomincia(); seen.clear(); closeImp(); return toast('Dati di esempio rimessi'); }
@@ -790,6 +846,12 @@
       $('#lgErr').textContent = '';
       try { await DATI.login($('#lgEmail').value, $('#lgPass').value); }
       catch (e) { $('#lgErr').textContent = 'Email o password non corrette.'; }
+    } else if (f.id === 'fCal') {
+      const testo = $('#calU').value.trim(), links = linkCal(testo);
+      if (testo && !links.length) return toast('Non sembra un link di calendario: deve cominciare con webcal:// o https://');
+      try { await DATI.imposta('privati', S.me, { calendario: links.join('\n'), aggiornato: Date.now() }); }
+      catch (e) { return sbaglio(e); }
+      closeSheet(); toast(links.length ? 'Fatto! I tuoi impegni arrivano entro mezz\'ora' : 'Calendario scollegato');
     } else if (f.id === 'fEv') {
       const who = [...f.querySelectorAll('.pk.on')].map(b => b.dataset.pk); if (!who.length) return toast('Scegli almeno una persona');
       const all = $('#evAll').checked;
@@ -853,10 +915,16 @@
     });
   }
   applicaTema();
+  let stopPriv = null, privDi = null;
+  function ascoltaPriv() {
+    if (privDi === S.me) return;
+    if (stopPriv) stopPriv(); privDi = S.me; S.priv = {};
+    stopPriv = DATI.ascoltaDoc('privati', S.me, d => { S.priv = d; if (impAperto()) rImp(); }) || null;
+  }
   function ascoltaCena() { if (stopCena) stopCena(); stopCena = DATI.ascoltaDoc('cena', T, c => { S.cena = c; render(); }); }
   DATI.avvia((persona, errore) => {
     if (!persona) { $('#app').hidden = true; $('#login').hidden = false; $('#lgErr').textContent = errore || ''; return; }
-    S.me = persona; $('#login').hidden = true; $('#app').hidden = false;
+    S.me = persona; $('#login').hidden = true; $('#app').hidden = false; ascoltaPriv();
     if (!avviato) {
       avviato = true;
       DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); render(); });
