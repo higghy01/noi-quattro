@@ -19,6 +19,9 @@ URL_APP = os.environ.get("URL_APP") or "https://higghy01.github.io/noi-quattro/"
 
 
 def main():
+    if not os.environ.get("FIREBASE_CHIAVE"):
+        print("Chiave di Firebase non ancora inserita: niente da fare.")
+        return
     db = database()
     ora = adesso()
     oggi = ora.date().isoformat()
