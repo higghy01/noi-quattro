@@ -38,7 +38,7 @@
   const vista = () => page === 'note' ? 'note-' + seg : page;
   const ri = (i) => seen.has(vista()) ? '' : ` rise" style="--i:${Math.min(i, 6)}`;
   const saluto = () => { const h = new Date().getHours(); return h < 5 ? 'Buonanotte' : h < 13 ? 'Buongiorno' : h < 18 ? 'Buon pomeriggio' : 'Buonasera'; };
-  const modificabile = (e) => e.fonte === 'app' || e.fonte === 'import:' + S.me;
+  const modificabile = (e) => e.fonte === 'app' || e.fonte === 'import:' + S.me || e.fonte === 'orario:' + S.me;
 
   /* Cosa vedono gli altri dei MIEI impegni del calendario: prima le scelte fatte a mano (per titolo),
      poi le parole automatiche (prima quelle da nascondere), poi la regola generale.
@@ -864,7 +864,7 @@
      <button class="btn tap">${e.id ? 'Salva le modifiche' : 'Salva impegno'}</button></form>`, () => { if (!e.id) setTimeout(() => $('#evT').focus(), 380); });
   }
   function sheetDettaglio(e) {
-    const fonte = e.fonte && e.fonte.startsWith('calendario:') ? `Dal calendario di ${esc(P(e.fonte.slice(11)).nome)}` : e.fonte && e.fonte.startsWith('import:') ? `Importato da ${esc(P(e.fonte.slice(7)).nome)}` : `Aggiunto da ${esc(P(e.creatoDa).nome)}`;
+    const fonte = e.fonte && e.fonte.startsWith('calendario:') ? `Dal calendario di ${esc(P(e.fonte.slice(11)).nome)}` : e.fonte && e.fonte.startsWith('import:') ? `Importato da ${esc(P(e.fonte.slice(7)).nome)}` : e.fonte && e.fonte.startsWith('orario:') ? `Dall'orario di lavoro di ${esc(P(e.fonte.slice(7)).nome)}` : `Aggiunto da ${esc(P(e.creatoDa).nome)}`;
     openSheet(`<h3>${esc(e.t)}</h3>
       <div>${piuGiorni(e) ? `Dal ${fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })} al ${fmt(e.fino, { weekday: 'long', day: 'numeric', month: 'long' })}` : fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })}${e.h ? ` · ${esc(e.h)}${e.fine ? '–' + esc(e.fine) : ''}` : ' · tutto il giorno'}${e.ripeti ? ` · ${RIPETI[e.ripeti].toLowerCase()}` : ''}</div>
       ${e.n ? `<div class="muted">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div><div class="src">${fonte}</div>
@@ -1013,6 +1013,8 @@
        <button class="btn ghost tap" id="paroleBtn">Parole automatiche e scelte</button>
        <div class="empty">Oppure, una volta sola:</div>
        <label class="btn ghost tap filebtn">Importa un file del calendario (.ics)<input type="file" id="icsFile" accept=".ics,text/calendar" hidden></label>
+      <label class="btn ghost tap filebtn">💼 Importa l'orario di lavoro (.ics)<input type="file" id="orarioFile" accept=".ics,text/calendar" hidden></label>
+      <div class="empty">L'orario cambia solo i turni dei giorni che contiene: il resto dei tuoi impegni non si tocca.</div>
        <div class="empty">Entrano i tuoi impegni dei prossimi 12 mesi. Se lo rifai, quelli importati prima vengono sostituiti.</div>
        ${importati ? `<button class="link tap" id="togliImp">Togli i ${importati} impegni importati</button>` : ''}
      </div>
@@ -1107,6 +1109,28 @@
       await DATI.aggiorna('privati', S.me, { dettagli }).catch(() => DATI.imposta('privati', S.me, { dettagli }));
       closeSheet(); render(); toast(out.length ? `Importati ${out.length} impegni` : 'Nel file non ci sono impegni nei prossimi 12 mesi');
     } catch (e) { console.error(e); toast('Il file non sembra un calendario .ics valido.'); }
+  }
+
+  /* L'orario di lavoro della settimana (file .ics preparato da Claude dalla foto dell'orario scritto a mano):
+     sostituisce solo i turni ("orario:<me>") dei giorni compresi nel file, gli altri impegni restano. */
+  async function importaOrario(file) {
+    if (!window.ICAL) return toast('Serve internet per leggere il file. Riprova.');
+    try {
+      const comp = new ICAL.Component(ICAL.parse(await file.text()));
+      const hhmm = (d) => d.toTimeString().slice(0, 5), out = [];
+      for (const v of comp.getAllSubcomponents('vevent')) {
+        const ev = new ICAL.Event(v), s = ev.startDate.toJSDate(), e = ev.endDate ? ev.endDate.toJSDate() : null, all = ev.startDate.isDate;
+        out.push({ t: (ev.summary || 'Al lavoro').slice(0, 80), d: iso(s), fino: ultimoGiorno(s, e, all), h: all ? '' : hhmm(s), fine: !all && e ? hhmm(e) : '',
+          who: [S.me], n: (ev.location || '').slice(0, 200), ripeti: '', fonte: 'orario:' + S.me, creatoDa: S.me, creato: Date.now() });
+      }
+      if (!out.length) return toast('Nel file non ci sono turni');
+      const giorni = out.map(x => x.d).sort(), da = giorni[0], a = giorni[giorni.length - 1];
+      const vecchi = S.impegni.filter(x => x.fonte === 'orario:' + S.me && x.d >= da && x.d <= a);
+      for (const x of vecchi) await DATI.elimina('impegni', x.id);
+      await DATI.molti('impegni', out);
+      closeSheet(); closeImp(); render();
+      toast(`Orario caricato: ${out.length} ${out.length === 1 ? 'turno' : 'turni'} dal ${fmt(da, { day: 'numeric', month: 'short' })} al ${fmt(a, { day: 'numeric', month: 'short' })}`);
+    } catch (e) { console.error(e); toast('Il file non sembra un orario .ics valido.'); }
   }
 
   /* ---------- Tocchi ---------- */
@@ -1327,6 +1351,7 @@
     // Si salva dopo che l'interruttore ha finito di scorrere (il salvataggio ridisegna la pagina).
     if (t.dataset && t.dataset.pref) { const k = t.dataset.pref, v = t.checked; setTimeout(() => DATI.imposta('persone', S.me, { notifiche: Object.assign({}, P(S.me).notifiche, { [k]: v }) }).catch(sbaglio), 320); }
     if (t.id === 'icsFile' && t.files[0]) importaIcs(t.files[0]);
+    if (t.id === 'orarioFile' && t.files[0]) importaOrario(t.files[0]);
     if (t.id === 'fotoIn' && t.files.length) caricaFoto(t.files);
     if (t.id === 'avIn' && t.files[0]) caricaAvatar(t.files[0]);
   });

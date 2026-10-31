@@ -28,9 +28,9 @@ service cloud.firestore {
     match /impegni/{id} {
       allow read: if membro();
       allow create: if membro() && request.resource.data.creatoDa == io()
-        && request.resource.data.fonte in ['app', 'import:' + io()];
+        && request.resource.data.fonte in ['app', 'import:' + io(), 'orario:' + io()];
       // Quelli dei calendari collegati li scrive solo il programma automatico.
-      allow update: if membro() && ((resource.data.fonte in ['app', 'import:' + io()]
+      allow update: if membro() && ((resource.data.fonte in ['app', 'import:' + io(), 'orario:' + io()]
         && request.resource.data.fonte == resource.data.fonte
         && request.resource.data.creatoDa == resource.data.creatoDa)
         // Dei miei impegni dal calendario posso solo scegliere se gli altri vedono il titolo o "Occupato".
@@ -38,7 +38,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['t', 'n', 'nascosto']))
         // Come ci si va e "importante": li può segnare chiunque, su qualsiasi impegno.
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mezzo', 'imp']));
-      allow delete: if membro() && resource.data.fonte in ['app', 'import:' + io()];
+      allow delete: if membro() && resource.data.fonte in ['app', 'import:' + io(), 'orario:' + io()];
     }
 
     match /note/{id} {
