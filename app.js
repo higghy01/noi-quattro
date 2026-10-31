@@ -441,16 +441,17 @@
 
   /* Schermata di un viaggio (entra da destra come le Impostazioni) */
   let tripId = null, carico = null, tripHtml = '';
+  let selFoto = null; // null = non sto scegliendo; altrimenti l'insieme delle foto scelte da salvare
   const tripAperto = () => $('#trip').classList.contains('on');
   function openTrip(id) {
-    tripId = id; tripHtml = '';
+    tripId = id; tripHtml = ''; selFoto = null;
     if (!tripAperto()) history.pushState({ schermo: 'viaggio' }, '');
     rTrip(); $('#trip').scrollTop = 0; $('#trip').classList.add('on'); $('#fab').classList.add('via');
     setTimeout(() => riparaAnteprime(fotoDi(id)), 900);
   }
   function closeTrip(daIndietro) {
     if (!tripAperto()) return;
-    $('#trip').classList.remove('on'); if (!impAperto() && !persAperto()) $('#fab').classList.remove('via');
+    selFoto = null; $('#trip').classList.remove('on'); if (!impAperto() && !persAperto()) $('#fab').classList.remove('via');
     if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
   }
   function rTrip() {
@@ -462,9 +463,67 @@
      <div class="hero">${cop ? `<img src="${esc(cop.disp || (cop.video ? cop.prev : cop.url))}" alt="">` : `<span class="noimg">${t.e}</span>`}<span class="tb">${t.e} ${esc(t.n)}</span><div class="hinfo"><h1>${esc(v.t)}</h1><span>${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</div></div>
      ${carico ? `<div class="prog" style="--p:${carico.pct}"><span>Carico… ${carico.fatte + 1 > carico.tot ? carico.tot : carico.fatte + 1} di ${carico.tot} · ${Math.round(carico.pct * 100)}%</span><i></i></div>`
        : `<label class="btn tap filebtn add-foto">📷 Aggiungi foto e video<input type="file" id="fotoIn" accept="image/*,video/*" multiple hidden></label>`}
-     ${fs.length ? `<div class="sec">${fs.length - nv} foto${nv ? ` · ${nv} video` : ''} · originali</div><div class="grid">${fs.map(f => { const n = cuoriN(f); return `<button class="ph tap${f.id === fresh ? ' pop' : ''}" data-foto="${f.id}" style="--pc:${col(f.by)}">${f.prev ? `<img src="${esc(f.prev)}" alt="" loading="lazy" decoding="async">` : '<span class="noimg">🎞️</span>'}<i></i>${f.video ? `<em>▶ ${durata(f.durata)}</em>` : ''}${n ? `<b>❤️ ${n}</b>` : ''}</button>`; }).join('')}</div>`
+     ${fs.length ? `<div class="sech"><div class="sec">${fs.length - nv} foto${nv ? ` · ${nv} video` : ''} · originali</div><button class="link tap" id="selOn">${selFoto ? 'Fine' : '⬇️ Salva in galleria'}</button></div><div class="grid${selFoto ? ' scegli' : ''}">${fs.map(f => { const n = cuoriN(f); return `<button class="ph tap${f.id === fresh ? ' pop' : ''}${selFoto && selFoto.has(f.id) ? ' sel' : ''}" data-foto="${f.id}" style="--pc:${col(f.by)}">${f.prev ? `<img src="${esc(f.prev)}" alt="" loading="lazy" decoding="async">` : '<span class="noimg">🎞️</span>'}<i></i>${f.video ? `<em>▶ ${durata(f.durata)}</em>` : ''}${n ? `<b>❤️ ${n}</b>` : ''}<s class="ck" aria-hidden="true">✓</s></button>`; }).join('')}</div>${selFoto ? barraSel(fs) : ''}`
        : '<div class="empty big"><b>📷</b><span>Ancora niente. Tocca "Aggiungi foto e video" e scegline quanti vuoi dalla galleria: entrano originali, a qualità piena.</span></div>'}`;
     if (html !== tripHtml) { tripHtml = html; $('#tripIn').innerHTML = html; }
+  }
+  // Scegliere foto e video da salvare in galleria: tocco per scegliere, "Tutte", poi Salva.
+  function barraSel(fs) {
+    const scelte = fs.filter(f => selFoto.has(f.id)), peso = scelte.reduce((n, f) => n + (f.size || 0), 0);
+    return `<div class="selbar" id="selBar"><button class="tap" id="selTutte">${scelte.length === fs.length ? 'Nessuna' : 'Tutte'}</button>
+      <button class="btn tap" id="selSalva"${scelte.length ? '' : ' disabled'}>${scelte.length ? `Salva ${scelte.length}${peso ? ' · ' + mb(peso) : ''}` : 'Tocca le foto'}</button></div>`;
+  }
+  function aggiornaSel() {
+    const fs = fotoDi(tripId);
+    document.querySelectorAll('#tripIn .ph').forEach(b => b.classList.toggle('sel', selFoto.has(b.dataset.foto)));
+    const bar = $('#selBar'); if (bar) bar.outerHTML = barraSel(fs);
+    tripHtml = $('#tripIn').innerHTML; // così il prossimo disegno non rifà la griglia per niente
+  }
+  /* Salvare tante foto: su iPhone si apre "Condividi" con tutti i file insieme ("Salva N elementi" li mette in Foto).
+     L'iPhone apre Condividi solo subito dopo un tocco: i file si preparano a gruppi (max 20 o 300 MB) e per ogni gruppo
+     basta toccare "Apri Salva". Sugli altri telefoni (Samsung) si scaricano uno per uno: finiscono nella Galleria, album Download. */
+  let gruppi = null; // { lista: [[f...]], i, pronti: File[] | null }
+  const iPhone = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  async function preparaGruppo() {
+    const g = gruppi.lista[gruppi.i], files = [];
+    for (let k = 0; k < g.length; k++) {
+      const f = g[k];
+      setSalva(`Preparo ${gruppi.i * 20 + k + 1} di ${gruppi.tot}…`, true);
+      const blob = await (await fetch(f.url)).blob();
+      files.push(new File([blob], f.nome || (f.video ? `ricordo-${k + 1}.mp4` : `ricordo-${k + 1}.jpg`), { type: blob.type || f.tipoFile || 'application/octet-stream' }));
+    }
+    gruppi.pronti = files;
+    setSalva(gruppi.lista.length > 1 ? `📲 Apri Salva (gruppo ${gruppi.i + 1} di ${gruppi.lista.length})` : '📲 Apri Salva', false);
+  }
+  function setSalva(testo, attesa) { const b = $('#selSalva'); if (b) { b.textContent = testo; b.disabled = attesa; } }
+  async function salvaScelte() {
+    const fs = fotoDi(tripId).filter(f => selFoto.has(f.id)); if (!fs.length) return;
+    if (gruppi && gruppi.pronti) {
+      try { await navigator.share({ files: gruppi.pronti }); }
+      catch (e) { if (e && e.name === 'AbortError') return; if (e && e.name === 'NotAllowedError') return toast('Tocca di nuovo per salvare'); toast('Non sono riuscito ad aprire Salva'); return; }
+      gruppi.i++; gruppi.pronti = null;
+      if (gruppi.i >= gruppi.lista.length) { gruppi = null; selFoto = null; tripHtml = ''; rTrip(); return toast('Salvate in galleria 🎉'); }
+      return preparaGruppo().catch(() => { gruppi = null; toast('Una foto non si è scaricata. Riprova.'); aggiornaSel(); });
+    }
+    const prova = new File([new Blob(['x'], { type: 'image/jpeg' })], 'x.jpg', { type: 'image/jpeg' });
+    if (iPhone && navigator.canShare && navigator.canShare({ files: [prova] })) {
+      const lista = []; let cur = [], peso = 0;
+      for (const f of fs) { if (cur.length && (cur.length >= 20 || peso + (f.size || 0) > 300 * 1048576)) { lista.push(cur); cur = []; peso = 0; } cur.push(f); peso += f.size || 0; }
+      lista.push(cur);
+      gruppi = { lista, i: 0, pronti: null, tot: fs.length };
+      return preparaGruppo().catch(() => { gruppi = null; toast('Una foto non si è scaricata. Riprova.'); aggiornaSel(); });
+    }
+    // Samsung e computer: un file alla volta nei Download.
+    for (let k = 0; k < fs.length; k++) {
+      const f = fs[k]; setSalva(`Scarico ${k + 1} di ${fs.length}…`, true);
+      try {
+        const blob = await (await fetch(f.url)).blob();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = f.nome || (f.video ? `ricordo-${k + 1}.mp4` : `ricordo-${k + 1}.jpg`);
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+        await new Promise(r => setTimeout(r, 400));
+      } catch (e) { toast('Una foto non si è scaricata'); }
+    }
+    selFoto = null; tripHtml = ''; rTrip(); toast(`Fatto: ${fs.length} ${fs.length === 1 ? 'file' : 'file'} nella Galleria, album Download`);
   }
   function sheetViaggio(v) {
     v = v || { t: '', dove: '', da: T, a: '', who: IDS(), tipo: filtroR !== 'tutti' ? filtroR : 'viaggio' };
@@ -1145,6 +1204,10 @@
     if (d.viaggio) { openTrip(d.viaggio); if (d.apriFoto) setTimeout(() => openViewer(d.apriFoto), 300); return; }
     if (t.id === 'tripBack') return closeTrip();
     if (d.modviaggio) return sheetViaggio(S.viaggi.find(x => x.id === d.modviaggio));
+    if (t.id === 'selOn') { selFoto = selFoto ? null : new Set(); gruppi = null; tripHtml = ''; return rTrip(); }
+    if (t.id === 'selTutte') { const fs = fotoDi(tripId); selFoto = selFoto.size === fs.length ? new Set() : new Set(fs.map(f => f.id)); gruppi = null; return aggiornaSel(); }
+    if (t.id === 'selSalva') return salvaScelte();
+    if (d.foto && selFoto) { selFoto.has(d.foto) ? selFoto.delete(d.foto) : selFoto.add(d.foto); gruppi = null; if (navigator.vibrate) navigator.vibrate(6); return aggiornaSel(); }
     if (d.foto) return openViewer(d.foto);
     if (d.vchiudi !== undefined) return closeViewer();
     if (d.cuore) {
