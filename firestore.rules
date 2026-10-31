@@ -67,6 +67,15 @@ service cloud.firestore {
       allow read, write: if membro() && io() != persona;
     }
 
+    // La parte privata di ognuno (il link del suo calendario): la vede e la cambia solo lui.
+    // La legge anche il programma automatico su GitHub, che ha la chiave di servizio.
+    match /privati/{persona} {
+      allow read, delete: if membro() && io() == persona;
+      allow create, update: if membro() && io() == persona
+        && request.resource.data.keys().hasOnly(['calendario', 'aggiornato'])
+        && request.resource.data.calendario is string && request.resource.data.calendario.size() < 3000;
+    }
+
     // Viaggi: tutti li vedono e li completano; li cancella solo chi li ha creati.
     match /viaggi/{id} {
       allow read: if membro();

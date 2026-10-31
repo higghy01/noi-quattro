@@ -262,7 +262,8 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .screen .sec{margin:12px 0 -4px 4px}
 .stato{display:flex;align-items:center;gap:10px;font-weight:600}
 .stato span{width:24px;height:24px;border-radius:999px;display:grid;place-items:center;color:#fff;font-size:13px;flex:none}
-.stato .ok{background:var(--ok)}.stato .no{background:var(--p-ambra)}
+.stato .ok{background:var(--ok)}.stato .no{background:var(--p-ambra)}.stato .att{background:var(--acc)}
+.passi{margin:4px 0 0;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.4}.passi li::marker{color:var(--acc);font-weight:700}
 .ore{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:6px;padding:0 0 12px}
 .ora{min-height:36px;padding:0 2px;border-radius:999px;background:var(--soft);font-size:13px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;transition:background .24s,color .24s}
 .ora.on{background:var(--acc);color:var(--acc-ink)}
