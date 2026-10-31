@@ -42,6 +42,13 @@
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{overflow-x:clip;overscroll-behavior:none}
+/* Pagina ferma di lato e senza barre di scorrimento (Sasha, 31/10/2026: "lo scorrimento e la linea al lato"):
+   col dito si scorre solo in su e in giù; le file che scorrono di lato (storie, filtri) restano libere. */
+html,body{width:100%;max-width:100%;overscroll-behavior-x:none;scrollbar-width:none}
+body{touch-action:pan-y;position:relative}
+.screen,.sheet{touch-action:pan-y;scrollbar-width:none}
+.storie,.filters{touch-action:pan-x pan-y}
+::-webkit-scrollbar{display:none;width:0;height:0}
 html{background:var(--bg)}
 html{touch-action:manipulation}
 /* Come un'app: niente selezione del testo né menu a pressione lunga sui comandi (i campi e le note restano selezionabili) */
@@ -92,7 +99,8 @@ input::-webkit-date-and-time-value{text-align:left;min-height:1.45em}
 .page{display:none}
 .page.on{display:block;animation:fm-page .42s var(--ease)}
 /* Cambiando scheda il contenuto arriva dal lato giusto (--dx lo mette app.js) */
-@keyframes fm-page{from{opacity:0;transform:translate(var(--dx,0px),var(--dy,6px))}to{opacity:1;transform:none}}
+/* Cambio scheda: solo dissolvenza con un filo di salita, niente scivolata di lato. */
+@keyframes fm-page{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .rise{animation:fm-rise .48s var(--ease) both;animation-delay:calc(var(--i,0)*60ms)}
 @keyframes fm-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 .pop{animation:fm-pop .42s var(--pop) both}

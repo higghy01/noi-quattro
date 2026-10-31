@@ -1384,6 +1384,8 @@
     catch (e) { $('#lgErr').textContent = !navigator.onLine ? 'Serve internet per mandare l\'email. Riprova appena c\'è rete.' : 'Non riesco a mandare l\'email. Controlla che sia scritta giusta.'; }
   };
   document.addEventListener('gesturestart', e => e.preventDefault());
+  // Due dita fuori dal visore delle foto: niente zoom né spostamento di lato della pagina.
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('.viewer')) e.preventDefault(); }, { passive: false });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
   /* ---------- Avvio ---------- */
