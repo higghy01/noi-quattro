@@ -180,7 +180,7 @@
       }
     });
   }
-  ['#p-oggi', '#p-cal', '#noteBody', '#p-viaggi', '#p-spesa', '#impIn', '#persIn'].forEach(fluido);
+  ['#p-oggi', '#p-cal', '#noteBody', '#p-viaggi', '#p-spesa', '#impIn', '#persIn', '#tripIn'].forEach(fluido);
   // A fine entrata la classe si toglie: così non riparte quando si torna sulla scheda.
   document.addEventListener('animationend', (ev) => {
     const t = ev.target; if (!t.classList || !/^fm-(rise|pop)$/.test(ev.animationName)) return;
@@ -461,10 +461,10 @@
     const html = `
      <div class="imp-top"><button class="back tap" id="tripBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Ricordi</button><button class="link tap" data-modviaggio="${v.id}">Modifica</button></div>
      <div class="hero">${cop ? `<img src="${esc(cop.disp || (cop.video ? cop.prev : cop.url))}" alt="">` : `<span class="noimg">${t.e}</span>`}<span class="tb">${t.e} ${esc(t.n)}</span><div class="hinfo"><h1>${esc(v.t)}</h1><span>${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</div></div>
-     ${carico ? `<div class="prog" style="--p:${carico.pct}"><span>Carico… ${carico.fatte + 1 > carico.tot ? carico.tot : carico.fatte + 1} di ${carico.tot} · ${Math.round(carico.pct * 100)}%</span><i></i></div>`
+     ${carico ? `<div class="prog" style="--p:${carico.pct}"><span>Carico… ${carico.fatte} di ${carico.tot} · ${Math.round(carico.pct * 100)}%</span><i></i></div>`
        : `<label class="btn tap filebtn add-foto">📷 Aggiungi foto e video<input type="file" id="fotoIn" accept="image/*,video/*" multiple hidden></label>`}
-     ${fs.length ? `<div class="sech"><div class="sec">${fs.length - nv} foto${nv ? ` · ${nv} video` : ''} · originali</div><button class="link tap" id="selOn">${selFoto ? 'Fine' : '⬇️ Salva in galleria'}</button></div><div class="grid${selFoto ? ' scegli' : ''}">${fs.map(f => { const n = cuoriN(f); return `<button class="ph tap${f.id === fresh ? ' pop' : ''}${selFoto && selFoto.has(f.id) ? ' sel' : ''}" data-foto="${f.id}" style="--pc:${col(f.by)}">${f.prev ? `<img src="${esc(f.prev)}" alt="" loading="lazy" decoding="async">` : '<span class="noimg">🎞️</span>'}<i></i>${f.video ? `<em>▶ ${durata(f.durata)}</em>` : ''}${n ? `<b>❤️ ${n}</b>` : ''}<s class="ck" aria-hidden="true">✓</s></button>`; }).join('')}</div>${selFoto ? barraSel(fs) : ''}`
-       : '<div class="empty big"><b>📷</b><span>Ancora niente. Tocca "Aggiungi foto e video" e scegline quanti vuoi dalla galleria: entrano originali, a qualità piena.</span></div>'}`;
+     ${fs.length ? `<div class="sech"><div class="sec">${fs.length - nv} foto${nv ? ` · ${nv} video` : ''} · originali</div><button class="link tap" id="selOn">${selFoto ? 'Fine' : '⬇️ Salva in galleria'}</button></div><div class="grid${selFoto ? ' scegli' : ''}">${fs.map(f => { const n = cuoriN(f); return `<button id="ph-${f.id}" class="ph tap${f.id === fresh ? ' pop' : ''}${selFoto && selFoto.has(f.id) ? ' sel' : ''}" data-foto="${f.id}" style="--pc:${col(f.by)}">${f.prev ? `<img src="${esc(f.prev)}" alt="" loading="lazy" decoding="async">` : '<span class="noimg">🎞️</span>'}<i></i>${f.video ? `<em>▶ ${durata(f.durata)}</em>` : ''}${n ? `<b>❤️ ${n}</b>` : ''}<s class="ck" aria-hidden="true">✓</s></button>`; }).join('')}${upTiles()}</div>${selFoto ? barraSel(fs) : ''}`
+       : carico ? `<div class="grid">${upTiles()}</div>` : '<div class="empty big"><b>📷</b><span>Ancora niente. Tocca "Aggiungi foto e video" e scegline quanti vuoi dalla galleria: entrano originali, a qualità piena.</span></div>'}`;
     if (html !== tripHtml) { tripHtml = html; $('#tripIn').innerHTML = html; }
   }
   // Scegliere foto e video da salvare in galleria: tocco per scegliere, "Tutte", poi Salva.
@@ -525,6 +525,8 @@
     }
     selFoto = null; tripHtml = ''; rTrip(); toast(`Fatto: ${fs.length} ${fs.length === 1 ? 'file' : 'file'} nella Galleria, album Download`);
   }
+  // I file che si stanno caricando: la copia sul telefono con una barretta che si riempie.
+  const upTiles = () => carico && carico.items ? carico.items.map(it => `<span id="up-${it.k}" class="ph up" data-up="${it.k}" style="--p:${it.pct}">${it.url ? `<img src="${it.url}" alt="">` : `<span class="noimg">${it.video ? '🎞️' : '🖼️'}</span>`}<u class="upb"></u></span>`).join('') : '';
   function sheetViaggio(v) {
     v = v || { t: '', dove: '', da: T, a: '', who: IDS(), tipo: filtroR !== 'tutti' ? filtroR : 'viaggio' };
     const fs = v.id ? fotoDi(v.id) : [], altrui = fs.some(f => f.by !== S.me), tp = tipoDi(v);
@@ -647,44 +649,73 @@
     return file.lastModified || Date.now();
   }
   const MOSTRABILI = /^image\/(jpeg|png|webp|gif)$/;
+  /* Caricamento: 3 file alla volta. Per ogni file l'originale parte subito, l'anteprima si prepara intanto.
+     Ogni file compare subito nella griglia (copia sul telefono con la sua barretta) e la pagina non si ridisegna:
+     cambiano solo i pezzi diversi. */
   async function caricaFoto(files) {
     if (!DATI.fotoPronte()) return toast('Lo spazio delle foto non è ancora attivo.');
-    const v = tripId, list = [...files].filter(f => /^(image|video)\//.test(f.type) || /\.(heic|heif|jpe?g|png|mov|mp4)$/i.test(f.name)).slice(0, 60); let ok = 0;
+    const v = tripId, list = [...files].filter(f => /^(image|video)\//.test(f.type) || /\.(heic|heif|jpe?g|png|mov|mp4)$/i.test(f.name)).slice(0, 60); let ok = 0, rotto = false;
     if (files.length > 60) toast('Ne carico 60 alla volta: poi aggiungi gli altri');
-    const totB = list.reduce((a, f) => a + f.size, 0) || 1; let fattiB = 0;
-    carico = { fatte: 0, tot: list.length, pct: 0 }; rTrip();
-    const avanti = (b) => { carico.pct = Math.min(1, (fattiB + b) / totB); const el = $('#tripIn .prog'); if (el) { el.style.setProperty('--p', carico.pct); el.querySelector('span').textContent = `Carico… ${Math.min(carico.fatte + 1, carico.tot)} di ${carico.tot} · ${Math.round(carico.pct * 100)}%`; } };
-    for (const file of list) {
-      try {
-        const video = /^video\//.test(file.type) || /\.(mov|mp4)$/i.test(file.name);
-        const quando = await dataScatto(file), id = rid() + rid();
-        const ext = ((file.name.match(/\.([a-z0-9]{2,5})$/i) || [])[1] || (video ? 'mp4' : 'jpg')).toLowerCase();
-        let anteprima = {}, vista = null;
-        if (video) anteprima = await fotogramma(file);
-        else {
-          // Se il telefono non sa aprire la foto (es. HEIC su Android) l'originale entra lo stesso, senza anteprima.
-          try {
-            const { im, u } = await apriImmagine(file);
-            anteprima = await rimpicciolisci(im, 520, 0.8); anteprima.W = im.naturalWidth; anteprima.H = im.naturalHeight;
-            if (!MOSTRABILI.test(file.type) && DATI.modo !== 'prova') vista = await rimpicciolisci(im, 3000, 0.92); // HEIC: copia da guardare anche su Android
-            URL.revokeObjectURL(u);
-          } catch (e) { if (DATI.modo === 'prova') throw e; anteprima = {}; }
-        }
-        const doc = { v, by: S.me, video, nome: (file.name || `ricordo.${ext}`).slice(0, 80), tipoFile: file.type || '', size: file.size, w: anteprima.W || 0, h: anteprima.H || 0, quando, creato: Date.now(), cuori: {} };
-        if (video && anteprima.durata) doc.durata = Math.round(anteprima.durata);
-        if (anteprima.blob) { const b = await DATI.carica(`foto/${v}/${id}_p.jpg`, anteprima.blob, S.me); doc.prev = b.url; doc.pathP = b.path; if (!video || anteprima.buona) doc.prevOk = true; }
-        if (vista) { const d = await DATI.carica(`foto/${v}/${id}_v.jpg`, vista.blob, S.me); doc.disp = d.url; doc.pathD = d.path; }
-        if (DATI.modo === 'prova') { doc.url = video ? URL.createObjectURL(file) : doc.prev; doc.path = ''; }
-        else { const a = await DATI.carica(`foto/${v}/${id}.${ext}`, file, S.me, avanti); doc.url = a.url; doc.path = a.path; }
-        fresh = await DATI.aggiungi('foto', doc);
-        ok++;
-      } catch (e) {
-        console.error(e);
-        if (!ok && e && /^storage\//.test(e.code || '')) { carico = null; rTrip(); return toast('Lo spazio delle foto non risponde. Chiudi e riapri l\'app, poi riprova.'); }
+    const totB = list.reduce((a, f) => a + f.size, 0) || 1, fatti = {};
+    const items = list.map((file, k) => {
+      const video = /^video\//.test(file.type) || /\.(mov|mp4)$/i.test(file.name);
+      return { k, file, video, url: !video && MOSTRABILI.test(file.type) ? URL.createObjectURL(file) : '', pct: 0 };
+    });
+    carico = { fatte: 0, tot: list.length, pct: 0, items }; rTrip();
+    const avanti = () => {
+      carico.pct = Math.min(1, Object.values(fatti).reduce((a, b) => a + b, 0) / totB);
+      const el = $('#tripIn .prog'); if (el) { el.style.setProperty('--p', carico.pct); el.querySelector('span').textContent = `Carico… ${carico.fatte} di ${carico.tot} · ${Math.round(carico.pct * 100)}%`; }
+    };
+    const uno = async (it) => {
+      const { file, video } = it;
+      const quando = await dataScatto(file), id = rid() + rid();
+      const ext = ((file.name.match(/\.([a-z0-9]{2,5})$/i) || [])[1] || (video ? 'mp4' : 'jpg')).toLowerCase();
+      const segna = (b) => { fatti[it.k] = b; it.pct = b / (file.size || 1); const t = document.querySelector(`#tripIn [data-up="${it.k}"]`); if (t) t.style.setProperty('--p', it.pct); avanti(); };
+      // L'originale parte subito (è la parte lunga); intanto si prepara l'anteprima.
+      const orig = DATI.modo === 'prova' ? Promise.resolve({ url: '', path: '' }) : DATI.carica(`foto/${v}/${id}.${ext}`, file, S.me, segna);
+      let anteprima = {}, vista = null;
+      if (video) anteprima = await fotogramma(file);
+      else {
+        // Se il telefono non sa aprire la foto (es. HEIC su Android) l'originale entra lo stesso, senza anteprima.
+        try {
+          const { im, u } = await apriImmagine(file);
+          anteprima = await rimpicciolisci(im, 520, 0.8); anteprima.W = im.naturalWidth; anteprima.H = im.naturalHeight;
+          if (!MOSTRABILI.test(file.type) && DATI.modo !== 'prova') vista = await rimpicciolisci(im, 3000, 0.92); // HEIC: copia da guardare anche su Android
+          URL.revokeObjectURL(u);
+        } catch (e) { if (DATI.modo === 'prova') throw e; anteprima = {}; }
       }
-      fattiB += file.size; carico.fatte++; avanti(0);
-    }
+      const doc = { v, by: S.me, video, nome: (file.name || `ricordo.${ext}`).slice(0, 80), tipoFile: file.type || '', size: file.size, w: anteprima.W || 0, h: anteprima.H || 0, quando, creato: Date.now(), cuori: {} };
+      if (video && anteprima.durata) doc.durata = Math.round(anteprima.durata);
+      const [p, d] = await Promise.all([
+        anteprima.blob ? DATI.carica(`foto/${v}/${id}_p.jpg`, anteprima.blob, S.me) : null,
+        vista ? DATI.carica(`foto/${v}/${id}_v.jpg`, vista.blob, S.me) : null]);
+      if (p) { doc.prev = p.url; doc.pathP = p.path; if (!video || anteprima.buona) doc.prevOk = true; }
+      if (d) { doc.disp = d.url; doc.pathD = d.path; }
+      const a = await orig;
+      if (DATI.modo === 'prova') { doc.url = video ? URL.createObjectURL(file) : doc.prev; doc.path = ''; }
+      else { doc.url = a.url; doc.path = a.path; }
+      segna(file.size);
+      // La copia sul telefono lascia il posto a quella vera senza ridisegnare la pagina.
+      carico.items = carico.items.filter(x => x !== it);
+      fresh = await DATI.aggiungi('foto', doc);
+      if (it.url) setTimeout(() => URL.revokeObjectURL(it.url), 4000);
+      ok++;
+    };
+    const coda = [...items];
+    const lavora = async () => {
+      while (coda.length && !rotto) {
+        const it = coda.shift();
+        try { await uno(it); }
+        catch (e) {
+          console.error(e); fatti[it.k] = it.file.size; carico.items = carico.items.filter(x => x !== it); rTrip();
+          if (!ok && e && /^storage\//.test(e.code || '')) rotto = true;
+        }
+        carico.fatte++; avanti();
+      }
+    };
+    await Promise.all([lavora(), lavora(), lavora()]);
     carico = null; rTrip();
+    if (rotto && !ok) return toast('Lo spazio delle foto non risponde. Chiudi e riapri l\'app, poi riprova.');
     if (ok) { toast(ok === 1 ? 'Aggiunto 📷' : `${ok} tra foto e video aggiunti 📷`); festa($('#tripIn .hero')); }
     if (ok < list.length) setTimeout(() => toast(`${list.length - ok} file non sono entrati. Riprova.`), 2300);
   }

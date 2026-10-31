@@ -489,3 +489,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .selbar>button:first-child{min-height:44px;padding:0 14px;border-radius:14px;background:var(--soft);font-weight:600}
 .selbar .btn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .selbar .btn:disabled{opacity:.55}
+/* Foto in caricamento */
+.ph.up img{opacity:.55;filter:saturate(.7)}
+.ph.up .upb{text-decoration:none;position:absolute;left:8px;right:8px;bottom:8px;height:5px;border-radius:999px;background:rgb(255 255 255 / .35);overflow:hidden}
+.ph.up .upb::after{content:"";position:absolute;inset:0;background:#fff;transform-origin:left;transform:scaleX(var(--p,0));transition:transform .4s var(--ease)}
