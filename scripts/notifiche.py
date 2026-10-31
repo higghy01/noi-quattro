@@ -116,9 +116,17 @@ def main():
                     manda(p, "note", f"Nota di {nome(n.get('by'))}", n.get("x", "")[:120], f"nota|{d.id}|{p}")
 
     # Due impegni della stessa persona alla stessa ora (oggi, domani, dopodomani: "inviati" ricorda per 2 giorni).
-    def intervallo(e):
-        a = int(e["h"][:2]) * 60 + int(e["h"][3:5])
-        b = int(e["fine"][:2]) * 60 + int(e["fine"][3:5]) if e.get("fine") else a + 60
+    def minuti(h):
+        return int(h[:2]) * 60 + int(h[3:5])
+
+    def intervallo(e, giorno):
+        # Più giorni con orario (stessa regola dell'app): primo giorno dall'inizio, in mezzo tutto il giorno, ultimo fino alla fine.
+        if not e.get("ripeti") and (e.get("fino") or "") > e.get("d", ""):
+            a = minuti(e["h"]) if giorno == e["d"] else 0
+            b = minuti(e["fine"]) if giorno == e["fino"] and e.get("fine") else 24 * 60
+            return a, b
+        a = minuti(e["h"])
+        b = minuti(e["fine"]) if e.get("fine") else a + 60
         return a, (b if b > a else 24 * 60)
     for k in range(3):
         giorno = (ora.date() + dt.timedelta(days=k)).isoformat()
@@ -127,7 +135,7 @@ def main():
             suoi = sorted((e for e in del_giorno if p in (e.get("who") or [])), key=lambda e: e["h"])
             for i, x in enumerate(suoi):
                 for y in suoi[i + 1:]:
-                    (a1, b1), (a2, b2) = intervallo(x), intervallo(y)
+                    (a1, b1), (a2, b2) = intervallo(x, giorno), intervallo(y, giorno)
                     tx, ty = titolo_per(x, p)[0], titolo_per(y, p)[0]
                     if a1 < b2 and a2 < b1 and tx != ty:
                         quando = "oggi" if k == 0 else "domani" if k == 1 else dt.date.fromisoformat(giorno).strftime("%d/%m")

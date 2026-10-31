@@ -439,11 +439,11 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .pq small{font-size:12.5px;color:var(--muted)}
 .ops{display:grid;gap:8px}
 .op{position:relative;display:flex;align-items:center;gap:8px;min-height:46px;padding:6px 10px 6px 8px;border-radius:14px;border:1px solid var(--line);background:var(--soft);overflow:hidden;text-align:left;width:100%;color:var(--fg);transition:border-color .24s,transform .38s var(--pop)}
-.op .bar{position:absolute;inset:0;transform-origin:left center;background:color-mix(in srgb,var(--pc) 20%,transparent);transition:transform .5s var(--ease);pointer-events:none}
+.op .bar{position:absolute;inset:0;transform-origin:left center;background:color-mix(in srgb,var(--acc) 16%,transparent);transition:transform .5s var(--ease);pointer-events:none}
 .op>span{position:relative}
-.op .ck{width:22px;height:22px;border-radius:999px;border:2px solid color-mix(in srgb,var(--pc) 55%,var(--line));display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;flex:none;transition:background-color .24s,border-color .24s,transform .3s var(--pop)}
-.op.on{border-color:color-mix(in srgb,var(--pc) 60%,transparent)}
-.op.on .ck{background:var(--pc);border-color:var(--pc);transform:scale(1.06)}
+.op .ck{width:22px;height:22px;border-radius:999px;border:2px solid color-mix(in srgb,var(--me) 55%,var(--line));display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;flex:none;transition:background-color .24s,border-color .24s,transform .3s var(--pop)}
+.op.on{border-color:color-mix(in srgb,var(--me) 60%,transparent)}
+.op.on .ck{background:var(--me);border-color:var(--me);transform:scale(1.06)}
 .op .ox{flex:1;min-width:0;font-weight:600;font-size:15px;overflow-wrap:anywhere}
 .op .ow{display:flex;flex:none;padding-left:4px}
 .op .ow i{width:24px;height:24px;border-radius:999px;background:var(--pc);color:#fff;font:600 11px/24px var(--f-body);text-align:center;font-style:normal;box-shadow:0 0 0 2px var(--panel);margin-left:-6px;position:relative;overflow:hidden}
@@ -453,7 +453,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .deciso{font-size:14px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--ok) 14%,transparent);overflow-wrap:anywhere}
 .addop{display:flex;gap:8px}
 .addop input{flex:1;min-width:0;min-height:42px}
-.addop button{width:42px;min-height:42px;border-radius:12px;background:color-mix(in srgb,var(--pc) 18%,var(--soft));font-size:20px;flex:none;color:var(--fg)}
+.addop button{width:42px;min-height:42px;border-radius:12px;background:color-mix(in srgb,var(--acc) 18%,var(--soft));font-size:20px;flex:none;color:var(--fg)}
 .pf{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
 .pf small{font-size:12.5px;color:var(--muted);min-width:0}
 .pfa{display:flex;align-items:center;gap:4px;flex:none;max-width:62%;min-width:0}
@@ -467,14 +467,14 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .opz{font-weight:400;color:var(--muted);font-size:12px}
 .vn{display:flex;align-items:center;gap:8px}.vn .vnx{flex:1;min-width:0;font-size:14px}
 @media (prefers-reduced-motion: reduce){.op .bar{transition:none}}
-/* Impegni: "Da non perdere" e accavallamenti */
+/* Impegni: "Da non perdere" e accavallamenti (avviso in ambra: il rosso è di una persona; il voto mio ha il mio colore, --me) */
 .imps{gap:4px}
 .imr{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line);width:100%;text-align:left;min-width:0}
 .imps h2+.imr{border-top:0}
 .imd{width:46px;flex:none;display:grid;justify-items:center;border-radius:12px;padding:5px 0;background:color-mix(in srgb,var(--acc) 14%,transparent)}
 .imd b{font:650 17px/1.1 var(--f-disp)}.imd small{font-size:11px;color:var(--muted)}
 .imt{display:grid;min-width:0}.imt b{font-weight:600;overflow-wrap:anywhere}.imt small{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
-.acc{font-size:12.5px;font-weight:600;color:var(--bad);margin-top:2px}
+.acc{font-size:12.5px;font-weight:600;color:var(--p-ambra);margin-top:2px}
 .star{min-height:44px;border-radius:14px;border:1px dashed var(--line);font-size:14px;font-weight:600;color:var(--muted);transition:background-color .24s,border-color .24s,color .24s,transform .38s var(--pop)}
 .star.on{border-style:solid;border-color:color-mix(in srgb,var(--acc) 50%,transparent);background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--fg)}
 /* Ricordi: scegliere foto da salvare in galleria */
