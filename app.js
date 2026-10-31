@@ -285,10 +285,13 @@
         let anteprima = {}, vista = null;
         if (video) anteprima = await fotogramma(file);
         else {
-          const { im, u } = await apriImmagine(file);
-          anteprima = await rimpicciolisci(im, 520, 0.8); anteprima.W = im.naturalWidth; anteprima.H = im.naturalHeight;
-          if (!MOSTRABILI.test(file.type) && DATI.modo !== 'prova') vista = await rimpicciolisci(im, 3000, 0.92); // HEIC: copia da guardare anche su Android
-          URL.revokeObjectURL(u);
+          // Se il telefono non sa aprire la foto (es. HEIC su Android) l'originale entra lo stesso, senza anteprima.
+          try {
+            const { im, u } = await apriImmagine(file);
+            anteprima = await rimpicciolisci(im, 520, 0.8); anteprima.W = im.naturalWidth; anteprima.H = im.naturalHeight;
+            if (!MOSTRABILI.test(file.type) && DATI.modo !== 'prova') vista = await rimpicciolisci(im, 3000, 0.92); // HEIC: copia da guardare anche su Android
+            URL.revokeObjectURL(u);
+          } catch (e) { if (DATI.modo === 'prova') throw e; anteprima = {}; }
         }
         const doc = { v, by: S.me, video, nome: (file.name || `ricordo.${ext}`).slice(0, 80), tipoFile: file.type || '', size: file.size, w: anteprima.W || 0, h: anteprima.H || 0, quando, creato: Date.now(), cuori: {} };
         if (video && anteprima.durata) doc.durata = Math.round(anteprima.durata);
@@ -395,13 +398,23 @@
     });
   })();
   // Scarica l'ORIGINALE: su iPhone e Android si apre "Condividi" per salvarlo in Foto/Galleria.
+  // L'iPhone apre "Condividi" solo subito dopo un tocco: se scaricare il file ha richiesto tempo, il file resta pronto e basta un secondo tocco.
+  let pronto = null; // { id, file }
   async function salvaFoto(f) {
     const nome = f.nome || (f.video ? 'ricordo.mp4' : 'ricordo.jpg');
     try {
-      toast(f.size > 30 * 1048576 ? `Preparo il file (${mb(f.size)})…` : 'Preparo il file…');
-      const blob = await (await fetch(f.url)).blob();
-      const file = new File([blob], nome, { type: blob.type || f.tipoFile || 'application/octet-stream' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) return await navigator.share({ files: [file] });
+      let file = pronto && pronto.id === f.id ? pronto.file : null;
+      if (!file) {
+        toast(f.size > 30 * 1048576 ? `Preparo il file (${mb(f.size)})…` : 'Preparo il file…');
+        const blob = await (await fetch(f.url)).blob();
+        file = new File([blob], nome, { type: blob.type || f.tipoFile || 'application/octet-stream' });
+        pronto = { id: f.id, file };
+      }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file] }); pronto = null; return; }
+        catch (e) { if (e && e.name === 'NotAllowedError') return toast('Pronto: tocca di nuovo ⬇️ per salvarlo'); throw e; }
+      }
+      const blob = file;
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 8000);
     } catch (e) { if (e && e.name === 'AbortError') return; window.open(f.url, '_blank'); }
   }
