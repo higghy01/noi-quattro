@@ -21,7 +21,8 @@ service cloud.firestore {
     match /persone/{id} {
       allow read: if membro();
       allow update: if membro() && io() == id
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifiche', 'privacy', 'foto', 'fotoPath']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifiche', 'privacy', 'foto', 'fotoPath', 'strada'])
+        && (!('strada' in request.resource.data) || request.resource.data.strada in [0, 10, 20, 30, 45]);
       allow create, delete: if false;
     }
 

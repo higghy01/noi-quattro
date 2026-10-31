@@ -122,6 +122,11 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .cv .av::after{content:attr(data-b);position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:999px;background:var(--panel);color:var(--fg);font:600 12px/20px var(--f-body);text-align:center;box-shadow:0 0 0 2px var(--panel)}
 .cv .nm{font-size:13px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cv.bump .av{animation:fm-bump .38s var(--pop)}
+/* Cena automatica: il ✕ messo da solo (turno o impegno all'ora di cena) è tratteggiato, quello toccato a mano pieno */
+.cv.auto .av::after{content:'🌙';font-size:11px;box-shadow:0 0 0 2px var(--panel),inset 0 0 0 1.5px var(--muted)}
+.perche{display:grid;gap:4px;margin:2px 0 6px;font-size:13px;color:var(--muted);min-width:0}
+.perche span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.perche b{color:var(--pc);font-weight:600}
 @keyframes fm-bump{40%{transform:scale(1.14)}}
 
 /* Impegni */
