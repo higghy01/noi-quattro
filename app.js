@@ -375,7 +375,10 @@
         else if (chi && chi !== S.me) az = `<span class="preso">🎁 Lo prende ${esc(P(chi).nome)}</span>`;
         else az = `<button class="prendo tap${chi === S.me ? ' on' : ''}" data-prendo="${r.id}" data-per="${p}">${chi === S.me ? '✓ Lo prendo io' : 'Lo prendo io'}</button>`;
         const via = r.idea && r.by === S.me ? `<button class="gx tap" data-delidea="${r.id}" data-per="${p}" aria-label="Togli l'idea">✕</button>` : '';
-        return `<div class="gi${r.idea ? ' idea' : ''}${r.id === fresh ? ' pop' : ''}${chi ? ' taken' : ''}"><div class="gt"><div class="t">${esc(r.x)}</div>${nota}${tag}</div><div class="ga">${az}${via}</div></div>`;
+        const lg = r.lego && r.lego.num ? r.lego : null;
+        const lgImg = lg ? (lg.img && /^https:\/\/cdn\.rebrickable\.com\//.test(lg.img) ? `<img class="lgimg" src="${esc(lg.img)}" alt="" loading="lazy">` : '<span class="lgimg lgph">🧱</span>') : '';
+        const lgRiga = lg ? `<div class="n">${legoInfo(lg)} · <a class="glink" href="${LEGO_URL}#/set/${encodeURIComponent(lg.num)}" target="_blank" rel="noopener">Scheda ›</a></div>` : '';
+        return `<div class="gi${r.idea ? ' idea' : ''}${lg ? ' lg' : ''}${r.id === fresh ? ' pop' : ''}${chi ? ' taken' : ''}">${lgImg}<div class="gt"><div class="t">${esc(r.x)}</div>${lgRiga}${nota}${tag}</div><div class="ga">${az}${via}</div></div>`;
       };
       return `<div class="card gift${seen.has(vista()) ? '' : ' rise'}" style="--pc:${col(p)};--i:${Math.min(i, 6)}">
         <h2><span class="gh"><span class="gav">${avt(p)}</span>${mio ? 'La mia lista' : 'Per ' + esc(P(p).nome)}</span><small>${mio ? tutti.length : `${presiN} su ${tutti.length} presi`}</small></h2>
@@ -1041,12 +1044,42 @@
      <button type="button" class="link tap" id="prPiu">+ Un'altra idea</button>
      <button class="btn tap">Proponi a tutti</button></form>`);
   }
+  /* LEGO (Sasha, 31/10/2026, per la collezione della sorella): i set si cercano nel catalogo di "I miei LEGO",
+     l'app della collezione, che è pubblico. Si scarica solo la prima volta che serve (circa 2 MB). */
+  const LEGO_URL = 'https://higghy01.github.io/app-lego/';
+  let legoCat = null;
+  async function catalogoLego() {
+    if (legoCat) return legoCat;
+    const r = await fetch(LEGO_URL + 'data/catalog.json'); if (!r.ok) throw new Error('catalogo');
+    const d = await r.json(), base = d.imgBase || '';
+    legoCat = (d.sets || []).map(x => ({ num: String(x[0]), nome: String(x[1] || ''), anno: x[2] || 0, pezzi: x[4] || 0, img: x[5] ? (/^https:/.test(x[5]) ? x[5] : base + x[5]) : '' }));
+    legoCat.forEach(x => { x.k = (x.num + ' ' + x.nome).toLowerCase(); });
+    return legoCat;
+  }
+  function cercaLego(q) {
+    q = q.toLowerCase().trim(); if (!legoCat || q.length < 2) return [];
+    const parole = q.split(/\s+/), esatto = (x) => x.num === q || x.num === q + '-1';
+    return legoCat.filter(x => parole.every(w => x.k.includes(w)))
+      .sort((a, b) => esatto(b) - esatto(a) || (b.anno || 0) - (a.anno || 0)).slice(0, 12);
+  }
+  const numLego = (n) => String(n || '').replace(/-1$/, '');
+  const legoInfo = (l) => `🧱 ${esc(numLego(l.num))}${l.pezzi ? ` · ${l.pezzi} pezzi` : ''}${l.anno ? ` · ${l.anno}` : ''}`;
+  function risLego() {
+    const box = $('#legoRis'); if (!box) return;
+    const q = $('#legoQ').value, ris = cercaLego(q);
+    box.innerHTML = !legoCat ? '<div class="empty">Carico il catalogo LEGO…</div>' : q.trim().length < 2 ? '<div class="empty">Scrivi almeno due lettere o il numero sulla scatola.</div>'
+      : ris.length ? ris.map(x => `<button type="button" class="lr tap" data-legoset="${esc(x.num)}">${x.img ? `<img src="${esc(x.img)}" alt="" loading="lazy">` : '<span class="lgph">🧱</span>'}<span><b>${esc(x.nome)}</b><small>${legoInfo(x)}</small></span></button>`).join('')
+      : '<div class="empty">Nessun set trovato. Prova con un\'altra parola o il numero.</div>';
+  }
   function sheetRegalo(per) {
     const mio = per === S.me;
     openSheet(`<h3>${mio ? 'Un desiderio per la mia lista' : 'Idea segreta per ' + esc(P(per).nome)}</h3><form class="stack" id="fRe" data-per="${per}">
      ${mio ? '' : `<div class="hint">🤫 ${esc(P(per).nome)} non la vede: la vedete solo voi altri.</div>`}
      <label>${mio ? 'Cosa ti piacerebbe ricevere' : 'Cosa potremmo regalare'}<input id="reX" required maxlength="80" placeholder="Es. un libro, una felpa, un concerto"></label>
      <label>Dettagli o link (facoltativo)<input id="reN" maxlength="300" placeholder="Taglia, colore, negozio o indirizzo web"></label>
+     <div id="legoSel"></div>
+     <button type="button" class="btn ghost tap" id="legoOn">🧱 Cerca un set LEGO</button>
+     <div id="legoBox" class="legobox" hidden><input id="legoQ" type="search" maxlength="60" autocomplete="off" placeholder="Nome o numero, es. Hogwarts o 76419"><div id="legoRis" class="legoris"></div></div>
      <button class="btn tap">${mio ? 'Aggiungi alla mia lista' : 'Salva l\'idea'}</button></form>`, () => setTimeout(() => $('#reX').focus(), 380));
   }
 
@@ -1302,10 +1335,28 @@
   }
 
   /* ---------- Tocchi ---------- */
+  // Ricerca dei set LEGO mentre si scrive (Invio non manda il modulo).
+  let legoT = 0;
+  document.addEventListener('input', (ev) => { if (ev.target.id === 'legoQ') { clearTimeout(legoT); legoT = setTimeout(risLego, 150); } });
+  document.addEventListener('keydown', (ev) => { if (ev.target.id === 'legoQ' && ev.key === 'Enter') { ev.preventDefault(); ev.target.blur(); } });
   document.addEventListener('click', async (ev) => {
     const t = ev.target.closest('button'); if (!t) return;
     const d = t.dataset;
     if (t.classList.contains('tab')) return go(d.p);
+    if (t.id === 'legoOn') {
+      t.hidden = true; $('#legoBox').hidden = false; $('#legoQ').focus(); risLego();
+      try { await catalogoLego(); risLego(); } catch (er) { $('#legoRis').innerHTML = '<div class="empty">Il catalogo LEGO non si apre: serve internet. Riprova tra poco.</div>'; }
+      return;
+    }
+    if (d.legoset) {
+      const x = legoCat && legoCat.find(y => y.num === d.legoset), f = $('#fRe'); if (!x || !f) return;
+      f.dataset.lego = JSON.stringify({ num: x.num, nome: x.nome.slice(0, 80), img: x.img, pezzi: x.pezzi, anno: x.anno });
+      $('#reX').value = ('LEGO ' + x.nome).slice(0, 80);
+      $('#legoSel').innerHTML = `<div class="lr scelto">${x.img ? `<img src="${esc(x.img)}" alt="">` : '<span class="lgph">🧱</span>'}<span><b>${esc(x.nome)}</b><small>${legoInfo(x)}</small></span><button type="button" class="gx tap" id="legoVia" aria-label="Togli il set">✕</button></div>`;
+      $('#legoBox').hidden = true; $('#legoOn').hidden = false; $('#legoOn').textContent = '🧱 Scegli un altro set';
+      return;
+    }
+    if (t.id === 'legoVia') { const f = $('#fRe'); delete f.dataset.lego; $('#legoSel').innerHTML = ''; $('#legoOn').textContent = '🧱 Cerca un set LEGO'; return; }
     if (d.go) return go(d.go);
     if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : sheetProposta('cena')) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
     if (d.filtror) { filtroR = d.filtror; return rViaggi(); }
@@ -1619,10 +1670,12 @@
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'fRe') {
       const per = f.dataset.per, x = $('#reX').value.trim().slice(0, 80), n = $('#reN').value.trim().slice(0, 300); if (!x) return;
+      let lego = null; try { lego = f.dataset.lego ? JSON.parse(f.dataset.lego) : null; } catch (er) {}
+      const extra = lego ? { lego } : {};
       closeSheet();
       try {
-        if (per === S.me) fresh = await DATI.aggiungi('regali', { per, x, n, creato: Date.now() });
-        else { fresh = rid(); await DATI.imposta('sorprese', per, { idee: { [fresh]: { x, n, by: S.me, creato: Date.now() } } }); }
+        if (per === S.me) fresh = await DATI.aggiungi('regali', Object.assign({ per, x, n, creato: Date.now() }, extra));
+        else { fresh = rid(); await DATI.imposta('sorprese', per, { idee: { [fresh]: Object.assign({ x, n, by: S.me, creato: Date.now() }, extra) } }); }
         render(); toast(per === S.me ? 'Aggiunto alla tua lista 🎁' : 'Idea salvata: resta un segreto 🤫');
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'addItem') {

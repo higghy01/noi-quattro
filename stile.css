@@ -255,6 +255,18 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .gi .t{font-weight:600;overflow-wrap:anywhere;transition:opacity .24s}
 .gi .n{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .gi .ga{display:flex;align-items:center;gap:4px;flex:none}
+/* LEGO: miniatura del set nella lista regali e ricerca nel catalogo di "I miei LEGO" */
+.gi .lgimg{flex:none;width:52px;height:52px;border-radius:10px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px var(--line)}
+.gi .lgph,.lr .lgph{display:grid;place-items:center;font-size:24px;background:var(--panel2,var(--line))}
+.legobox{display:grid;gap:8px;min-width:0}
+.legoris{display:grid;gap:6px;max-height:46vh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;scrollbar-width:none}
+.legoris::-webkit-scrollbar{display:none}
+.lr{display:flex;align-items:center;gap:10px;width:100%;min-width:0;padding:6px;border-radius:12px;background:var(--panel);box-shadow:0 0 0 1px var(--line);text-align:left;color:var(--fg)}
+.lr img,.lr .lgph{flex:none;width:56px;height:56px;border-radius:9px;object-fit:contain;background:#fff}
+.lr>span{display:grid;min-width:0;flex:1}
+.lr b{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lr small{color:var(--muted);font-size:12.5px}
+.lr.scelto{box-shadow:0 0 0 2px var(--acc)}
 .gi.taken .t{opacity:.6}
 .glink{color:var(--acc);font-size:13px;font-weight:600;text-decoration:none;display:inline-block;padding:4px 0}
 .prendo{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid color-mix(in srgb,var(--pc) 45%,var(--line));font-size:13px;font-weight:600;color:var(--fg);transition:background .24s,color .24s,border-color .24s,transform .3s var(--pop)}
