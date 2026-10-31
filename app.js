@@ -132,7 +132,7 @@
     const r = rientro(id);
     if (ades && r && ades.id === r.turno.id) return { t: `Al lavoro fino alle ${ades.fine}, a casa verso le ${r.ora}`, c: `Lavoro, 🏠 ${r.ora}`, k: 'occ' };
     if (ades) return { t: `Ora: ${ades.t}, fino alle ${ades.fine}`, c: `Ora · ${ades.t}`, k: 'occ' };
-    if (r && r.turno.fine <= ora && hm(r.m) > ora && r.m < 24 * 60) return { t: `Sta tornando dal lavoro, a casa verso le ${r.ora}`, c: `In arrivo · ${r.ora}`, k: 'dopo' };
+    if (r && r.turno.fine <= ora && hm(r.m) > ora && r.m < 24 * 60) return { t: `Sta tornando dal lavoro, a casa verso le ${r.ora}`, c: `🏠 ${r.ora}`, k: 'dopo' };
     const pros = oggi.find(e => e.h && e.h > ora);
     if (pros && r && pros.id === r.turno.id) return { t: `Alle ${pros.h} al lavoro, a casa verso le ${r.ora}`, c: `${pros.h} · lavoro`, k: 'dopo' };
     if (pros) return { t: `Alle ${pros.h}: ${pros.t}`, c: `${pros.h} · ${pros.t}`, k: 'dopo' };
@@ -1009,8 +1009,8 @@
     const ing = ingredienti(r), ho = ricHo[id] || {};
     const inLista = new Set(S.spesa.filter(x => !x.done).map(x => chiave(x.x)));
     const scelti = ing.filter((x, i) => !ho[i] && !inLista.has(chiave(x))).length;
-    const html = `<div data-ricv="${id}">${r.foto ? `<img class="rfoto" src="${esc(r.foto)}" alt="">` : ''}<h3>${ricEmoji(r.t || '')} ${esc(r.t)}</h3>
-      ${r.porz ? `<div class="empty">Per ${esc(r.porz)}</div>` : ''}
+    const html = `<div data-ricv="${id}">${r.foto ? `<img class="rfoto" src="${esc(r.foto)}" alt="">` : ''}<div class="rtesta"><h3>${ricEmoji(r.t || '')} ${esc(r.t)}</h3>
+      ${r.porz ? `<div class="empty">Per ${esc(r.porz)}</div>` : ''}</div>
       <div class="sec">Ingredienti</div>
       <div class="hint">Togli quelli che avete già in casa: gli altri vanno nella spesa.</div>
       <div class="ingr">${ing.map((x, i) => { const gia = inLista.has(chiave(x)); return `<button type="button" class="ig tap${ho[i] || gia ? '' : ' on'}${gia ? ' gia' : ''}" data-ing="${i}" data-ric-id="${id}"${gia ? ' disabled' : ''}><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>${esc(x)}${gia ? ' <small>già in lista</small>' : ''}</span></button>`; }).join('') || '<div class="empty">Nessun ingrediente scritto.</div>'}</div>
@@ -1182,6 +1182,7 @@
     const r = await fetch(LEGO_URL + 'data/catalog.json'); if (!r.ok) throw new Error('catalogo');
     const d = await r.json(), base = d.imgBase || '';
     legoCat = (d.sets || []).map(x => ({ num: String(x[0]), nome: String(x[1] || ''), anno: x[2] || 0, pezzi: x[4] || 0, img: x[5] ? (/^https:/.test(x[5]) ? x[5] : base + x[5]) : '' }));
+    legoCat = legoCat.filter(x => !/^\d{9,}(-\d+)?$/.test(x.num)); // via i libri (codice ISBN al posto del numero del set)
     legoCat.forEach(x => { x.k = (x.num + ' ' + x.nome).toLowerCase(); });
     return legoCat;
   }
