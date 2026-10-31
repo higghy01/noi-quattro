@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Noi quattro</title>
+<meta name="theme-color" content="#5B4BD6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Noi quattro">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icona-180.png">
+<link rel="icon" href="icona-512.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650&display=swap">
+<link rel="stylesheet" href="stile.css">
+</head>
+<body>
+<!-- Accesso -->
+<section id="login" class="login" hidden>
+  <div class="login-in">
+    <div class="logo" aria-hidden="true"><i style="--pc:var(--p-blu)"></i><i style="--pc:var(--p-rosa)"></i><i style="--pc:var(--p-ambra)"></i><i style="--pc:var(--p-verde)"></i></div>
+    <h1 class="hello">Noi quattro</h1>
+    <p class="muted">Gli impegni, le note e la spesa di casa, sempre aggiornati per tutti.</p>
+    <form id="fLogin" class="stack">
+      <label>Email<input id="lgEmail" type="email" autocomplete="username" required></label>
+      <label>Password<input id="lgPass" type="password" autocomplete="current-password" required></label>
+      <button class="btn tap">Entra</button>
+      <button type="button" class="link tap" id="lgReset">Prima volta o password dimenticata? Ricevi un'email per sceglierla</button>
+      <div class="err" id="lgErr" role="alert"></div>
+    </form>
+  </div>
+</section>
+
+<!-- App -->
+<div id="app" hidden>
+  <div class="wrap">
+    <header class="head">
+      <div>
+        <h1 class="hello" id="hello">Ciao</h1>
+        <div class="date" id="today"></div>
+      </div>
+      <button class="me tap" id="meBtn" aria-label="Il mio profilo">·</button>
+    </header>
+    <div class="banner" id="banner" hidden></div>
+    <section class="page on" id="p-oggi"></section>
+    <section class="page" id="p-cal"></section>
+    <section class="page" id="p-note"></section>
+    <section class="page" id="p-spesa"></section>
+  </div>
+
+  <button class="fab tap" id="fab" aria-label="Aggiungi">+</button>
+
+  <nav class="tabs" aria-label="Sezioni">
+    <div class="in">
+      <div class="tpill" id="tpill"></div>
+      <button class="tab on tap" data-p="oggi"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Oggi</button>
+      <button class="tab tap" data-p="cal"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Impegni</button>
+      <button class="tab tap" data-p="note"><svg viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg>Bacheca</button>
+      <button class="tab tap" data-p="spesa"><svg viewBox="0 0 24 24"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 8H6"/><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/></svg>Spesa</button>
+    </div>
+  </nav>
+</div>
+
+<div class="veil" id="veil"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="in" id="sheetIn"></div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<!-- Firebase (gratuito). Se config.js non è compilato l'app parte in modalità prova, con dati di esempio sul telefono. -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js" defer></script>
+<script src="config.js"></script>
+<script src="dati.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
