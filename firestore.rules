@@ -67,6 +67,22 @@ service cloud.firestore {
       allow read, write: if membro() && io() != persona;
     }
 
+    // Viaggi: tutti li vedono e li completano; li cancella solo chi li ha creati.
+    match /viaggi/{id} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.creatoDa == io();
+      allow update: if membro() && request.resource.data.creatoDa == resource.data.creatoDa;
+      allow delete: if membro() && resource.data.creatoDa == io();
+    }
+
+    // Foto dei viaggi: ognuno carica e toglie solo le sue; i cuori li mettono tutti.
+    match /foto/{id} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.by == io();
+      allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cuori']);
+      allow delete: if membro() && resource.data.by == io();
+    }
+
     // Telefoni iscritti alle notifiche: ognuno iscrive solo sé stesso.
     match /token/{t} {
       allow create, update: if membro() && request.resource.data.persona == io();

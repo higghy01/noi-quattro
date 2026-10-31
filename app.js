@@ -11,8 +11,8 @@
   const NOTIF = [['promemoria', 'Promemoria un\'ora prima dei miei impegni'], ['nuovi', 'Quando qualcuno mi aggiunge a un impegno'],
     ['riepilogo', 'La sera: gli impegni di domani', 'oraRiepilogo', [19, 20, 21, 22], 21],
     ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['note', 'Note messe in evidenza']];
-  const SCHEDE = ['oggi', 'cal', 'note', 'spesa'];
-  const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', spesa: 'Spesa' };
+  const SCHEDE = ['oggi', 'cal', 'note', 'viaggi', 'spesa'];
+  const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', viaggi: 'Viaggi', spesa: 'Spesa' };
   const NOMI_COLORI = { blu: 'blu', rosa: 'rosa', ambra: 'ambra', verde: 'verde', viola: 'viola', corallo: 'corallo', rosso: 'rosso', grigio: 'grigio' };
   // Preferenze di questo telefono (aspetto, scheda di apertura): restano solo qui.
   const LS = {
@@ -24,7 +24,7 @@
 
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
-  const S = { me: null, persone: {}, impegni: [], note: [], spesa: [], cena: {}, regali: [], sorprese: {} };
+  const S = { me: null, persone: {}, impegni: [], note: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [] };
   let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = LS.get('noi4-bacheca', 'note');
   const seen = new Set(); let fresh = null; let avviato = false;
 
@@ -73,6 +73,7 @@
        <div class="empty">Tocca il tuo cerchio: sì, no, non so.</div></div>
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.')}</div>
      <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.')}</div>
+     ${ricordo(ri(3))}
      ${pinned.length ? `<div class="card${ri(3)}"><h2><span class="ttl"><i class="ic">📌</i>In evidenza</span></h2>${pinned.map(n => `<div style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><p style="margin:6px 0 0;white-space:pre-wrap">${esc(n.x)}</p></div>`).join('')}</div>` : ''}
      <button class="card tap${ri(4)}" data-go="spesa"><h2><span class="ttl"><i class="ic">🛒</i>Lista della spesa</span> <small>${left ? `${left} da prendere ›` : 'tutto preso ›'}</small></h2></button>
     </div>`;
@@ -141,6 +142,210 @@
     return `<div class="stack">${[S.me, ...IDS().filter(i => i !== S.me)].map(card).join('')}</div>`;
   }
 
+  /* ---------- Viaggi e foto ---------- */
+  const fotoDi = (v) => S.foto.filter(f => f.v === v).sort((a, b) => (a.quando || 0) - (b.quando || 0));
+  const cuoriN = (f) => Object.values(f.cuori || {}).filter(Boolean).length;
+  function periodo(v) {
+    const o = { day: 'numeric', month: 'long', year: 'numeric' };
+    if (!v.a || v.a === v.da) return fmt(v.da, o);
+    if (v.da.slice(0, 7) === v.a.slice(0, 7)) return `${+v.da.slice(8)}–${fmt(v.a, o)}`;
+    return `${fmt(v.da, { day: 'numeric', month: 'short' })} – ${fmt(v.a, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  }
+  const copertina = (v) => S.foto.find(f => f.id === v.cop && f.v === v.id) || fotoDi(v.id)[0];
+  const avs = (who) => `<span class="avs">${(who || []).filter(p => S.persone[p]).map(p => `<i style="--pc:${col(p)}">${ini(p)}</i>`).join('')}</span>`;
+  function rViaggi() {
+    const list = [...S.viaggi].sort((a, b) => (b.da || '').localeCompare(a.da || ''));
+    let anno = null, html = '';
+    list.forEach((v, i) => {
+      const y = (v.da || '').slice(0, 4);
+      if (y !== anno) { anno = y; html += `<div class="anno${ri(i + 1)}">${esc(y)}</div>`; }
+      const cop = copertina(v), n = fotoDi(v.id).length;
+      html += `<button class="trip tap${v.id === fresh ? ' pop' : ri(i + 1)}" data-viaggio="${v.id}">
+        <span class="cov">${cop ? `<img src="${esc(cop.prev || cop.url)}" alt="" loading="lazy" decoding="async">` : '<span class="noimg">🧳</span>'}<span class="nf">${n} foto</span></span>
+        <span class="tinfo"><b>${esc(v.t)}</b><span class="muted">${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</span></button>`;
+    });
+    $('#p-viaggi').innerHTML = `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">🧳</i>I nostri viaggi</span> <small>${list.length}</small></h2>
+      ${html || '<div class="empty big"><b>🧳</b><span>Ancora nessun viaggio. Tocca + per aggiungere una vacanza, poi caricate le foto tutti insieme.</span></div>'}</div>`;
+  }
+  // "Un anno fa…": una foto di un viaggio passato nello stesso periodo, altrimenti una a caso (la stessa per tutto il giorno).
+  function ricordo(cls) {
+    if (!S.foto.length) return '';
+    const oggi = new Date(), md = (d) => (d.getMonth() * 31) + d.getDate();
+    const vicini = S.foto.filter(f => { const d = new Date(f.quando || 0); return d.getFullYear() < oggi.getFullYear() && Math.abs(md(d) - md(oggi)) <= 3; });
+    const pool = vicini.length ? vicini : S.foto;
+    const seme = [...T].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+    const f = [...pool].sort((a, b) => (a.id < b.id ? -1 : 1))[seme % pool.length];
+    const v = S.viaggi.find(x => x.id === f.v); if (!v) return '';
+    const anni = oggi.getFullYear() - new Date(f.quando || 0).getFullYear();
+    const titolo = vicini.length ? (anni === 1 ? 'Un anno fa' : `${anni} anni fa`) : 'Un ricordo';
+    return `<button class="card memo tap${cls}" data-viaggio="${v.id}" data-apri-foto="${f.id}"><img src="${esc(f.prev || f.url)}" alt="" loading="lazy" decoding="async"><span class="mtx"><small>${titolo}</small><b>${esc(v.t)}</b></span></button>`;
+  }
+
+  /* Schermata di un viaggio (entra da destra come le Impostazioni) */
+  let tripId = null, carico = null, tripHtml = '';
+  const tripAperto = () => $('#trip').classList.contains('on');
+  function openTrip(id) {
+    tripId = id; tripHtml = '';
+    if (!tripAperto()) history.pushState({ schermo: 'viaggio' }, '');
+    rTrip(); $('#trip').scrollTop = 0; $('#trip').classList.add('on'); $('#fab').classList.add('via');
+  }
+  function closeTrip(daIndietro) {
+    if (!tripAperto()) return;
+    $('#trip').classList.remove('on'); if (!impAperto()) $('#fab').classList.remove('via');
+    if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
+  }
+  function rTrip() {
+    const v = S.viaggi.find(x => x.id === tripId);
+    if (!v) { if (tripAperto()) closeTrip(); return; }
+    const fs = fotoDi(v.id), cop = copertina(v);
+    const html = `
+     <div class="imp-top"><button class="back tap" id="tripBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Viaggi</button><button class="link tap" data-modviaggio="${v.id}">Modifica</button></div>
+     <div class="hero">${cop ? `<img src="${esc(cop.url)}" alt="">` : '<span class="noimg">🧳</span>'}<div class="hinfo"><h1>${esc(v.t)}</h1><span>${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</div></div>
+     ${carico ? `<div class="prog" style="--p:${carico.fatte / carico.tot}"><span>Carico le foto… ${carico.fatte} di ${carico.tot}</span><i></i></div>`
+       : `<label class="btn tap filebtn add-foto">📷 Aggiungi foto<input type="file" id="fotoIn" accept="image/*" multiple hidden></label>`}
+     ${fs.length ? `<div class="sec">${fs.length} foto</div><div class="grid">${fs.map(f => { const n = cuoriN(f); return `<button class="ph tap${f.id === fresh ? ' pop' : ''}" data-foto="${f.id}" style="--pc:${col(f.by)}"><img src="${esc(f.prev || f.url)}" alt="" loading="lazy" decoding="async"><i></i>${n ? `<b>❤️ ${n}</b>` : ''}</button>`; }).join('')}</div>`
+       : '<div class="empty big"><b>📷</b><span>Ancora nessuna foto. Tocca "Aggiungi foto" e scegline quante vuoi dalla galleria: si caricano tutte insieme.</span></div>'}`;
+    if (html !== tripHtml) { tripHtml = html; $('#tripIn').innerHTML = html; }
+  }
+  function sheetViaggio(v) {
+    v = v || { t: '', dove: '', da: T, a: '', who: IDS() };
+    const fs = v.id ? fotoDi(v.id) : [], altrui = fs.some(f => f.by !== S.me);
+    openSheet(`<h3>${v.id ? 'Modifica il viaggio' : 'Nuovo viaggio'}</h3><form class="stack" id="fVi" data-id="${v.id || ''}">
+     <label>Nome<input id="viT" required maxlength="60" value="${esc(v.t)}" placeholder="Es. Mare in Puglia"></label>
+     <label>Dove<input id="viD" maxlength="60" value="${esc(v.dove)}" placeholder="Città o posto"></label>
+     <div class="row2"><label>Dal<input id="viDa" type="date" required value="${esc(v.da)}"></label><label>Al (facoltativo)<input id="viA" type="date" value="${esc(v.a || '')}"></label></div>
+     <label>Chi c'era</label>${pickHtml(v.who || [])}
+     <button class="btn tap">${v.id ? 'Salva' : 'Crea il viaggio'}</button>
+     ${v.id && v.creatoDa === S.me ? (altrui ? '<div class="empty">Si può eliminare solo quando dentro ci sono soltanto le tue foto.</div>' : `<button type="button" class="btn bad tap" data-delviaggio="${v.id}">Elimina il viaggio${fs.length ? ` e le ${fs.length} foto` : ''}</button>`) : ''}
+    </form>`, () => { if (!v.id) setTimeout(() => $('#viT').focus(), 380); });
+  }
+
+  /* Caricare foto: rimpicciolite sul telefono, con la data di scatto */
+  function apriImmagine(file) {
+    return new Promise((ok, ko) => { const u = URL.createObjectURL(file), im = new Image(); im.onload = () => ok({ im, u }); im.onerror = () => { URL.revokeObjectURL(u); ko(new Error('immagine')); }; im.src = u; });
+  }
+  async function rimpicciolisci(im, max, q) {
+    const k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+    const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(im, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+    return { blob, w: c.width, h: c.height };
+  }
+  async function dataScatto(file) {
+    try {
+      const t = new TextDecoder('latin1').decode(await file.slice(0, 131072).arrayBuffer());
+      const m = t.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+      if (m) { const d = new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(); if (m[1] > 1990 && d < Date.now() + 864e5) return d; }
+    } catch (e) {}
+    return file.lastModified || Date.now();
+  }
+  async function caricaFoto(files) {
+    if (!DATI.fotoPronte()) return toast('Lo spazio delle foto non è ancora attivo: ci pensa Sasha.');
+    const v = tripId, list = [...files].slice(0, 60); let ok = 0;
+    if (files.length > 60) toast('Ne carico 60 alla volta: poi aggiungi le altre');
+    carico = { fatte: 0, tot: list.length }; rTrip();
+    for (const file of list) {
+      try {
+        const quando = await dataScatto(file), { im, u } = await apriImmagine(file);
+        const piccola = await rimpicciolisci(im, 520, 0.78);
+        const grande = DATI.modo === 'prova' ? piccola : await rimpicciolisci(im, 2048, 0.85);
+        URL.revokeObjectURL(u);
+        const id = rid() + rid();
+        const b = await DATI.carica(`foto/${v}/${id}_p.jpg`, piccola.blob, S.me);
+        const a = DATI.modo === 'prova' ? b : await DATI.carica(`foto/${v}/${id}.jpg`, grande.blob, S.me);
+        fresh = await DATI.aggiungi('foto', { v, by: S.me, url: a.url, prev: b.url, path: a.path, pathP: b.path, w: grande.w, h: grande.h, quando, creato: Date.now(), cuori: {} });
+        ok++;
+      } catch (e) {
+        console.error(e);
+        // Spazio foto non ancora attivo o senza permesso: inutile provare con le altre.
+        if (!ok && e && /^storage\//.test(e.code || '')) { carico = null; rTrip(); return toast('Lo spazio delle foto non è ancora pronto. Riprova più tardi.'); }
+      }
+      carico.fatte++; rTrip();
+    }
+    carico = null; rTrip();
+    if (ok) { toast(ok === 1 ? 'Foto aggiunta 📷' : `${ok} foto aggiunte 📷`); festa($('#tripIn .hero')); }
+    if (ok < list.length) setTimeout(() => toast(`${list.length - ok} foto non sono entrate. Riprova.`), 2300);
+  }
+
+  /* Visore: foto a tutto schermo, si scorre di lato, doppio tocco per ingrandire, giù per chiudere */
+  let vis = null; // { lista: [id], i }
+  const visAperto = () => $('#viewer').classList.contains('on');
+  function openViewer(id) {
+    const f = S.foto.find(x => x.id === id); if (!f) return;
+    const lista = fotoDi(f.v).map(x => x.id);
+    vis = { lista, i: Math.max(0, lista.indexOf(id)) };
+    history.pushState({ schermo: 'foto' }, '');
+    rViewer(); $('#viewer').classList.add('on');
+  }
+  function closeViewer(daIndietro) {
+    if (!visAperto()) return;
+    $('#viewer').classList.remove('on'); vis = null;
+    if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
+  }
+  function rViewer() {
+    if (!vis) return;
+    vis.lista = vis.lista.filter(id => S.foto.some(f => f.id === id));
+    if (!vis.lista.length) return closeViewer();
+    vis.i = Math.min(vis.i, vis.lista.length - 1);
+    const slide = (k, pos) => { const f = S.foto.find(x => x.id === vis.lista[k]); return f ? `<div class="vs" style="transform:translateX(${pos * 100}%)"><img class="vp" src="${esc(f.prev || f.url)}" alt=""><img class="vb" src="${esc(f.url)}" alt=""></div>` : ''; };
+    $('#vtrack').style.transition = 'none'; $('#vtrack').style.transform = '';
+    $('#vtrack').innerHTML = slide(vis.i - 1, -1) + slide(vis.i, 0) + slide(vis.i + 1, 1);
+    const f = S.foto.find(x => x.id === vis.lista[vis.i]), mio = f.by === S.me, cuore = (f.cuori || {})[S.me], v = S.viaggi.find(x => x.id === f.v) || {};
+    $('#vcount').textContent = `${vis.i + 1} di ${vis.lista.length}`;
+    $('#vbar').innerHTML = `<div class="vwho"><span class="chip" style="--pc:${col(f.by)}"><i></i>${esc(P(f.by).nome)}</span><small>${new Date(f.quando || f.creato).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</small></div>
+      <div class="vacts"><button class="vb-btn tap${cuore ? ' on' : ''}" data-cuore="${f.id}" aria-label="Mi piace">${cuore ? '❤️' : '🤍'}<span>${cuoriN(f) || ''}</span></button>
+      <button class="vb-btn tap" data-salva="${f.id}" aria-label="Salva sul telefono">⬇️</button>
+      ${v.cop !== f.id ? `<button class="vb-btn tap" data-cop="${f.id}" aria-label="Usa come copertina">🖼️</button>` : ''}
+      ${mio ? `<button class="vb-btn tap" data-delfoto="${f.id}" aria-label="Togli la foto">🗑️</button>` : ''}</div>`;
+  }
+  (() => {
+    const vw = $('#viewer'), tr = $('#vtrack'); let x0 = null, y0 = 0, dx = 0, dy = 0, asse = null, t0 = 0, ultimoTap = 0;
+    vw.addEventListener('touchstart', e => {
+      if (e.touches.length > 1 || e.target.closest('.vbar,.vtop')) { x0 = null; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = dy = 0; asse = null; t0 = Date.now();
+    }, { passive: true });
+    vw.addEventListener('touchmove', e => {
+      if (x0 == null) return;
+      dx = e.touches[0].clientX - x0; dy = e.touches[0].clientY - y0;
+      if (!asse && Math.hypot(dx, dy) > 8) asse = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      if (!asse || vw.querySelector('.vs .vb.zoom')) return;
+      e.preventDefault(); tr.style.transition = 'none';
+      if (asse === 'x') { const bordo = (dx > 0 && vis.i === 0) || (dx < 0 && vis.i === vis.lista.length - 1); tr.style.transform = `translateX(${bordo ? dx / 3 : dx}px)`; }
+      else if (dy > 0) { tr.style.transform = `translateY(${dy}px) scale(${1 - Math.min(dy, 300) / 1200})`; vw.style.setProperty('--bg-o', String(1 - Math.min(dy, 300) / 400)); }
+    }, { passive: false });
+    vw.addEventListener('touchend', e => {
+      if (x0 == null) return; x0 = null;
+      const dt = Date.now() - t0;
+      if (!asse && dt < 250) { // tocco: doppio tocco = ingrandisci
+        if (Date.now() - ultimoTap < 300) {
+          const im = vw.querySelector('.vs:nth-child(2) .vb') || vw.querySelector('.vs .vb');
+          const tt = e.changedTouches[0], r = im.getBoundingClientRect();
+          im.style.transformOrigin = `${tt.clientX - r.left}px ${tt.clientY - r.top}px`; im.classList.toggle('zoom'); ultimoTap = 0;
+        } else ultimoTap = Date.now();
+        return;
+      }
+      tr.style.transition = ''; vw.style.removeProperty('--bg-o');
+      if (asse === 'x') {
+        const dir = dx < 0 ? 1 : -1, veloce = Math.abs(dx) / Math.max(1, dt) > 0.4;
+        const k = vis.i + dir;
+        if ((Math.abs(dx) > 80 || (veloce && Math.abs(dx) > 30)) && k >= 0 && k < vis.lista.length) {
+          tr.style.transform = `translateX(${-dir * 100}%)`;
+          setTimeout(() => { vis.i = k; rViewer(); }, 260);
+        } else tr.style.transform = '';
+      } else if (asse === 'y') {
+        if (dy > 120) closeViewer(); else tr.style.transform = '';
+      }
+    });
+  })();
+  async function salvaFoto(f) {
+    try {
+      const blob = await (await fetch(f.url)).blob();
+      const file = new File([blob], 'noi-quattro.jpg', { type: blob.type || 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) return await navigator.share({ files: [file] });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'noi-quattro.jpg'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    } catch (e) { if (e && e.name === 'AbortError') return; window.open(f.url, '_blank'); }
+  }
+
   function rSpesa() {
     const ord = (a, b) => (b.creato || 0) - (a.creato || 0);
     const todo = S.spesa.filter(x => !x.done).sort(ord), done = S.spesa.filter(x => x.done).sort(ord);
@@ -154,7 +359,7 @@
     $('#itemTx').value = keep;
   }
 
-  const R = { oggi: rOggi, cal: rCal, note: rNote, spesa: rSpesa };
+  const R = { oggi: rOggi, cal: rCal, note: rNote, viaggi: rViaggi, spesa: rSpesa };
   const GEAR = '<span class="gear" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>';
   function render() {
     if (!S.me || !S.persone[S.me]) return;
@@ -166,11 +371,14 @@
     $('#today').textContent = TODAY.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
     banner();
     const a = document.activeElement && document.activeElement.id;
-    R[page](); seen.add(vista()); fresh = null;
+    R[page](); seen.add(vista());
     if (impAperto()) rImp();
+    if (tripAperto()) rTrip();
+    if (visAperto()) rViewer();
+    fresh = null;
     if (a === 'itemTx' && $('#itemTx')) $('#itemTx').focus();
     $('#fab').hidden = page === 'spesa';
-    $('#fab').setAttribute('aria-label', page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : 'Nuova nota') : 'Nuovo impegno');
+    $('#fab').setAttribute('aria-label', page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : 'Nuova nota') : page === 'viaggi' ? 'Nuovo viaggio' : 'Nuovo impegno');
   }
   function banner() {
     const b = $('#banner');
@@ -212,7 +420,7 @@
   $('#veil').onclick = () => closeSheet();
   // Il velo non fa scorrere la pagina sotto.
   $('#veil').addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-  addEventListener('popstate', () => { if (ignoraPop) { ignoraPop--; return; } if (aperto()) closeSheet(true); else if (impAperto()) closeImp(true); else if (page !== 'oggi') go('oggi', true); });
+  addEventListener('popstate', () => { if (ignoraPop) { ignoraPop--; return; } if (visAperto()) closeViewer(true); else if (aperto()) closeSheet(true); else if (tripAperto()) closeTrip(true); else if (impAperto()) closeImp(true); else if (page !== 'oggi') go('oggi', true); });
 
   // Foglio: si chiude trascinandolo verso il basso, come su iPhone e Android.
   (() => {
@@ -325,7 +533,7 @@
   }
   // Si chiude anche trascinando da sinistra verso destra, come su iPhone.
   (() => {
-    const sc = $('#imp'); let x0 = null, dx = 0, t0 = 0;
+    document.querySelectorAll('.screen').forEach(sc => { let x0 = null, dx = 0, t0 = 0;
     sc.addEventListener('touchstart', e => { const x = e.touches[0].clientX; x0 = x < 32 ? x : null; dx = 0; t0 = Date.now(); }, { passive: true });
     sc.addEventListener('touchmove', e => {
       if (x0 == null) return; dx = Math.max(0, e.touches[0].clientX - x0);
@@ -335,7 +543,8 @@
       if (x0 == null) return; x0 = null;
       const veloce = dx / Math.max(1, Date.now() - t0) > 0.5;
       sc.classList.remove('drag'); sc.style.transform = '';
-      if (dx > 110 || (veloce && dx > 40)) closeImp();
+      if (dx > 110 || (veloce && dx > 40)) (sc.id === 'trip' ? closeTrip : closeImp)();
+    });
     });
   })();
 
@@ -392,7 +601,31 @@
     const d = t.dataset;
     if (t.classList.contains('tab')) return go(d.p);
     if (d.go) return go(d.go);
-    if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : sheetNota()) : sheetEvento();
+    if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : sheetNota()) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
+    if (d.viaggio) { openTrip(d.viaggio); if (d.apriFoto) setTimeout(() => openViewer(d.apriFoto), 300); return; }
+    if (t.id === 'tripBack') return closeTrip();
+    if (d.modviaggio) return sheetViaggio(S.viaggi.find(x => x.id === d.modviaggio));
+    if (d.foto) return openViewer(d.foto);
+    if (d.vchiudi !== undefined) return closeViewer();
+    if (d.cuore) {
+      const f = S.foto.find(x => x.id === d.cuore); if (!f) return;
+      const on = !(f.cuori || {})[S.me];
+      if (on) { t.classList.add('on'); festa(t); }
+      return DATI.aggiorna('foto', f.id, { cuori: Object.assign({}, f.cuori, { [S.me]: on }) }).catch(sbaglio);
+    }
+    if (d.salva) { const f = S.foto.find(x => x.id === d.salva); return f && salvaFoto(f); }
+    if (d.cop) { const f = S.foto.find(x => x.id === d.cop); if (!f) return; await DATI.aggiorna('viaggi', f.v, { cop: f.id }).catch(sbaglio); return toast('Copertina cambiata 🖼️'); }
+    if (d.delfoto) {
+      if (!d.sicuro) { d.sicuro = '1'; t.classList.add('warn'); return toast('Tocca ancora 🗑️ per togliere la foto'); }
+      const f = S.foto.find(x => x.id === d.delfoto); if (!f) return;
+      await DATI.elimina('foto', f.id).catch(sbaglio); DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); return toast('Foto tolta');
+    }
+    if (d.delviaggio) {
+      if (!d.sicuro) { d.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare tutto'; return; }
+      const fs = fotoDi(d.delviaggio); closeSheet(); closeTrip();
+      for (const f of fs) { await DATI.elimina('foto', f.id).catch(() => {}); DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); }
+      await DATI.elimina('viaggi', d.delviaggio).catch(sbaglio); return toast('Viaggio eliminato');
+    }
     if (t.id === 'meBtn') return openImp();
     if (t.id === 'impBack') return closeImp();
     if (d.me) { DATI.cambiaPersona(d.me); return toast('Ora guardi l\'app come ' + P(d.me).nome); }
@@ -474,6 +707,7 @@
     if (t.dataset && t.dataset.pref) { const k = t.dataset.pref, v = t.checked; setTimeout(() => DATI.imposta('persone', S.me, { notifiche: Object.assign({}, P(S.me).notifiche, { [k]: v }) }).catch(sbaglio), 320); }
     if (t.id === 'privOcc') { const v = t.checked ? 'occupato' : 'tutto'; setTimeout(() => DATI.imposta('persone', S.me, { privacy: v }).catch(sbaglio), 320); toast(t.checked ? 'Gli altri vedranno solo "Occupato"' : 'Gli altri vedranno i tuoi impegni per intero'); }
     if (t.id === 'icsFile' && t.files[0]) importaIcs(t.files[0]);
+    if (t.id === 'fotoIn' && t.files.length) caricaFoto(t.files);
   });
   document.addEventListener('submit', async (ev) => {
     ev.preventDefault(); const f = ev.target;
@@ -494,6 +728,15 @@
     } else if (f.id === 'fNo') {
       const n = { by: S.me, x: $('#noX').value.trim(), pin: $('#noPin').checked, creato: Date.now() }; closeSheet();
       try { fresh = await DATI.aggiungi('note', n); render(); toast('Nota attaccata'); } catch (er) { sbaglio(er); }
+    } else if (f.id === 'fVi') {
+      const who = [...f.querySelectorAll('.pk.on')].map(b => b.dataset.pk);
+      const da = $('#viDa').value, a = $('#viA').value;
+      const v = { t: $('#viT').value.trim().slice(0, 60), dove: $('#viD').value.trim().slice(0, 60), da, a: a && a >= da ? a : '', who };
+      closeSheet();
+      try {
+        if (f.dataset.id) { await DATI.aggiorna('viaggi', f.dataset.id, v); toast('Viaggio aggiornato'); }
+        else { const id = await DATI.aggiungi('viaggi', Object.assign(v, { creatoDa: S.me, creato: Date.now() })); fresh = id; render(); setTimeout(() => openTrip(id), 250); toast('Viaggio creato: ora aggiungete le foto 📷'); }
+      } catch (er) { sbaglio(er); }
     } else if (f.id === 'fRe') {
       const per = f.dataset.per, x = $('#reX').value.trim().slice(0, 80), n = $('#reN').value.trim().slice(0, 300); if (!x) return;
       closeSheet();
@@ -542,6 +785,8 @@
       avviato = true;
       DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); render(); });
       DATI.ascolta('regali', l => { S.regali = l; render(); });
+      DATI.ascolta('viaggi', l => { S.viaggi = l; render(); });
+      DATI.ascolta('foto', l => { S.foto = l; render(); });
       DATI.ascolta('impegni', l => { S.impegni = l; render(); });
       DATI.ascolta('note', l => { S.note = l; render(); });
       DATI.ascolta('spesa', l => { S.spesa = l; render(); });

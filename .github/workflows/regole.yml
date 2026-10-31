@@ -3,7 +3,7 @@ name: Regole del database
 on:
   push:
     branches: [main]
-    paths: [firestore.rules]
+    paths: [firestore.rules, storage.rules]
   workflow_dispatch: {}
 concurrency: { group: regole, cancel-in-progress: false }
 jobs:
