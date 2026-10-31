@@ -20,6 +20,13 @@ service firebase.storage {
       allow create: if io() == persona && request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
       allow delete: if io() == persona;
     }
+    // Foto delle ricette: le vedono i 4, chi carica firma il file; la pagina è aperta, quindi tutti possono cambiarla.
+    match /ricette/{ricetta}/{nome} {
+      allow read: if io() != '';
+      allow create: if io() != '' && request.resource.metadata.by == io()
+        && request.resource.size < 8 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if io() != '';
+    }
     match /{tutto=**} { allow read, write: if false; }
   }
 }

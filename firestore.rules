@@ -76,6 +76,15 @@ service cloud.firestore {
       allow read, create, update, delete: if membro();
     }
 
+    // Ricette di famiglia: una pagina aperta, tutti scrivono e correggono; chi l'ha scritta resta segnato.
+    match /ricette/{id} {
+      function ok() { return request.resource.data.t is string && request.resource.data.t.size() <= 60
+        && (!('ingr' in request.resource.data) || (request.resource.data.ingr is list && request.resource.data.ingr.size() <= 60)); }
+      allow read, delete: if membro();
+      allow create: if membro() && request.resource.data.by == io() && ok();
+      allow update: if membro() && request.resource.data.by == resource.data.by && ok();
+    }
+
     // Una risposta per persona: ognuno scrive solo la sua.
     match /cena/{giorno} {
       allow read: if membro();
