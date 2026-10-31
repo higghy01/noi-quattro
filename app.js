@@ -61,10 +61,19 @@
   }
   // I miei impegni che arrivano da un calendario (collegato o importato da file): per questi decido cosa vedono gli altri.
   const mioCal = (e) => e.fonte === 'calendario:' + S.me || e.fonte === 'import:' + S.me;
+  // Compleanni (Sasha, 31/10/2026: "non fregano a nessuno"): dai calendari non entrano, anche scritti di fretta.
+  // Le stesse parole le usa il programma dei calendari (scripts/sincronizza_calendari.py): tenerle uguali.
+  const COMPL = /b[iy]r?t?h?d[ae]y|byrt|\bb-?day\b|compl?ean+o|cumplea|geburtstag|anniversaire|🎂/i;
+  const FESTA_C = /festa|party|cena|pranzo|aperitivo/i;
+  const RICORR = /festa|party|cena|pranzo|aperitivo|natale|vigilia|pasqua|capodanno|ferragosto|anniversario|onomastico|ferie|vacanza/i;
+  const compleanno = (t, annuale) => !FESTA_C.test(t) && (COMPL.test(t) || (!!annuale && !RICORR.test(t)));
+  const daCalendario = (e) => /^(calendario|import):/.test(e.fonte || '');
   // I miei impegni nascosti: io vedo il titolo vero (sta nella mia parte privata), gli altri "Occupato".
+  // I compleanni arrivati dai calendari prima della regola non si vedono più.
   function mappaImpegni() {
     const det = S.priv.dettagli || {};
-    S.impegni = (S.impRaw || []).map(e => e.nascosto && mioCal(e) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e);
+    S.impegni = (S.impRaw || []).map(e => e.nascosto && mioCal(e) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e)
+      .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')));
   }
   // Applica subito le regole ai miei impegni (senza aspettare il programma della mezz'ora).
   async function applicaRegole(rg) {
@@ -134,7 +143,6 @@
   }
   // Impegni importanti: con tutta la famiglia, segnati con la stella, o con parole da grande occasione.
   const PAROLE_IMP = ['matrimonio', 'laurea', 'battesimo', 'comunione', 'cresima', 'funerale', 'viaggio', 'partenza', 'volo', 'trasloco', 'esame', 'concerto', 'vacanza', 'ferie', 'natale', 'capodanno', 'pasqua'];
-  const COMPL = /birthday|compleanno|\bbday\b|cumpleaños/i;
   const importante = (e) => !e.nascosto && (e.imp || !COMPL.test(e.t)) && (e.imp || ((e.who || []).length >= IDS().length && IDS().length > 1) || PAROLE_IMP.some(w => reParola(w).test(chiave(e.t))));
   // Il prossimo giorno (entro 45) in cui cade ogni impegno importante, uno per impegno, in ordine di data.
   function prossimiImportanti(n) {
@@ -1084,7 +1092,7 @@
     const attive = 'Notification' in window && Notification.permission === 'granted';
     const tema = LS.get('noi4-tema', 'auto'), apri = LS.get('noi4-apertura', 'oggi');
     const collegato = S.impegni.some(e => e.fonte === 'calendario:' + S.me);
-    const importati = S.impegni.filter(e => e.fonte === 'import:' + S.me).length;
+    const importati = (S.impRaw || []).filter(e => e.fonte === 'import:' + S.me).length;
     $('#impIn').innerHTML = `
      <div class="imp-top"><button class="back tap" id="impBack" aria-label="Indietro"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Indietro</button></div>
      <h1 class="hello${sr(0)}">Impostazioni</h1>
@@ -1191,7 +1199,8 @@
         const s = start.toJSDate(), e = end ? end.toJSDate() : null;
         if ((e && e > s ? e <= da : s < da) || s > a || out.length >= 800) return; // entrano anche quelli iniziati prima e ancora in corso
         const all = start.isDate, titolo = (ev.summary || 'Impegno').slice(0, 80), luogo = (ev.location || '').slice(0, 200);
-        if (/birthday|compleanno|\bbday\b|cumpleaños/i.test(titolo) && !/festa|party|cena|pranzo|aperitivo/i.test(titolo)) return; // i compleanni non entrano
+        const rr = ev.component && ev.component.getFirstPropertyValue('rrule');
+        if (compleanno(titolo, all && rr && String(rr.freq).toUpperCase() === 'YEARLY')) return; // i compleanni non entrano
         const vis = regolaCal(titolo, rg).vis;
         out.push({ t: vis ? titolo : 'Occupato', d: iso(s), fino: ultimoGiorno(s, e, all), h: all ? '' : hhmm(s), fine: !all && e ? hhmm(e) : '',
           who: [S.me], n: vis ? luogo : '', ripeti: '', fonte: 'import:' + S.me, creatoDa: S.me, creato: Date.now(), nascosto: !vis });
@@ -1211,7 +1220,7 @@
           const o = ev.getOccurrenceDetails(next); push(o.item, o.startDate, o.endDate);
         }
       }
-      const vecchi = S.impegni.filter(e => e.fonte === 'import:' + S.me);
+      const vecchi = (S.impRaw || []).filter(e => e.fonte === 'import:' + S.me); // anche i compleanni nascosti, così spariscono davvero
       toast(`Importo ${out.length} impegni…`);
       await DATI.eliminaMolti('impegni', vecchi.map(e => e.id)); // tutti insieme, non uno alla volta
       const ids = await DATI.molti('impegni', out);
@@ -1378,7 +1387,7 @@
     if (d.ora) { t.parentElement.querySelectorAll('.ora').forEach(b => b.classList.toggle('on', b === t)); return DATI.imposta('persone', S.me, { notifiche: Object.assign({}, P(S.me).notifiche, { [d.ora]: +d.h }) }).catch(sbaglio); }
     if (t.id === 'togliImp') {
       if (!d.sicuro) { d.sicuro = '1'; t.textContent = 'Tocca ancora per toglierli'; t.style.color = 'var(--bad)'; return; }
-      const g = S.impegni.filter(e => e.fonte === 'import:' + S.me);
+      const g = (S.impRaw || []).filter(e => e.fonte === 'import:' + S.me);
       for (const e of g) await DATI.elimina('impegni', e.id).catch(sbaglio);
       if (g.some(e => (S.priv.dettagli || {})[e.id])) await DATI.aggiorna('privati', S.me, { dettagli: senzaDettagli(g) }).catch(sbaglio);
       return toast('Impegni importati tolti');

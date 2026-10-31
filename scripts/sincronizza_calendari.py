@@ -34,12 +34,29 @@ from comune import ROMA, adesso, database
 GIORNI = 60
 # Compleanni dai calendari (scelta del 31/10/2026): non entrano nell'app.
 # Una festa vera ("Festa di compleanno", "cena per il compleanno") resta.
-COMPLEANNO = re.compile(r"birthday|compleanno|\bbday\b|cumpleaños", re.I)
+# Anche scritti di fretta ("birtday", "compleano", "b-day") o con la torta 🎂.
+COMPLEANNO = re.compile(r"b[iy]r?t?h?d[ae]y|byrt|\bb-?day\b|compl?ean+o|cumplea|geburtstag|anniversaire|🎂", re.I)
 FESTA = re.compile(r"festa|party|cena|pranzo|aperitivo", re.I)
+# Un impegno di tutto il giorno che torna ogni anno (es. solo "Marco") è quasi sempre un compleanno:
+# esce anche lui, tranne le feste e le ricorrenze con un nome chiaro.
+RICORRENZA = re.compile(r"festa|party|cena|pranzo|aperitivo|natale|vigilia|pasqua|capodanno|ferragosto|anniversario|onomastico|ferie|vacanza", re.I)
 
 
-def compleanno(titolo):
-    return bool(COMPLEANNO.search(titolo)) and not FESTA.search(titolo)
+def compleanno(titolo, annuale=False):
+    if FESTA.search(titolo):
+        return False
+    return bool(COMPLEANNO.search(titolo)) or (annuale and not RICORRENZA.search(titolo))
+
+
+def annuali(cal):
+    """Gli UID degli impegni di tutto il giorno che si ripetono ogni anno."""
+    out = set()
+    for c in cal.walk("VEVENT"):
+        r = c.get("RRULE")
+        inizio = c.get("DTSTART")
+        if r and inizio is not None and not isinstance(inizio.dt, dt.datetime) and "YEARLY" in [str(x).upper() for x in r.get("FREQ", [])]:
+            out.add(str(c.get("UID")))
+    return out
 MASSIMO = 20 * 1024 * 1024  # un calendario più grande di 20 MB non è un calendario
 
 
@@ -106,8 +123,9 @@ def regola(priv, generale):
     return visibile
 
 
-def impegni(cal, persona, visibile):
+def impegni(cal, persona, visibile, saltati):
     oggi = adesso().date()
+    ogni_anno = annuali(cal)
     for ev in recurring_ical_events.of(cal).between(oggi, oggi + dt.timedelta(days=GIORNI)):
         inizio = ora(ev.get("DTSTART").dt)
         fine = ora(ev.get("DTEND").dt) if ev.get("DTEND") else None
@@ -125,7 +143,8 @@ def impegni(cal, persona, visibile):
             g1 = fine - dt.timedelta(days=1)
         uid = f"{persona}|{ev.get('UID')}|{inizio}"
         titolo = str(ev.get("SUMMARY", "Impegno"))[:80]
-        if compleanno(titolo):
+        if compleanno(titolo, tutto and str(ev.get("UID")) in ogni_anno):
+            saltati[0] += 1
             continue
         luogo = str(ev.get("LOCATION", ""))[:200]
         vis = visibile(titolo)
@@ -163,11 +182,11 @@ def main():
             if "calStato" in persone.get(persona, {}):
                 db.collection("persone").document(persona).update({"calStato": firestore.DELETE_FIELD})
             continue
-        nuovi, dettagli, letti = {}, {}, 0
+        nuovi, dettagli, letti, saltati = {}, {}, 0, [0]
         visibile = regola(privati.get(persona, {}), privacy.get(persona))
         for url in link:
             try:
-                for i, doc, det in impegni(leggi(url), persona, visibile):
+                for i, doc, det in impegni(leggi(url), persona, visibile, saltati):
                     nuovi[i] = doc
                     if det:
                         dettagli[i] = det
@@ -198,7 +217,7 @@ def main():
             stato = {"calStato": {"letti": letti, "tot": len(link), "n": len(nuovi), "quando": int(time.time() * 1000)}} if link \
                 else {"calStato": firestore.DELETE_FIELD}
             db.collection("persone").document(persona).update(stato)
-        print(f"{persona}: {letti}/{len(link)} calendari, {len(nuovi)} impegni ({len(dettagli)} nascosti come Occupato), {len(togli)} tolti")
+        print(f"{persona}: {letti}/{len(link)} calendari, {len(nuovi)} impegni ({len(dettagli)} nascosti come Occupato), {len(togli)} tolti, {saltati[0]} compleanni lasciati fuori")
     if errori and errori == sum(1 for v in calendari.values() if v):
         sys.exit(1)
 
