@@ -10,7 +10,7 @@
   // [chiave, testo, orario scelto (facoltativo), ore possibili, ora solita]
   const NOTIF = [['promemoria', 'Promemoria un\'ora prima dei miei impegni'], ['nuovi', 'Quando qualcuno mi aggiunge a un impegno'],
     ['riepilogo', 'La sera: gli impegni di domani', 'oraRiepilogo', [19, 20, 21, 22], 21],
-    ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['proposte', 'Nuove proposte, quando hanno votato tutti e cosa si è deciso']];
+    ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['proposte', 'Nuove proposte, quando hanno votato tutti e cosa si è deciso'], ['conflitti', 'Se ho due impegni alla stessa ora']];
   const SCHEDE = ['oggi', 'cal', 'note', 'viaggi', 'spesa'];
   const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', viaggi: 'Ricordi', spesa: 'Spesa' };
   const NOMI_COLORI = { blu: 'blu', rosa: 'rosa', ambra: 'ambra', verde: 'verde', viola: 'viola', corallo: 'corallo', rosso: 'rosso', grigio: 'grigio' };
@@ -117,17 +117,42 @@
   // "dal 3 al 7 nov" per gli impegni di più giorni.
   const durataGiorni = (e) => `dal ${fmt(e.d, { day: 'numeric', month: e.d.slice(0, 7) === e.fino.slice(0, 7) ? undefined : 'short' })} al ${fmt(e.fino, { day: 'numeric', month: 'short' })}`;
   const delGiorno = (d, f) => S.impegni.filter(e => capita(e, d) && (!f || f(e))).sort((a, b) => (a.h || '').localeCompare(b.h || ''));
+  // Due impegni della stessa persona che si accavallano nello stesso giorno (senza orario non contano).
+  // Un impegno senza fine dura un'ora; uno che finisce "prima" di iniziare (turno 22-6) arriva a mezzanotte.
+  const minuti = (h) => +h.slice(0, 2) * 60 + +h.slice(3, 5);
+  const intervallo = (e) => { const a = minuti(e.h), b = e.fine ? minuti(e.fine) : a + 60; return [a, b > a ? b : 24 * 60]; };
+  function accavallati(e, d, chi) {
+    if (!e.h) return [];
+    const [a1, b1] = intervallo(e);
+    return delGiorno(d, x => x.id !== e.id && x.h && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x); return a1 < b2 && a2 < b1; });
+  }
+  // Impegni importanti: con tutta la famiglia, segnati con la stella, o con parole da grande occasione.
+  const PAROLE_IMP = ['matrimonio', 'laurea', 'battesimo', 'comunione', 'cresima', 'funerale', 'viaggio', 'partenza', 'volo', 'trasloco', 'esame', 'concerto', 'vacanza', 'ferie', 'natale', 'capodanno', 'pasqua'];
+  const COMPL = /birthday|compleanno|\bbday\b|cumpleaños/i;
+  const importante = (e) => !e.nascosto && (e.imp || !COMPL.test(e.t)) && (e.imp || ((e.who || []).length >= IDS().length && IDS().length > 1) || PAROLE_IMP.some(w => reParola(w).test(chiave(e.t))));
+  // Il prossimo giorno (entro 45) in cui cade ogni impegno importante, uno per impegno, in ordine di data.
+  function prossimiImportanti(n) {
+    const out = [], visti = new Set();
+    for (let i = 0; i < 45 && out.length < n; i++) {
+      const d = iso(addDays(TODAY, i));
+      for (const e of delGiorno(d, importante)) {
+        if (visti.has(e.id) || (d === T && e.h && (e.fine || e.h) < oraAdesso())) continue;
+        visti.add(e.id); out.push([d, e]); if (out.length >= n) break;
+      }
+    }
+    return out;
+  }
 
   function chips(who) {
     const ids = IDS();
     if (who.length >= ids.length && ids.length > 1) return `<span class="chip" style="--pc:var(--acc)"><i></i>Tutti</span>`;
     return who.filter(w => S.persone[w]).map(w => `<span class="chip" style="--pc:${col(w)}"><i></i>${esc(P(w).nome)}</span>`).join('');
   }
-  function evList(list, vuoto) {
+  function evList(list, vuoto, giorno) {
     if (!list.length) return `<div class="empty">${vuoto || 'Nessun impegno. Tocca + per aggiungerne uno.'}</div>`;
     return list.map(e => `<button class="ev tap${e.id === fresh ? ' pop' : ''}" data-ev="${e.id}">
       <div class="h">${e.h ? esc(e.h) : '<small>tutto il giorno</small>'}${e.h && e.fine ? `<small>${esc(e.fine)}</small>` : ''}</div>
-      <div><div class="t">${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${piuGiorni(e) ? `<div class="n">🗓️ ${durataGiorni(e)}</div>` : ''}${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
+      <div><div class="t">${e.imp ? '⭐ ' : ''}${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${piuGiorni(e) ? `<div class="n">🗓️ ${durataGiorni(e)}</div>` : ''}${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}${giorno && (e.who || []).includes(S.me) ? accavallati(e, giorno, S.me).slice(0, 1).map(x => `<div class="acc">⚠️ Alla stessa ora hai «${esc(x.t)}»</div>`).join('') : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
   }
 
   /* ---------- Fluidità ----------
@@ -176,8 +201,8 @@
        <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = S.cena[i] || '?'; return `<button class="cv tap" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${esc(P(i).nome)}</span></button>`; }).join('')}</div>
        <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.</div></div>
      ${propOggi(ri(1))}
-     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.')}</div>
-     <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.')}</div>
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.', T)}</div>
+     <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.', tom)}</div>
      ${ricordo(ri(3))}
      <button class="card tap${ri(4)}" data-go="spesa"><h2><span class="ttl"><i class="ic">🛒</i>Lista della spesa</span> <small>${left ? `${left} da prendere ›` : 'tutto preso ›'}</small></h2></button>
     </div>`;
@@ -188,14 +213,17 @@
     const k = days.indexOf(selDay);
     const show = e => filt === 'tutti' || (e.who || []).includes(filt);
     const ids = IDS();
+    const top = prossimiImportanti(4), dom = iso(addDays(TODAY, 1));
     $('#p-cal').innerHTML = `<div class="stack">
+     ${top.length ? `<div class="card imps${ri(0)}"><h2><span class="ttl"><i class="ic">⭐</i>Da non perdere</span></h2>
+       ${top.map(([d, e]) => `<button class="imr tap" data-ev="${e.id}"><span class="imd"><b>${d === T ? 'Oggi' : d === dom ? 'Dom.' : +d.slice(8)}</b><small>${d === T || d === dom ? (e.h || '') : fmt(d, { month: 'short' })}</small></span><span class="imt"><b>${esc(e.t)}</b><small>${d === T || d === dom ? '' : fmt(d, { weekday: 'long' }) + (e.h ? ' · ' + esc(e.h) : '') + ' · '}${(e.who || []).length >= ids.length ? 'tutti' : (e.who || []).filter(w => S.persone[w]).map(w => esc(P(w).nome)).join(', ')}</small></span></button>`).join('')}</div>` : ''}
      <div class="card${ri(0)}">
        <div class="wnav"><button class="tap" data-wk="-1" aria-label="Settimana prima">‹</button><b>${fmt(days[0], { day: 'numeric', month: 'short' })} – ${fmt(days[6], { day: 'numeric', month: 'short' })}</b><button class="tap" data-wk="1" aria-label="Settimana dopo">›</button></div>
        <div class="week"><div class="wsel" style="transform:translateX(calc(${Math.max(k, 0)} * (100% + 4px)));opacity:${k < 0 ? 0 : 1}"></div>
        ${days.map(d => { const ppl = [...new Set(delGiorno(d, show).flatMap(e => e.who || []))].filter(p => S.persone[p]); return `<button class="day tap${d === selDay ? ' sel' : ''}${d === T ? ' oggi' : ''}" data-day="${d}"><span class="wd">${fmt(d, { weekday: 'short' })}</span><span class="dn">${+d.slice(8)}</span><span class="pd">${ppl.slice(0, 4).map(p => `<i style="--pc:${col(p)}"></i>`).join('')}</span></button>`; }).join('')}</div>
        <div class="filters">${['tutti', ...ids].map(f => `<button class="fb tap${filt === f ? ' on' : ''}" data-f="${f}" style="--pc:${f === 'tutti' ? 'var(--acc)' : col(f)}"><i></i>${f === 'tutti' ? 'Tutti' : esc(P(f).nome)}</button>`).join('')}</div>
      </div>
-     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">📅</i>${selDay === T ? 'Oggi' : fmt(selDay, { weekday: 'long', day: 'numeric', month: 'long' })}</span></h2>${evList(delGiorno(selDay, show))}</div>
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">📅</i>${selDay === T ? 'Oggi' : fmt(selDay, { weekday: 'long', day: 'numeric', month: 'long' })}</span></h2>${evList(delGiorno(selDay, show), '', selDay)}</div>
     </div>`;
   }
 
@@ -400,7 +428,7 @@
      <div class="phero${sr(0)}"><span class="pav">${avt(id)}</span><div><h1>${esc(p.nome)}${mio ? ' <small>(tu)</small>' : ''}</h1>
        <div class="riass">${pezzi.map(x => `<span>${esc(x)}</span>`).join('')}</div></div></div>
      <div class="sec${sr(1)}">Prossimi impegni</div>
-     <div class="card${sr(1)}">${per.length ? per.slice(0, 5).map(([d, l]) => `<div class="pg"><small>${d === T ? 'Oggi' : d === dom ? 'Domani' : fmt(d, { weekday: 'long', day: 'numeric', month: 'short' })}</small>${evList(l)}</div>`).join('') : '<div class="empty">Niente nei prossimi 14 giorni.</div>'}</div>
+     <div class="card${sr(1)}">${per.length ? per.slice(0, 5).map(([d, l]) => `<div class="pg"><small>${d === T ? 'Oggi' : d === dom ? 'Domani' : fmt(d, { weekday: 'long', day: 'numeric', month: 'short' })}</small>${evList(l, '', d)}</div>`).join('') : '<div class="empty">Niente nei prossimi 14 giorni.</div>'}</div>
      <div class="sec${sr(2)}">${mio ? 'Le tue proposte' : 'Le sue proposte'}</div>
      <div class="card${sr(2)}">${prop.length ? prop.map(p => { const v = inTesta(p); return `<p class="pn">${(PTIPO[p.tipo] || PTIPO.altro).e} ${esc(p.q)}<small>${p.chiusa ? `✅ Deciso: ${esc(p.scelta)}` : v ? `In testa: ${esc(v.x)}` : 'Ancora senza voti'}</small></p>`; }).join('') : `<div class="empty">${mio ? 'Non hai' : 'Non ha'} ancora fatto proposte.</div>`}</div>
      <div class="sec${sr(3)}">Lista dei desideri</div>
@@ -832,6 +860,7 @@
      <label>Chi c'è</label>${pickHtml(e.who || [S.me])}
      <label>Come ci andate (facoltativo)</label>${mezziHtml(e.mezzo || '', 'data-mzf')}
      <label>Nota<input id="evN" maxlength="200" value="${esc(e.n)}" placeholder="Facoltativa"></label>
+     <label class="sw">⭐ Importante (va in cima a Impegni)<input type="checkbox" id="evImp"${e.imp ? ' checked' : ''}></label>
      <button class="btn tap">${e.id ? 'Salva le modifiche' : 'Salva impegno'}</button></form>`, () => { if (!e.id) setTimeout(() => $('#evT').focus(), 380); });
   }
   function sheetDettaglio(e) {
@@ -839,6 +868,7 @@
     openSheet(`<h3>${esc(e.t)}</h3>
       <div>${piuGiorni(e) ? `Dal ${fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })} al ${fmt(e.fino, { weekday: 'long', day: 'numeric', month: 'long' })}` : fmt(e.d, { weekday: 'long', day: 'numeric', month: 'long' })}${e.h ? ` · ${esc(e.h)}${e.fine ? '–' + esc(e.fine) : ''}` : ' · tutto il giorno'}${e.ripeti ? ` · ${RIPETI[e.ripeti].toLowerCase()}` : ''}</div>
       ${e.n ? `<div class="muted">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div><div class="src">${fonte}</div>
+      ${e.nascosto ? '' : `<button class="star tap${e.imp ? ' on' : ''}" data-impst="${e.id}">${e.imp ? '⭐ Importante: lo vedono tutti in Impegni' : '☆ Segna come importante'}</button>`}
       ${e.fonte === 'import:' + S.me || !(e.fonte || '').startsWith('import:') ? `<div class="vis" data-mze="${e.id}"><label>Come ci andate</label>${mezziHtml(e.mezzo || '', 'data-mzd')}</div>` : ''}
       ${mioCal(e) ? `<div class="vis" data-vise="${e.id}"><label>Gli altri vedono</label>${segHtml('vis', [['mostra', '👁️ Tutto'], ['nascondi', '🔒 Solo occupato']], e.privato ? 'nascondi' : 'mostra')}
         <div class="empty" id="visPerche">${regolaCal(e.t, regole()).perche} La scelta vale anche per gli altri impegni «${esc(e.t)}».</div></div>` : ''}
@@ -1048,6 +1078,7 @@
         const s = start.toJSDate(), e = end ? end.toJSDate() : null;
         if ((e && e > s ? e <= da : s < da) || s > a || out.length >= 800) return; // entrano anche quelli iniziati prima e ancora in corso
         const all = start.isDate, titolo = (ev.summary || 'Impegno').slice(0, 80), luogo = (ev.location || '').slice(0, 200);
+        if (/birthday|compleanno|\bbday\b|cumpleaños/i.test(titolo) && !/festa|party|cena|pranzo|aperitivo/i.test(titolo)) return; // i compleanni non entrano
         const vis = regolaCal(titolo, rg).vis;
         out.push({ t: vis ? titolo : 'Occupato', d: iso(s), fino: ultimoGiorno(s, e, all), h: all ? '' : hhmm(s), fine: !all && e ? hhmm(e) : '',
           who: [S.me], n: vis ? luogo : '', ripeti: '', fonte: 'import:' + S.me, creatoDa: S.me, creato: Date.now(), nascosto: !vis });
@@ -1124,6 +1155,12 @@
       const id = t.closest('[data-mze]').dataset.mze, on = !t.classList.contains('on');
       t.parentElement.querySelectorAll('.mz').forEach(b => b.classList.remove('on')); t.classList.toggle('on', on);
       return DATI.aggiorna('impegni', id, { mezzo: on ? d.mzd : '' }).then(() => toast(on ? 'Mezzo segnato' : 'Mezzo tolto')).catch(sbaglio);
+    }
+    if (d.impst) {
+      const e = S.impegni.find(x => x.id === d.impst); if (!e) return;
+      const on = !e.imp; t.classList.toggle('on', on); t.textContent = on ? '⭐ Importante: lo vedono tutti in Impegni' : '☆ Segna come importante';
+      if (on) festa(t);
+      return DATI.aggiorna('impegni', e.id, { imp: on }).catch(sbaglio);
     }
     if (d.mzt) { mzTipo = d.mzt; segSet(t.parentElement, TIPI_MEZZO.findIndex(([e]) => e === d.mzt)); return; }
     if (d.togmz != null) {
@@ -1319,7 +1356,7 @@
       const who = [...f.querySelectorAll('.pk.on')].map(b => b.dataset.pk); if (!who.length) return toast('Scegli almeno una persona');
       const all = $('#evAll').checked;
       const mzOn = f.querySelector('.mz.on');
-      const e = { t: $('#evT').value.trim(), d: $('#evD').value, h: all ? '' : $('#evH').value, fine: all ? '' : $('#evF').value, who, n: $('#evN').value.trim(), ripeti: $('#evR').value, mezzo: mzOn ? mzOn.dataset.mzf : '' };
+      const e = { t: $('#evT').value.trim(), d: $('#evD').value, h: all ? '' : $('#evH').value, fine: all ? '' : $('#evF').value, who, n: $('#evN').value.trim(), ripeti: $('#evR').value, mezzo: mzOn ? mzOn.dataset.mzf : '', imp: $('#evImp').checked };
       const fino = $('#evFino').value; e.fino = fino && fino > e.d && !e.ripeti ? fino : '';
       closeSheet();
       if (page === 'cal') { selDay = e.d; weekStart = inizioSettimana(new Date(e.d + 'T12:00:00')); }

@@ -467,3 +467,13 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .opz{font-weight:400;color:var(--muted);font-size:12px}
 .vn{display:flex;align-items:center;gap:8px}.vn .vnx{flex:1;min-width:0;font-size:14px}
 @media (prefers-reduced-motion: reduce){.op .bar{transition:none}}
+/* Impegni: "Da non perdere" e accavallamenti */
+.imps{gap:4px}
+.imr{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line);width:100%;text-align:left;min-width:0}
+.imps h2+.imr{border-top:0}
+.imd{width:46px;flex:none;display:grid;justify-items:center;border-radius:12px;padding:5px 0;background:color-mix(in srgb,var(--acc) 14%,transparent)}
+.imd b{font:650 17px/1.1 var(--f-disp)}.imd small{font-size:11px;color:var(--muted)}
+.imt{display:grid;min-width:0}.imt b{font-weight:600;overflow-wrap:anywhere}.imt small{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.acc{font-size:12.5px;font-weight:600;color:var(--bad);margin-top:2px}
+.star{min-height:44px;border-radius:14px;border:1px dashed var(--line);font-size:14px;font-weight:600;color:var(--muted);transition:background-color .24s,border-color .24s,color .24s,transform .38s var(--pop)}
+.star.on{border-style:solid;border-color:color-mix(in srgb,var(--acc) 50%,transparent);background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--fg)}

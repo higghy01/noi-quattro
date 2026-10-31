@@ -32,6 +32,14 @@ from firebase_admin import firestore
 from comune import ROMA, adesso, database
 
 GIORNI = 60
+# Compleanni dai calendari (Sasha, 31/10/2026: "non fregano a nessuno"): non entrano nell'app.
+# Una festa vera ("Festa di compleanno", "cena per il compleanno") resta.
+COMPLEANNO = re.compile(r"birthday|compleanno|\bbday\b|cumpleaños", re.I)
+FESTA = re.compile(r"festa|party|cena|pranzo|aperitivo", re.I)
+
+
+def compleanno(titolo):
+    return bool(COMPLEANNO.search(titolo)) and not FESTA.search(titolo)
 MASSIMO = 20 * 1024 * 1024  # un calendario più grande di 20 MB non è un calendario
 
 
@@ -117,6 +125,8 @@ def impegni(cal, persona, visibile):
             g1 = fine - dt.timedelta(days=1)
         uid = f"{persona}|{ev.get('UID')}|{inizio}"
         titolo = str(ev.get("SUMMARY", "Impegno"))[:80]
+        if compleanno(titolo):
+            continue
         luogo = str(ev.get("LOCATION", ""))[:200]
         vis = visibile(titolo)
         yield "cal-" + hashlib.sha1(uid.encode()).hexdigest()[:20], {

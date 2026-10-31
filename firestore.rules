@@ -36,8 +36,8 @@ service cloud.firestore {
         // Dei miei impegni dal calendario posso solo scegliere se gli altri vedono il titolo o "Occupato".
         || (resource.data.fonte == 'calendario:' + io()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['t', 'n', 'nascosto']))
-        // Come ci si va: lo può segnare chiunque, su qualsiasi impegno.
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mezzo']));
+        // Come ci si va e "importante": li può segnare chiunque, su qualsiasi impegno.
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mezzo', 'imp']));
       allow delete: if membro() && resource.data.fonte in ['app', 'import:' + io()];
     }
 
