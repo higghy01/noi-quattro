@@ -109,6 +109,8 @@ def impegni(cal, persona, visibile):
         g0 = inizio if tutto else inizio.date()
         if fine is None:
             g1 = g0
+        elif isinstance(fine, dt.datetime) and fine - inizio < dt.timedelta(hours=24):
+            g1 = g0  # con un orario conta come "più giorni" solo se dura almeno 24 ore (un turno 22-6 resta del suo giorno)
         elif isinstance(fine, dt.datetime):
             g1 = (fine - dt.timedelta(microseconds=1)).date() if fine.time() == dt.time(0) else fine.date()
         else:

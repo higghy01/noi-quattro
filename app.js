@@ -294,7 +294,7 @@
   }
   // "Un anno fa…": una foto di un viaggio passato nello stesso periodo, altrimenti una a caso (la stessa per tutto il giorno).
   function ricordo(cls) {
-    const conFoto = S.foto.filter(f => f.prev);
+    const conFoto = S.foto.filter(f => f.prev && f.quando > 0);
     if (!conFoto.length) return '';
     // Anniversario più vicino (anche a cavallo di Capodanno: una foto del 30 dicembre vale il 2 gennaio).
     const oggi = new Date(); oggi.setHours(12, 0, 0, 0);
@@ -966,10 +966,13 @@
   // un impegno di tutto il giorno dal 3 al 7 finisce il giorno 8, uno che finisce a mezzanotte appartiene al giorno prima.
   function ultimoGiorno(s, end, tuttoIlGiorno) {
     if (!end) return '';
+    // Con un orario conta come "più giorni" solo se dura almeno 24 ore: un turno di notte (22-6) resta del suo giorno.
+    if (!tuttoIlGiorno && end - s < 864e5) return '';
     const e = new Date(end.getTime() - (tuttoIlGiorno || (end.getHours() === 0 && end.getMinutes() === 0) ? 1 : 0));
     const f = iso(e), d = iso(s);
     return f > d ? f : '';
   }
+  const senzaDettagli = (via) => { const d = Object.assign({}, S.priv.dettagli || {}); via.forEach(e => delete d[e.id]); return d; };
   async function importaIcs(file) {
     if (!window.ICAL) return toast('Serve internet per leggere il file. Riprova.');
     toast('Leggo il calendario…');
@@ -983,7 +986,7 @@
       const rg = regole();
       const push = (ev, start, end) => {
         const s = start.toJSDate(), e = end ? end.toJSDate() : null;
-        if ((e && e > s ? e : s) < da || s > a || out.length >= 800) return; // entrano anche quelli iniziati prima e ancora in corso
+        if ((e && e > s ? e <= da : s < da) || s > a || out.length >= 800) return; // entrano anche quelli iniziati prima e ancora in corso
         const all = start.isDate, titolo = (ev.summary || 'Impegno').slice(0, 80), luogo = (ev.location || '').slice(0, 200);
         const vis = regolaCal(titolo, rg).vis;
         out.push({ t: vis ? titolo : 'Occupato', d: iso(s), fino: ultimoGiorno(s, e, all), h: all ? '' : hhmm(s), fine: !all && e ? hhmm(e) : '',
@@ -1007,9 +1010,10 @@
       const vecchi = S.impegni.filter(e => e.fonte === 'import:' + S.me);
       for (const e of vecchi) await DATI.elimina('impegni', e.id);
       const ids = await DATI.molti('impegni', out);
-      const dettagli = {};
+      // I titoli privati: via quelli dei vecchi impegni importati, dentro quelli nuovi (si riscrive l'elenco intero).
+      const dettagli = senzaDettagli(vecchi);
       (ids || []).forEach((id, i) => { if (det[i]) dettagli[id] = det[i]; });
-      if (Object.keys(dettagli).length) await DATI.imposta('privati', S.me, { dettagli });
+      await DATI.aggiorna('privati', S.me, { dettagli }).catch(() => DATI.imposta('privati', S.me, { dettagli }));
       closeSheet(); render(); toast(out.length ? `Importati ${out.length} impegni` : 'Nel file non ci sono impegni nei prossimi 12 mesi');
     } catch (e) { console.error(e); toast('Il file non sembra un calendario .ics valido.'); }
   }
@@ -1131,6 +1135,7 @@
       if (!d.sicuro) { d.sicuro = '1'; t.textContent = 'Tocca ancora per toglierli'; t.style.color = 'var(--bad)'; return; }
       const g = S.impegni.filter(e => e.fonte === 'import:' + S.me);
       for (const e of g) await DATI.elimina('impegni', e.id).catch(sbaglio);
+      if (g.some(e => (S.priv.dettagli || {})[e.id])) await DATI.aggiorna('privati', S.me, { dettagli: senzaDettagli(g) }).catch(sbaglio);
       return toast('Impegni importati tolti');
     }
     if (d.addreg) return sheetRegalo(d.addreg);
@@ -1187,7 +1192,9 @@
       if (!x.done && S.spesa.filter(y => !y.done).length === 1) { festa(t.querySelector('.box')); setTimeout(() => toast('Tutto preso! 🎉'), 200); }
       setTimeout(() => DATI.aggiorna('spesa', x.id, x.done ? { done: false, presoDa: '', preso: 0 } : { done: true, presoDa: S.me, preso: Date.now() }).catch(sbaglio), 380); return;
     }
-    if (t.id === 'clear') { const g = S.spesa.filter(x => x.done); for (const x of g) DATI.elimina('spesa', x.id).catch(sbaglio); return toast('Lista pulita'); }
+    if (t.id === 'clear') {
+      if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.textContent = 'Tocca ancora'; t.style.color = 'var(--bad)'; return; }
+      const g = S.spesa.filter(x => x.done); for (const x of g) DATI.elimina('spesa', x.id).catch(sbaglio); return toast('Lista pulita'); }
   });
   document.addEventListener('change', (ev) => {
     const t = ev.target;
@@ -1237,7 +1244,7 @@
             Object.assign(e, { t: 'Occupato', n: '', nascosto: true });
           } else if (prima && mioCal(prima)) e.nascosto = false;
           // Chi è stato aggiunto adesso riceve l'avviso "ti ha aggiunto" (lo manda il programma delle notifiche).
-          if (prima && prima.fonte === 'app') Object.assign(e, { aggiunti: who.filter(p => !(prima.who || []).includes(p)), modificato: Date.now(), modificatoDa: S.me });
+          if (prima && prima.fonte === 'app') Object.assign(e, { aggiunti: [...new Set([...(Date.now() - (prima.modificato || 0) < 864e5 ? prima.aggiunti || [] : []), ...who.filter(p => !(prima.who || []).includes(p))])].filter(p => who.includes(p)), modificato: Date.now(), modificatoDa: S.me });
           await DATI.aggiorna('impegni', f.dataset.id, e); toast('Impegno aggiornato');
         }
         else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('Impegno salvato: lo vedono tutti'); }
@@ -1271,7 +1278,7 @@
   $('#lgReset').onclick = async () => {
     const em = $('#lgEmail').value.trim(); if (!em) { $('#lgErr').textContent = 'Scrivi prima la tua email qui sopra.'; return; }
     try { await DATI.reset(em); $('#lgErr').textContent = ''; toast('Ti ho mandato un\'email: segui il link per scegliere la password.'); }
-    catch (e) { $('#lgErr').textContent = 'Non riesco a mandare l\'email. Controlla che sia scritta giusta.'; }
+    catch (e) { $('#lgErr').textContent = !navigator.onLine ? 'Serve internet per mandare l\'email. Riprova appena c\'è rete.' : 'Non riesco a mandare l\'email. Controlla che sia scritta giusta.'; }
   };
   document.addEventListener('gesturestart', e => e.preventDefault());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
@@ -1321,6 +1328,7 @@
     if (!avviato) {
       avviato = true;
       const a = (x) => { if (typeof x === 'function') stopDati.push(x); };
+      if (DATI.iscriviDiNuovo) DATI.iscriviDiNuovo();
       a(DATI.ascolta('persone', l => { S.persone = Object.fromEntries(l.map(p => [p.id, p])); ascoltaSorprese(); render(); }));
       a(DATI.ascolta('regali', l => { S.regali = l; render(); }));
       a(DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); }));

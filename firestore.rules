@@ -110,7 +110,8 @@ service cloud.firestore {
     // Telefoni iscritti alle notifiche: ognuno iscrive solo sé stesso.
     match /token/{t} {
       allow create, update: if membro() && request.resource.data.persona == io();
-      allow read, delete: if false;
+      allow delete: if membro() && resource.data.persona == io();
+      allow read: if false;
     }
 
     // Tutto il resto (es. "sistema", usato dai programmi automatici) è chiuso.
