@@ -477,3 +477,15 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .acc{font-size:12.5px;font-weight:600;color:var(--bad);margin-top:2px}
 .star{min-height:44px;border-radius:14px;border:1px dashed var(--line);font-size:14px;font-weight:600;color:var(--muted);transition:background-color .24s,border-color .24s,color .24s,transform .38s var(--pop)}
 .star.on{border-style:solid;border-color:color-mix(in srgb,var(--acc) 50%,transparent);background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--fg)}
+/* Ricordi: scegliere foto da salvare in galleria */
+.sech{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}.sech .sec{margin:0}
+.sech .link{min-height:40px}
+.ph .ck{position:absolute;right:6px;top:6px;width:24px;height:24px;border-radius:999px;border:2px solid #fff;background:rgb(0 0 0 / .25);color:transparent;font-size:13px;font-weight:700;text-decoration:none;display:grid;place-items:center;opacity:0;transform:scale(.6);transition:opacity .2s,transform .3s var(--pop),background-color .2s}
+.grid.scegli .ph .ck{opacity:1;transform:none}
+.grid.scegli .ph img{transition:transform .3s var(--pop),opacity .2s}
+.ph.sel .ck{background:var(--acc);border-color:#fff;color:var(--acc-ink)}
+.ph.sel img{transform:scale(.88);border-radius:10px}
+.selbar{position:sticky;bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;padding:8px;margin-top:4px;border-radius:18px;background:color-mix(in srgb,var(--panel) 88%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--shadow);border:1px solid var(--line);animation:fm-rise .32s var(--ease) both;z-index:2}
+.selbar>button:first-child{min-height:44px;padding:0 14px;border-radius:14px;background:var(--soft);font-weight:600}
+.selbar .btn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.selbar .btn:disabled{opacity:.55}
