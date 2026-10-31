@@ -32,11 +32,11 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme=light])[data-page=cal]{--acc:#4FC3D1}
   :root:not([data-theme=light])[data-page=note]{--acc:#F2C230}
-  :root:not([data-theme=light])[data-page=spesa]{--acc:#F5944F}
+  :root:not([data-theme=light])[data-page=spesa]{--acc:#F7AE45}
   :root:not([data-theme=light])[data-page=viaggi]{--acc:#E879B9}}
 :root[data-theme=dark][data-page=cal]{--acc:#4FC3D1}
 :root[data-theme=dark][data-page=note]{--acc:#F2C230}
-:root[data-theme=dark][data-page=spesa]{--acc:#F5944F}
+:root[data-theme=dark][data-page=spesa]{--acc:#F7AE45}
 :root[data-theme=dark][data-page=viaggi]{--acc:#E879B9}
 /* "Fatto / ok" (--ok) prende il colore della scheda: il verde è di una persona. */
 

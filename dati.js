@@ -154,7 +154,17 @@
       },
       login: (email, pass) => auth.signInWithEmailAndPassword(email.trim(), pass),
       reset: (email) => auth.sendPasswordResetEmail(email.trim()),
-      esci: () => auth.signOut(),
+      // Uscendo, questo telefono smette di ricevere le notifiche di chi esce (altrimenti arriverebbero a chi entra dopo).
+      async esci() {
+        try {
+          if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            const token = await firebase.messaging().getToken({ vapidKey: window.CONFIG.vapidKey, serviceWorkerRegistration: reg });
+            await fs.collection('token').doc(token).delete();
+          }
+        } catch (e) { console.error(e); }
+        return auth.signOut();
+      },
       ascolta(col, cb) { return fs.collection(col).onSnapshot(s => cb(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(col, e)); },
       ascoltaDoc(col, id, cb) { return fs.collection(col).doc(id).onSnapshot(d => cb(d.data() || {}), () => cb({})); },
       // Senza rete Firebase tiene la modifica sul telefono e la manda appena torna internet, ma la sua "conferma"
@@ -184,6 +194,11 @@
         return { url: await ref.getDownloadURL(), path };
       },
       eliminaFile: (path) => path ? firebase.storage().ref(path).delete().catch(() => {}) : Promise.resolve(),
+      // Con il permesso già dato, il telefono si iscrive da solo per chi è entrato (es. dopo un cambio di persona).
+      async iscriviDiNuovo() {
+        if (!('Notification' in window) || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return;
+        try { await this.attivaNotifiche(); } catch (e) { console.error(e); }
+      },
       async attivaNotifiche() {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) {
           return /iPhone|iPad/.test(navigator.userAgent)
