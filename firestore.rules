@@ -97,7 +97,8 @@ service cloud.firestore {
         && request.resource.data.d is string && request.resource.data.d.size() == 10
         && request.resource.data.tipo in ['interrogazione', 'verifica', 'compito', 'portare', 'altro']
         && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 200; }
-      allow read: if membro();
+      // Le legge solo chi le ha scritte.
+      allow read: if membro() && resource.data.per == io();
       allow create: if membro() && ok();
       allow update: if membro() && resource.data.per == io() && ok();
       allow delete: if membro() && resource.data.per == io();
