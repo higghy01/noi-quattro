@@ -1,4 +1,4 @@
-// Noi quattro - l'app. Legge e scrive solo attraverso DATI (dati.js).
+// NDSZ - l'app. Legge e scrive solo attraverso DATI (dati.js).
 (function () {
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1129,7 +1129,7 @@
 
      ${DATI.modo === 'prova' ? `<div class="sec${sr(6)}">Prova</div><div class="card${sr(6)}"><div class="empty">Guarda l'app come un'altra persona:</div>${pickHtml([S.me]).replace(/data-pk=/g, 'data-me=')}<button class="link tap" id="reset">Rimetti i dati di esempio</button></div>`
        : `<div class="card${sr(6)}"><button class="btn bad tap" id="esci">Esci da questo telefono</button></div>`}
-     <div class="ver">Noi quattro · fatta in casa con cura 💜</div>`;
+     <div class="ver">NDSZ · fatta in casa con cura 💜</div>`;
   }
   // Si chiude anche trascinando da sinistra verso destra, come su iPhone.
   (() => {
