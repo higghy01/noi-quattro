@@ -114,12 +114,15 @@
       const orario = []; g.forEach((l, i) => l.forEach((m, o) => m && orario.push({ g: i + 1, o: o + 1, m })));
       db.scuola = { p3: { classe: '3A', orario, ore, dal: iso(-30), al: iso(220), pause: [], copie: ['p1'] } };
       db.compiti = { [uid()]: { per: 'p1', di: 'p3', m: 'Matematica', tipo: 'verifica', d: iso(3), x: 'Equazioni', by: 'p1', creato: Date.now(), fatto: false },
-        [uid()]: { per: 'p3', di: 'p3', m: 'Inglese', tipo: 'interrogazione', d: iso(2), x: '', by: 'p3', creato: Date.now(), fatto: false } };
+        [uid()]: { per: 'p3', di: 'p3', m: 'Inglese', tipo: 'interrogazione', d: iso(2), x: '', by: 'p3', creato: Date.now(), fatto: false },
+        [uid()]: { per: 'p1', di: 'p3', m: 'Inglese', tipo: 'interrogazione', d: iso(8), x: '', by: 'p1', creato: Date.now(), fatto: false },
+        [uid()]: { per: 'p1', di: 'p3', m: 'Italiano', tipo: 'compito', d: iso(1), x: 'Pagina 40', by: 'p1', creato: Date.now(), fatto: false } };
     }
     if (!db.voti) {
-      const v = (per, m, voto, tipo, g) => ({ per, di: 'p3', m, v: voto, tipo, d: iso(-g), x: '', by: per, creato: Date.now() - g * 864e5 });
+      const v = (per, m, voto, tipo, g, p) => ({ per, di: 'p3', m, v: voto, tipo, p: p == null ? 100 : p, d: iso(-g), x: '', by: per, creato: Date.now() - g * 864e5 });
       db.voti = {}; [v('p1', 'Matematica', 7.5, 'scritto', 9), v('p1', 'Matematica', 6.25, 'orale', 3), v('p1', 'Inglese', 8, 'orale', 5), v('p1', 'Storia', 5.5, 'scritto', 12),
-        v('p3', 'Italiano', 7, 'scritto', 4)].forEach(x => { db.voti[uid()] = x; });
+        v('p1', 'Storia', 4.75, 'orale', 6), v('p1', 'Storia', 6, 'scritto', 2, 50), v('p1', 'Educazione civica', 8.5, 'orale', 7), v('p1', 'Matematica', 6.5, 'scritto', 260),
+        v('p1', 'Inglese', 5.75, 'scritto', 300), v('p3', 'Italiano', 7, 'scritto', 4)].forEach(x => { db.voti[uid()] = x; });
     }
     // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
     const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };

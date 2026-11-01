@@ -73,9 +73,14 @@
   function mappaImpegni() {
     const det = S.priv.dettagli || {};
     S.impegni = (S.impRaw || []).map(e => e.nascosto && mioCal(e) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e)
-      .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')))
-      .concat(eventiScuola());
+      .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')));
+    // La scuola non entra nel calendario di famiglia (scelta di Sasha del 01/11/2026: la sorella non vuole impegni e scuola
+    // mischiati): lezioni e note stanno nel Calendario della sua sezione Personale. Le lezioni servono solo a dire
+    // "è a scuola" in Oggi e ad avvisarla se un impegno vero cade durante la scuola.
+    S.scuolaEv = eventiScuola();
   }
+  // Gli impegni di un giorno più le lezioni (solo per "dove è adesso" e per gli accavallamenti).
+  const conScuola = (d, f) => S.impegni.concat(S.scuolaEv || []).filter(e => capita(e, d) && (!f || f(e))).sort((a, b) => (a.h || '').localeCompare(b.h || ''));
   // Applica subito le regole ai miei impegni (senza aspettare il programma della mezz'ora).
   async function applicaRegole(rg) {
     rg = regole(rg); const det = {}, cambi = [];
@@ -128,7 +133,7 @@
   const cenaDi = (id) => S.cena[id] === 'si' || S.cena[id] === 'no' ? { v: S.cena[id] } : fuoriCena(id) ? { v: 'no', auto: fuoriCena(id) } : { v: '?' };
   function statoOra(id) {
     // Le note di scuola non sono un'attività; se c'è un impegno vero durante la scuola, vince quello.
-    const ora = oraAdesso(), oggi = delGiorno(T, e => (e.who || []).includes(id) && !e.cmp);
+    const ora = oraAdesso(), oggi = conScuola(T, e => (e.who || []).includes(id));
     const orora = oggi.filter(e => e.h && e.h <= ora && e.fine && e.fine > ora), ades = orora.find(e => !e.virtuale) || orora[0];
     // t = frase intera (pagina della persona), c = versione corta (sotto il cerchio in Oggi)
     const r = rientro(id);
@@ -177,7 +182,7 @@
     // La scuola e le note di scuola non danno avvisi loro; un impegno vero durante la scuola invece sì.
     if (!e.h || e.virtuale) return [];
     const [a1, b1] = intervallo(e, d);
-    return delGiorno(d, x => x.id !== e.id && x.h && !x.cmp && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
+    return conScuola(d, x => x.id !== e.id && x.h && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
   }
   // Impegni importanti: con tutta la famiglia, segnati con la stella, o con parole da grande occasione.
   const PAROLE_IMP = ['matrimonio', 'laurea', 'battesimo', 'comunione', 'cresima', 'funerale', 'viaggio', 'partenza', 'volo', 'trasloco', 'esame', 'concerto', 'vacanza', 'ferie', 'natale', 'capodanno', 'pasqua'];
@@ -1263,8 +1268,7 @@
     return out;
   }
   const mieiC = (di) => S.compiti.filter(c => c.per === S.me && (!di || c.di === di) && !c.via);
-  // Nel calendario: la scuola di ognuno la vedono tutti (un impegno per giorno della settimana, dalla prima all'ultima ora);
-  // le note (interrogazioni, verifiche…) solo chi le ha scritte.
+  // Le lezioni come impegni settimanali (uno per giorno, dalla prima all'ultima ora): non si mostrano nel calendario di famiglia.
   function eventiScuola() {
     const out = [];
     for (const [pid, s] of Object.entries(S.scuola)) {
@@ -1276,11 +1280,6 @@
         out.push({ id: `scuola-${pid}-${g}`, t: '🎒 Scuola', d: iso(d), h: tutte ? l[0].h : '', fine: tutte ? l[l.length - 1].fine : '', who: [pid],
           n: `${ore} ore`, ripeti: 'settimanale', al: s.al || '', pause: pause(s), fonte: `scuola:${pid}`, scuola: g, virtuale: true });
       }
-    }
-    for (const c of mieiC()) {
-      if (c.fatto) continue;
-      const s = S.scuola[c.di], lz = s && lezioni(s, gSett(c.d)).find(x => x.m === c.m);
-      out.push({ id: `cmp-${c.id}`, t: titoloC(c), d: c.d, h: lz ? lz.h : '', fine: lz ? lz.fine : '', who: [S.me], n: c.x || '', ripeti: '', fonte: 'compito:' + S.me, cmp: c.id, virtuale: true });
     }
     return out;
   }
@@ -1333,7 +1332,7 @@
   }
   // La scheda Scuola ha quattro parti, come un diario di scuola: Orario, Agenda, Voti, Materie (scelta di Sasha del 01/11/2026:
   // "praticamente uguale" all'app che usa la sorella).
-  const TABS_S = [['orario', 'Orario'], ['agenda', 'Agenda'], ['voti', 'Voti'], ['materie', 'Materie']];
+  const TABS_S = [['orario', 'Calendario'], ['agenda', 'Agenda'], ['voti', 'Voti'], ['materie', 'Materie']];
   let scTab = LS.get('noi4-scuola-tab', 'orario'); if (!TABS_S.some(t => t[0] === scTab)) scTab = 'orario';
   function rScuola(m, sr, k) {
     const s = S.scuola[m.di], colM = coloriMat(s), nome = esc(P(m.di).nome);
@@ -1343,22 +1342,52 @@
      <div class="sctabs${sr(k * 3 + 2)}">${segHtml('sctab', TABS_S, scTab)}</div>
      <div class="scbody" data-tab="${scTab}">${corpo}</div>`;
   }
+  // Calendario della scuola (Sasha, 01/11/2026): un mese alla volta, solo i giorni di scuola (lun-ven o lun-sab),
+  // con le interrogazioni, le verifiche e i compiti segnati. Sotto, le lezioni e le note del giorno scelto.
+  let scMese = null, scAnim = '';
   function scOrario(m, s, colM) {
-    if (!mioDay || !aScuola(s, mioDay) && mioDay < T) mioDay = giornoScuola(s);
-    // La settimana del giorno scelto, dal lunedì all'ultimo giorno con lezioni.
-    const ultimo = Math.max(...(s.orario || []).map(x => +x.g)), lun = inizioSettimana(new Date(mioDay + 'T12:00:00'));
-    const giorni = [...Array(ultimo)].map((_, i) => iso(addDays(lun, i)));
-    const kSel = Math.max(0, giorni.indexOf(mioDay));
+    if (!mioDay || !aScuola(s, mioDay) && mioDay < T && !scMese) mioDay = giornoScuola(s);
+    if (!scMese) scMese = mioDay.slice(0, 7);
+    const ultimo = Math.min(6, Math.max(5, ...(s.orario || []).map(x => +x.g)));
+    const y = +scMese.slice(0, 4), mo = +scMese.slice(5, 7), primo = new Date(y, mo - 1, 1, 12), nG = fineMese(scMese + '-01');
+    const note = mieiC(m.di), daFare = (d) => note.filter(c => c.d === d && !c.fatto);
+    const PROVA = ['verifica', 'interrogazione'];
+    const celle = []; let lun = inizioSettimana(primo);
+    if (iso(addDays(lun, ultimo - 1)).slice(0, 7) < scMese) lun = addDays(lun, 7); // la prima settimana inizia nel weekend
+    while (iso(lun).slice(0, 7) <= scMese) {
+      for (let i = 0; i < ultimo; i++) {
+        const d = iso(addDays(lun, i));
+        if (d.slice(0, 7) !== scMese) { celle.push('<span class="cg fuori" aria-hidden="true"></span>'); continue; }
+        const nn = daFare(d), pr = nn.filter(c => PROVA.includes(c.tipo));
+        const lab = `${fmt(d, { weekday: 'long', day: 'numeric', month: 'long' })}${nn.length ? `: ${nn.map(c => esc((TIPO_C[c.tipo] || TIPO_C.altro).n)).join(', ')}` : ''}`;
+        celle.push(`<button type="button" class="cg tap${d === mioDay ? ' on' : ''}${d === T ? ' oggi' : ''}${aScuola(s, d) ? '' : ' no'}${pr.length ? ' prova' : ''}" data-mioday="${d}" aria-label="${lab}"><b>${+d.slice(8)}</b>${nn.length ? `<span class="cgd">${nn.slice(0, 3).map(c => `<i style="--mc:${colM[c.m] || 'var(--acc)'}"></i>`).join('')}</span>` : ''}</button>`);
+      }
+      lun = addDays(lun, 7);
+    }
+    const nMese = note.filter(c => c.d.slice(0, 7) === scMese && !c.fatto), nProve = nMese.filter(c => PROVA.includes(c.tipo)).length;
     const lz = aScuola(s, mioDay) ? lezioni(s, gSett(mioDay)) : [];
-    const note = mieiC(m.di), delGiornoC = note.filter(c => c.d === mioDay);
+    const delGiornoC = note.filter(c => c.d === mioDay), conLez = new Set(lz.map(x => x.m)), altre = delGiornoC.filter(c => !conLez.has(c.m));
+    const anim = scAnim; scAnim = '';
     return `<div class="card scuola">
-       <div class="seg sgiorni" style="--n:${giorni.length};--k:${kSel}"><i class="spill"></i>${giorni.map(d => `<button type="button" class="tap${d === mioDay ? ' on' : ''}${d === T ? ' oggi' : ''}${aScuola(s, d) ? '' : ' no'}" data-mioday="${d}"><small>${GG[gSett(d)]}</small><b>${+d.slice(8)}</b>${note.some(c => c.d === d && !c.fatto) ? '<i class="sdot"></i>' : ''}</button>`).join('')}</div>
+       <div class="cmese"><button type="button" class="tap cfr" data-scmese="-1" aria-label="Mese prima"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+         <div><b>${fmt(scMese + '-01', { month: 'long', year: 'numeric' })}</b><small>${nMese.length ? `${nMese.length} da fare${nProve ? ` · ${nProve} ${nProve === 1 ? 'prova' : 'prove'}` : ''}` : 'Niente segnato'}</small></div>
+         <button type="button" class="tap cfr" data-scmese="1" aria-label="Mese dopo"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
+       <div class="cgr${anim ? ' cgr-' + anim : ''}" style="--c:${ultimo}">${GG.slice(1, ultimo + 1).map(g => `<span class="cgh">${g.slice(0, 1)}</span>`).join('')}${celle.join('')}</div>
        <div class="lgiorno"><b>${mioDay === T ? 'Oggi' : mioDay === iso(addDays(TODAY, 1)) ? 'Domani' : fmt(mioDay, { weekday: 'long', day: 'numeric', month: 'long' })}</b>${lz.length && lz[0].h ? `<small>${esc(lz[0].h)}–${esc(lz[lz.length - 1].fine)}</small>` : ''}</div>
        ${lz.length ? `<div class="lez">${lz.map(x => { const nn = delGiornoC.filter(c => c.m === x.m);
          return `<button type="button" class="lz tap" data-lez="${esc(x.m)}" data-di="${m.di}" style="--mc:${colM[x.m]}"><span class="lo"><b>${x.da}ª${x.a > x.da ? `–${x.a}ª` : ''}</b>${x.h ? `<small>${esc(x.h)}</small>` : ''}</span><span class="lm"><b>${esc(x.m)}</b>${x.prof ? `<small>${esc(x.prof)}</small>` : ''}${nn.length ? `<span class="lzn">${nn.map(c => `<span class="${c.fatto ? 'ok' : ''}">${(TIPO_C[c.tipo] || TIPO_C.altro).e} ${esc((TIPO_C[c.tipo] || TIPO_C.altro).n)}</span>`).join('')}</span>` : ''}</span><span class="lzp" aria-hidden="true">+</span></button>`; }).join('')}</div>
+       ${altre.length ? `<div class="cmpl">${altre.map(c => rigaC(c, colM)).join('')}</div>` : ''}
        <div class="empty">Tocca una materia per segnare un'interrogazione, una verifica o i compiti.</div>`
-       : `<div class="empty">${inPausa(s, mioDay) ? 'Vacanza: niente scuola 🎉' : 'Niente scuola questo giorno.'}</div>`}
+       : `${altre.length ? `<div class="cmpl">${altre.map(c => rigaC(c, colM)).join('')}</div>` : ''}<div class="empty">${inPausa(s, mioDay) ? 'Vacanza: niente scuola 🎉' : 'Niente scuola questo giorno.'}</div>`}
      </div>`;
+  }
+  // Cambio mese: il giorno scelto diventa oggi (se è il mese di oggi) o il primo giorno di scuola del mese.
+  function cambiaMese(dir, s) {
+    const y = +scMese.slice(0, 4), mo = +scMese.slice(5, 7) - 1 + dir, n = new Date(y, mo, 1, 12);
+    scMese = iso(n).slice(0, 7); scAnim = dir > 0 ? 'av' : 'in';
+    if (T.slice(0, 7) === scMese) { mioDay = T; return; }
+    for (let i = 0; i < 31; i++) { const d = iso(addDays(n, i)); if (d.slice(0, 7) !== scMese) break; if (aScuola(s, d)) { mioDay = d; return; } }
+    mioDay = scMese + '-01';
   }
   const rigaC = (c, colM) => `<div class="cmp${c.fatto ? ' fatto' : ''}" style="--mc:${colM[c.m] || 'var(--acc)'}"><button type="button" class="ck tap" data-cmpfatto="${c.id}" aria-label="${c.fatto ? 'Da rifare' : 'Fatto'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><button type="button" class="cmx tap" data-cmp="${c.id}"><b>${esc(titoloC(c))}</b><small>${quando(c.d)}${c.x ? ' · ' + esc(c.x) : ''}</small></button></div>`;
   function scAgenda(m, s, colM) {
@@ -1369,7 +1398,7 @@
     return `<div class="card">
        <div class="agtop"><b>In arrivo</b><small>${arrivo.filter(c => !c.fatto).length ? `${arrivo.filter(c => !c.fatto).length} da fare${prove ? ` · ${prove} ${prove === 1 ? 'prova' : 'prove'}` : ''}` : 'Tutto fatto ✨'}</small></div>
        ${arrivo.length ? `<div class="cmpl">${arrivo.map(c => rigaC(c, colM)).join('')}</div>`
-       : `<div class="empty">Niente in arrivo. Quando c'è un'interrogazione o una verifica, segnala qui: la vedi anche nel calendario.</div>`}
+       : `<div class="empty">Niente in arrivo. Quando c'è un'interrogazione o una verifica, segnala qui: la vedi anche nel Calendario della scuola.</div>`}
        <button type="button" class="btn tap" data-cmpnuovo="${m.di}">+ Segna compiti o una verifica</button></div>
      ${passate.length ? `<div class="sec">Già passate</div><div class="card"><div class="cmpl passate">${passate.map(c => rigaC(c, colM)).join('')}</div></div>` : ''}`;
   }
@@ -1377,54 +1406,95 @@
     const ore = {}; (s.orario || []).forEach(x => { ore[x.m] = (ore[x.m] || 0) + 1; });
     const prof = {}; (s.orario || []).forEach(x => { if (x.prof) prof[x.m] = x.prof; });
     const vm = votiPerMateria(m.di);
-    return `<div class="card"><div class="mat">${Object.keys(colM).map(x => `<button type="button" class="tap" data-votimat="${esc(x)}" data-di="${m.di}" style="--mc:${colM[x]}"><i></i><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'} a settimana${prof[x] ? ' · ' + esc(prof[x]) : ''}</small>${vm[x] ? `<small>media ${fmtMedia(vm[x].media)}</small>` : ''}</button>`).join('')}</div></div>`;
+    return `<div class="card"><div class="mat">${Object.keys(colM).map(x => `<button type="button" class="tap" data-votimat="${esc(x)}" data-di="${m.di}" style="--mc:${colM[x]}"><i></i><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'} a settimana${prof[x] ? ' · ' + esc(prof[x]) : ''}</small>${vm[x] && vm[x].media != null ? `<small>media ${fmtMedia(vm[x].media)}</small>` : ''}</button>`).join('')}</div></div>`;
   }
-  /* Voti: il voto all'italiana (7+, 7½, 8−), la media di ogni materia e la media generale (media delle materie). */
+  /* Voti (regole di Sasha del 01/11/2026): da 1 a 10 con i decimali (6+ = 6,25, 6½, 7− = 6,75, o un numero qualsiasi),
+     scritto/orale/pratico, un peso per i voti che non contano al 100%, tutte le materie, gli anni scolastici separati,
+     media di ogni materia (pesata), media delle materie e media di tutti i voti, e il voto minimo per tornare al 6. */
   const TIPI_V = [['scritto', 'Scritto'], ['orale', 'Orale'], ['pratico', 'Pratico']];
-  const fmtVoto = (v) => { const n = Math.round(v * 4) / 4, i = Math.floor(n), r = n - i; return r === 0 ? `${i}` : r === 0.25 ? `${i}+` : r === 0.5 ? `${i}½` : `${i + 1}−`; };
+  const PESI = [['100', '100%'], ['75', '75%'], ['50', '50%'], ['25', '25%'], ['0', '0%']];
+  const fmtVoto = (v) => { const n = Math.round(v * 4) / 4;
+    if (Math.abs(n - v) > 0.001) return String(Math.round(v * 100) / 100).replace('.', ',');
+    const i = Math.floor(n), r = n - i; return r === 0 ? `${i}` : r === 0.25 ? `${i}+` : r === 0.5 ? `${i}½` : `${i + 1}−`; };
   const fmtMedia = (v) => v.toFixed(2).replace('.', ',').replace(/,?0+$/, '');
   // Mai i colori delle persone (verde, rosso, blu, grigio): sufficiente viola, quasi ambra, insufficiente rosa.
   const coloreVoto = (v) => (v = Math.round(v * 100) / 100) >= 6 ? 'var(--p-viola)' : v >= 5 ? 'var(--p-ambra)' : 'var(--p-rosa)';
-  const mieiV = (di) => S.voti.filter(v => v.per === S.me && v.di === di && typeof v.v === 'number');
-  function votiPerMateria(di) {
-    const out = {};
-    for (const v of mieiV(di)) (out[v.m] = out[v.m] || { l: [] }).l.push(v);
-    for (const k in out) { const l = out[k].l.sort((a, b) => b.d.localeCompare(a.d) || (b.creato || 0) - (a.creato || 0)); out[k].media = l.reduce((n, x) => n + x.v, 0) / l.length; }
+  const pesoV = (x) => typeof x.p === 'number' && x.p >= 0 && x.p <= 100 ? x.p : 100;
+  // L'anno scolastico parte il 1° settembre: un voto del 15/10/2026 è del 2026/27, uno del 10/5/2026 del 2025/26.
+  const annoV = (d) => { const y = +d.slice(0, 4), m = +d.slice(5, 7); const a = m >= 9 ? y : y - 1; return `${a}/${String(a + 1).slice(2)}`; };
+  const annoOra = () => annoV(T);
+  let voAnno = null;
+  const mieiV = (di) => S.voti.filter(v => v.per === S.me && v.di === di && typeof v.v === 'number' && /^\d{4}-\d{2}-\d{2}$/.test(v.d || ''));
+  // Media pesata: Σ(voto × peso) / Σ(peso). I voti che "non contano" (peso 0) si vedono ma non cambiano la media.
+  function mediaP(l) { const P = l.reduce((n, x) => n + pesoV(x), 0); return P ? l.reduce((n, x) => n + x.v * pesoV(x), 0) / P : null; }
+  function votiPerMateria(di, anno) {
+    const out = {}, a = anno || annoOra();
+    for (const v of mieiV(di).filter(v => annoV(v.d) === a)) (out[v.m] = out[v.m] || { l: [] }).l.push(v);
+    for (const k in out) { const l = out[k].l.sort((a, b) => b.d.localeCompare(a.d) || (b.creato || 0) - (a.creato || 0)); out[k].media = mediaP(l); }
     return out;
   }
+  // Il voto minimo da prendere nel prossimo voto (che conta al 100%) per riportare la media a 6, arrotondato al quarto in su.
+  // Se servirebbe più di 10, si dice quanti 10 servono: mai un numero impossibile.
+  function perIlSei(l) {
+    const P = l.reduce((n, x) => n + pesoV(x), 0), S0 = l.reduce((n, x) => n + x.v * pesoV(x), 0);
+    if (!P || S0 / P >= 6) return null;
+    const x = Math.ceil(((6 * (P + 100) - S0) / 100) * 4 - 1e-9) / 4;
+    if (x <= 10) return { v: Math.max(6, x) };
+    return { dieci: Math.ceil((6 * P - S0) / 400 - 1e-9) };
+  }
+  const fraseSei = (q, corta) => !q ? '' : q.v != null ? (corta ? `per il 6: almeno ${fmtVoto(q.v)}` : `Per tornare al 6 ti basta prendere almeno <b>${fmtVoto(q.v)}</b> al prossimo voto. Ce la fai 💪`)
+    : (corta ? `per il 6: ${q.dieci} voti buoni` : `Con un voto solo non basta: per tornare al 6 servono ${q.dieci} voti da 10 (o qualche voto buono in più). Un passo alla volta 💪`);
   function scVoti(m, s, colM) {
-    const vm = votiPerMateria(m.di), mat = Object.keys(colM).concat(Object.keys(vm).filter(x => !colM[x]));
-    const conVoti = mat.filter(x => vm[x]), tot = conVoti.reduce((n, x) => n + vm[x].l.length, 0);
-    const gen = conVoti.length ? conVoti.reduce((n, x) => n + vm[x].media, 0) / conVoti.length : null;
-    return `<div class="card vgen">${gen == null ? `<div class="empty">Ancora nessun voto. Quando ne prendi uno, segnalo qui: la media si calcola da sola.</div>`
-       : `<div class="vmed"><span class="vbig" style="--vc:${coloreVoto(gen)}">${fmtMedia(gen)}</span><div><b>Media generale</b><small>${tot} ${tot === 1 ? 'voto' : 'voti'} in ${conVoti.length} ${conVoti.length === 1 ? 'materia' : 'materie'}</small></div></div>`}
+    const anni = [...new Set([annoOra(), ...mieiV(m.di).map(v => annoV(v.d))])].sort().reverse();
+    if (!voAnno || !anni.includes(voAnno)) voAnno = annoOra();
+    const vm = votiPerMateria(m.di, voAnno), corrente = voAnno === annoOra();
+    const mat = (corrente ? Object.keys(colM) : []).concat(Object.keys(vm).filter(x => !(corrente && colM[x])).sort((a, b) => a.localeCompare(b)));
+    const conMedia = mat.filter(x => vm[x] && vm[x].media != null), tutti = mat.flatMap(x => vm[x] ? vm[x].l : []);
+    const gen = conMedia.length ? conMedia.reduce((n, x) => n + vm[x].media, 0) / conMedia.length : null, tot = mediaP(tutti);
+    const sotto = conMedia.filter(x => vm[x].media < 6).length;
+    return `${anni.length > 1 ? `<div class="vanni">${segHtml('voanno', anni.slice(0, 4).map(a => [a, a]), voAnno)}</div>` : ''}
+     <div class="card vgen">${gen == null ? `<div class="empty">${corrente ? 'Ancora nessun voto. Quando ne prendi uno, segnalo qui: la media si calcola da sola.' : `Nessun voto nel ${voAnno}.`}</div>`
+       : `<div class="vmed"><span class="vbig" style="--vc:${coloreVoto(gen)}">${fmtMedia(gen)}</span><div><b>Media delle materie</b><small>${conMedia.length} ${conMedia.length === 1 ? 'materia' : 'materie'} · ${voAnno}</small></div></div>
+       ${tot != null ? `<div class="vtot"><span>Media di tutti i voti</span><span class="vch" style="--vc:${coloreVoto(tot)}">${fmtMedia(tot)}</span></div>` : ''}
+       <div class="vtot"><span>${tutti.length} ${tutti.length === 1 ? 'voto' : 'voti'}</span><small>${sotto ? `${sotto} sotto il 6` : 'tutte sufficienti ✨'}</small></div>`}
        <button type="button" class="btn tap" data-votonuovo="${m.di}">+ Aggiungi un voto</button></div>
-     <div class="card"><div class="vmat">${mat.map(x => { const r = vm[x]; return `<button type="button" class="vm tap${r ? '' : ' vuota'}" data-votimat="${esc(x)}" data-di="${m.di}" style="--mc:${colM[x] || 'var(--muted)'}"><i></i><span><b>${esc(x)}</b><small>${r ? `${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'} · ultimo ${fmtVoto(r.l[0].v)}` : 'Nessun voto'}</small></span>${r ? `<span class="vch" style="--vc:${coloreVoto(r.media)}">${fmtMedia(r.media)}</span>` : '<span class="vch nv">—</span>'}</button>`; }).join('')}</div></div>`;
+     ${mat.length ? `<div class="card"><div class="vmat">${mat.map(x => { const r = vm[x], q = r && perIlSei(r.l); return `<button type="button" class="vm tap${r ? '' : ' vuota'}" data-votimat="${esc(x)}" data-di="${m.di}" style="--mc:${colM[x] || 'var(--muted)'}"><i></i><span><b>${esc(x)}</b><small>${r ? `${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'} · ultimo ${fmtVoto(r.l[0].v)}` : 'Nessun voto'}</small>${q ? `<small class="vsei">${fraseSei(q, true)}</small>` : ''}</span>${r && r.media != null ? `<span class="vch" style="--vc:${coloreVoto(r.media)}">${fmtMedia(r.media)}</span>` : '<span class="vch nv">—</span>'}</button>`; }).join('')}</div></div>` : ''}`;
   }
   function sheetVotiMat(di, mat) {
-    const s = S.scuola[di]; if (!s) return; const r = votiPerMateria(di)[mat], c = coloriMat(s)[mat] || 'var(--acc)';
+    const s = S.scuola[di]; if (!s) return; const anno = voAnno || annoOra(), r = votiPerMateria(di, anno)[mat], c = coloriMat(s)[mat] || 'var(--acc)';
     const prof = ((s.orario || []).find(x => x.m === mat && x.prof) || {}).prof;
-    openSheet(`<h3 class="cmh" style="--mc:${c}"><i></i>${esc(mat)}</h3>${prof ? `<div class="muted">${esc(prof)}</div>` : ''}
-      ${r ? `<div class="vmed"><span class="vbig" style="--vc:${coloreVoto(r.media)}">${fmtMedia(r.media)}</span><div><b>Media</b><small>${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'}</small></div></div>
-      <div class="vlist">${r.l.map(v => `<button type="button" class="vr tap" data-votoid="${v.id}"><span class="vch" style="--vc:${coloreVoto(v.v)}">${fmtVoto(v.v)}</span><span><b>${(TIPI_V.find(t => t[0] === v.tipo) || TIPI_V[0])[1]}</b><small>${fmt(v.d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')}${v.x ? ' · ' + esc(v.x) : ''}</small></span></button>`).join('')}</div>`
+    const parti = r ? TIPI_V.map(([k, n]) => [n, mediaP(r.l.filter(v => (v.tipo || 'scritto') === k)), r.l.filter(v => (v.tipo || 'scritto') === k).length]).filter(x => x[2]) : [];
+    const q = r && perIlSei(r.l);
+    openSheet(`<h3 class="cmh" style="--mc:${c}"><i></i>${esc(mat)}</h3><div class="muted">${prof ? esc(prof) + ' · ' : ''}${anno}</div>
+      ${r ? `<div class="vmed"><span class="vbig" style="--vc:${r.media == null ? 'var(--muted)' : coloreVoto(r.media)}">${r.media == null ? '—' : fmtMedia(r.media)}</span><div><b>Media</b><small>${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'}</small></div></div>
+      ${parti.length > 1 || (parti.length === 1 && parti[0][1] != null) ? `<div class="vparti">${parti.map(([n, md, k]) => `<div><small>${n}</small><span class="vch${md == null ? ' nv' : ''}" style="--vc:${md == null ? 'var(--muted)' : coloreVoto(md)}">${md == null ? '—' : fmtMedia(md)}</span></div>`).join('')}</div>` : ''}
+      ${q ? `<div class="vsei-box">${fraseSei(q)}</div>` : ''}
+      <div class="vlist">${r.l.map(v => `<button type="button" class="vr tap" data-votoid="${v.id}"><span class="vch" style="--vc:${coloreVoto(v.v)}">${fmtVoto(v.v)}</span><span><b>${(TIPI_V.find(t => t[0] === v.tipo) || TIPI_V[0])[1]}${pesoV(v) < 100 ? ` <em class="vpeso">${pesoV(v) ? `peso ${pesoV(v)}%` : 'non conta'}</em>` : ''}</b><small>${fmt(v.d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')}${v.x ? ' · ' + esc(v.x) : ''}</small></span></button>`).join('')}</div>`
       : `<div class="empty">Ancora nessun voto in ${esc(mat)}.</div>`}
       <button type="button" class="btn tap" data-votonuovo="${di}" data-mat="${esc(mat)}">+ Voto di ${esc(mat)}</button>`);
   }
   function sheetVoto(di, mat) {
     const s = S.scuola[di]; if (!s) return; const colM = coloriMat(s);
+    const altre = [...new Set(mieiV(di).map(v => v.m))].filter(x => !colM[x]).sort((a, b) => a.localeCompare(b));
     openSheet(`<h3>Nuovo voto</h3><form class="stack" id="fVo" data-di="${di}">
       ${mat ? `<div class="cmh" style="--mc:${colM[mat] || 'var(--acc)'}"><i></i><b>${esc(mat)}</b></div><input type="hidden" id="voM" value="${esc(mat)}">`
-      : `<label>Materia</label><div class="tipi">${Object.keys(colM).map(x => `<button type="button" class="tp tap mt" data-vomat="${esc(x)}" style="--mc:${colM[x]}"><i></i>${esc(x)}</button>`).join('')}</div><input type="hidden" id="voM" value="">`}
+      : `<label>Materia</label><div class="tipi">${Object.keys(colM).concat(altre).map(x => `<button type="button" class="tp tap mt" data-vomat="${esc(x)}" style="--mc:${colM[x] || 'var(--muted)'}"><i></i>${esc(x)}</button>`).join('')}<button type="button" class="tp tap" data-vomat="+">+ Altra materia</button></div>
+        <input type="hidden" id="voM" value=""><input id="voAltra" class="voh" maxlength="60" autocomplete="off" placeholder="Nome della materia (es. Educazione civica)">`}
       <div class="vprev"><span class="vbig" id="voPrev" style="--vc:var(--muted)">–</span></div>
       <div class="vnum">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<button type="button" class="tap" data-vonum="${n}">${n}</button>`).join('')}</div>
       ${segHtml('vomod', [['0', 'Pieno'], ['0.25', '+'], ['0.5', '½'], ['-0.25', '−']], '0')}
+      <input id="voLib" inputmode="decimal" maxlength="5" autocomplete="off" placeholder="Oppure scrivi il voto (es. 7,3)">
       ${segHtml('votipo', TIPI_V, 'scritto')}
+      <label>Quanto conta nella media</label>
+      <div class="vpesi">${segHtml('vopeso', PESI, '100')}<small>Di solito 100%. Con 0% il voto si vede ma non conta nella media.</small></div>
       <label>Quando<input type="date" id="voD" value="${T}" max="${T}"></label>
       <input id="voX" maxlength="120" autocomplete="off" placeholder="Argomento, se vuoi">
       <button class="btn tap">Salva il voto</button></form>`);
   }
-  // Il voto scelto nel foglio: numero + segno (pieno, +, ½, −), mai sopra il 10.
+  // Il voto scelto nel foglio: il numero scritto a mano (se c'è), altrimenti numero + segno (pieno, +, ½, −), da 1 a 10.
   function votoScelto() {
+    const lib = ($('#voLib') || {}).value || '';
+    if (lib.trim()) { const v = parseFloat(lib.replace(',', '.')); return isFinite(v) && v >= 1 && v <= 10 ? Math.round(v * 100) / 100 : NaN; }
     const n = document.querySelector('[data-vonum].on'), md = document.querySelector('[data-vomod].on');
     if (!n) return null; return Math.max(0, Math.min(10, +n.dataset.vonum + (md ? +md.dataset.vomod : 0)));
   }
@@ -1432,10 +1502,12 @@
     // Sopra il 10 non si va: con il 10 il segno torna "Pieno" (o "−").
     const n = document.querySelector('[data-vonum].on'), md = document.querySelector('[data-vomod].on');
     if (n && +n.dataset.vonum === 10 && md && +md.dataset.vomod > 0) segSet(md.parentElement, 0);
-    const v = votoScelto(), el = $('#voPrev'); if (!el) return; el.textContent = v == null ? '–' : fmtVoto(v); el.style.setProperty('--vc', v == null ? 'var(--muted)' : coloreVoto(v)); }
+    const v = votoScelto(), el = $('#voPrev'); if (!el) return; const ok = v != null && !isNaN(v);
+    el.textContent = ok ? fmtVoto(v) : v == null ? '–' : '?'; el.style.setProperty('--vc', ok ? coloreVoto(v) : 'var(--muted)'); }
   function sheetVotoDett(id) {
     const v = S.voti.find(x => x.id === id); if (!v) return;
-    openSheet(`<h3>${esc(v.m)}: ${fmtVoto(v.v)}</h3><div>${(TIPI_V.find(t => t[0] === v.tipo) || TIPI_V[0])[1]} · ${fmt(v.d, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+    openSheet(`<h3>${esc(v.m)}: ${fmtVoto(v.v)}</h3><div>${(TIPI_V.find(t => t[0] === v.tipo) || TIPI_V[0])[1]} · ${fmt(v.d, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+      ${pesoV(v) < 100 ? `<div class="muted">${pesoV(v) ? `Conta il ${pesoV(v)}% nella media` : 'Non conta nella media'}</div>` : ''}
       ${v.x ? `<div class="muted">${esc(v.x)}</div>` : ''}<div class="src">${v.di === S.me ? 'Lo vedi solo tu' : 'Lo vedi solo tu: è nella tua copia di prova'}</div>
       <button type="button" class="btn bad tap" data-votovia="${v.id}">Elimina il voto</button>`);
   }
@@ -1718,7 +1790,9 @@
   /* ---------- Tocchi ---------- */
   // Ricerca dei set LEGO mentre si scrive (Invio non manda il modulo).
   let legoT = 0;
-  document.addEventListener('input', (ev) => { if (ev.target.id === 'legoQ') { clearTimeout(legoT); legoT = setTimeout(risLego, 150); } });
+  document.addEventListener('input', (ev) => {
+    if (ev.target.id === 'voLib') { if (ev.target.value.trim()) document.querySelectorAll('[data-vonum].on').forEach(b => b.classList.remove('on')); return aggiornaPrev(); }
+    if (ev.target.id === 'legoQ') { clearTimeout(legoT); legoT = setTimeout(risLego, 150); } });
   document.addEventListener('keydown', (ev) => { if (ev.target.id === 'legoQ' && ev.key === 'Enter') { ev.preventDefault(); ev.target.blur(); } });
   document.addEventListener('click', async (ev) => {
     const t = ev.target.closest('button'); if (!t) return;
@@ -1930,13 +2004,17 @@
     if (t.id === 'mioBack') return closeMio();
     if (d.apriMio) { closeSheet(true); return openMio(true); }
     if (d.mioday) { mioDay = d.mioday; return rMio(); }
+    if (d.scmese) { const md = moduli(S.me)[0]; if (!md || !scMese) return; cambiaMese(+d.scmese, S.scuola[md.di]); return rMio(); }
     if (d.sctab) { if (scTab === d.sctab) return; scTab = d.sctab; LS.set('noi4-scuola-tab', scTab); segSet(t.parentElement, TABS_S.findIndex(x => x[0] === scTab)); return rMio(); }
     if (d.votimat) return sheetVotiMat(d.di, d.votimat);
     if (d.votonuovo) return sheetVoto(d.votonuovo, d.mat || '');
     if (d.votoid) return sheetVotoDett(d.votoid);
-    if (d.vomat) { t.parentElement.querySelectorAll('.tp').forEach(b => b.classList.toggle('on', b === t)); $('#voM').value = d.vomat; return; }
-    if (d.vonum) { t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); return aggiornaPrev(); }
-    if (d.vomod != null || d.votipo) { const b = [...t.parentElement.querySelectorAll('button')]; segSet(t.parentElement, b.indexOf(t)); return aggiornaPrev(); }
+    if (d.vomat) { t.parentElement.querySelectorAll('.tp').forEach(b => b.classList.toggle('on', b === t));
+      const al = $('#voAltra'), nuova = d.vomat === '+'; $('#voM').value = nuova ? '' : d.vomat;
+      if (al) { al.classList.toggle('voh', !nuova); if (nuova) al.focus(); } return; }
+    if (d.vonum) { t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); const l = $('#voLib'); if (l) l.value = ''; return aggiornaPrev(); }
+    if (d.voanno) { if (voAnno === d.voanno) return; voAnno = d.voanno; return rMio(); }
+    if (d.vomod != null || d.votipo || d.vopeso != null) { const b = [...t.parentElement.querySelectorAll('button')]; segSet(t.parentElement, b.indexOf(t)); return aggiornaPrev(); }
     if (d.votovia) {
       // Due tocchi separati: un doppio tocco veloce per sbaglio non elimina.
       if (!t.dataset.sicuro) { t.dataset.sicuro = Date.now(); t.textContent = 'Tocca ancora per eliminare'; return; }
@@ -2125,10 +2203,13 @@
         render(); toast(per === S.me ? 'Aggiunto alla tua lista 🎁' : 'Idea salvata: resta un segreto 🤫');
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'fVo') {
-      const v = votoScelto(), mat = $('#voM').value, tp = f.querySelector('[data-votipo].on'), dd = $('#voD').value;
+      const v = votoScelto(), al = $('#voAltra'), mat = ($('#voM').value || (al && !al.classList.contains('voh') ? al.value : '')).trim().replace(/\s+/g, ' ').slice(0, 60);
+      const tp = f.querySelector('[data-votipo].on'), pe = f.querySelector('[data-vopeso].on'), dd = $('#voD').value;
       if (!mat) return toast('Scegli la materia');
       if (v == null) return toast('Scegli il voto');
-      const voto = { per: S.me, di: f.dataset.di, m: mat, v, tipo: tp ? tp.dataset.votipo : 'scritto', d: /^\d{4}-\d{2}-\d{2}$/.test(dd) ? dd : T, x: $('#voX').value.trim().slice(0, 120), by: S.me, creato: Date.now() };
+      if (isNaN(v)) return toast('Il voto va da 1 a 10 (es. 7,3)');
+      const p = pe ? +pe.dataset.vopeso : 100;
+      const voto = { per: S.me, di: f.dataset.di, m: mat, v, tipo: tp ? tp.dataset.votipo : 'scritto', p, d: /^\d{4}-\d{2}-\d{2}$/.test(dd) ? dd : T, x: $('#voX').value.trim().slice(0, 120), by: S.me, creato: Date.now() };
       closeSheet(); toast(v >= 6 ? `${fmtVoto(v)} in ${mat} 🎉` : `${fmtVoto(v)} in ${mat}: la prossima andrà meglio 💪`);
       if (v >= 8) festa(document.querySelector('#mio .vbig'));
       try { await DATI.aggiungi('voti', voto); } catch (er) { sbaglio(er); }

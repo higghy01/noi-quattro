@@ -635,3 +635,43 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .vnum button{min-height:48px;border-radius:14px;background:var(--soft);font:650 18px var(--f-disp);transition:background-color .2s,color .2s,transform .12s var(--ease)}
 .vnum button.on{background:var(--me);color:#fff}
 .tp.mt.on{background:color-mix(in srgb,var(--mc) 18%,transparent);border-color:var(--mc)}
+
+/* Calendario della scuola (v47): un mese, solo i giorni di scuola, interrogazioni e verifiche segnate */
+.cmese{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;text-align:center}
+.cmese b{display:block;font:650 17px var(--f-disp);text-transform:capitalize}
+.cmese small{color:var(--muted);font-size:12px}
+.cfr{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--soft)}
+.cfr svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.cgr{display:grid;grid-template-columns:repeat(var(--c),1fr);gap:4px}
+.cgr-av,.cgr-in{animation:fm-cal .32s var(--ease) both}
+@keyframes fm-cal{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+.cgh{text-align:center;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;padding-bottom:2px}
+.cg{position:relative;min-height:46px;border-radius:12px;display:grid;place-items:center;align-content:center;gap:3px;background:var(--soft);transition:background-color .2s,color .2s,transform .12s var(--ease)}
+.cg.fuori{background:none}
+.cg b{font:600 15px var(--f-disp);line-height:1}
+.cg.no{background:none;opacity:.42}
+.cg.oggi b{color:var(--me)}
+.cg.prova{box-shadow:inset 0 0 0 2px var(--p-ambra)}
+.cg.on{background:var(--me);color:#fff}
+.cg.on b{color:#fff}
+.cg.on.prova{box-shadow:inset 0 0 0 2px color-mix(in srgb,#fff 70%,transparent)}
+.cgd{display:flex;gap:3px;height:5px}
+.cgd i{width:5px;height:5px;border-radius:999px;background:var(--mc)}
+.cg.on .cgd i{background:#fff}
+
+/* Voti (v47): anni, medie, peso, voto minimo per il 6 */
+.vanni .seg{margin-bottom:0}
+.vtot{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px}
+.vtot small{color:var(--muted);font-size:13px}
+.vsei{color:var(--p-rosa)!important;font-weight:600}
+.vsei-box{padding:12px 14px;border-radius:14px;font-size:14px;line-height:1.4;background:color-mix(in srgb,var(--p-rosa) 12%,var(--panel));color:var(--fg)}
+.vsei-box b{color:var(--p-rosa);font-size:16px}
+.vparti{display:flex;gap:12px;flex-wrap:wrap}
+.vparti div{display:flex;align-items:center;gap:8px}
+.vparti small{color:var(--muted);font-size:13px}
+.vpeso{font-style:normal;font-weight:500;font-size:12px;color:var(--muted);margin-left:4px}
+.vnum{grid-template-columns:repeat(5,1fr)}
+.vpesi .seg button{font-size:13px;padding-inline:2px}
+.voh{display:none}
+.sctabs .seg button{font-size:13.5px;padding-inline:2px}
+.vpesi small{display:block;margin-top:-4px;color:var(--muted);font-size:12px}

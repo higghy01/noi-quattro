@@ -3,7 +3,7 @@
 Si avvia a mano (workflow "Note di scuola") con l'ingresso "note", un JSON:
   {"persona": "p3", "note": [{"m": "Matematica", "tipo": "verifica", "d": "2026-11-05", "x": "equazioni"}],
    "voti": [{"m": "Inglese", "v": 7.5, "tipo": "orale", "d": "2026-10-20", "x": ""}]}
-voti: v da 0 a 10 (7+ = 7.25, 7½ = 7.5, 8− = 7.75), tipo scritto, orale o pratico. Un voto uguale non si ripete.
+voti: v da 0 a 10 (7+ = 7.25, 7½ = 7.5, 8− = 7.75), tipo scritto, orale o pratico, p = peso in % (facoltativo, 100). Un voto uguale non si ripete.
 tipo: interrogazione, verifica, compito, portare, altro (come nell'app). Una nota uguale
 (stessa materia, tipo e giorno) già presente non si ripete: si aggiorna solo il testo.
 L'ingresso si legge dal file dell'evento, così non finisce nel registro.
@@ -77,7 +77,10 @@ def main():
         if not m or tipo not in TIPI_V or isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 10:
             raise SystemExit("Voto non valido: servono materia, voto da 0 a 10 e tipo")
         giorno(d)
-        nuovi_v.append({"m": giusta(m), "v": float(v), "tipo": tipo, "d": d, "x": str(n.get("x", "")).strip()[:200]})
+        p = n.get("p", 100)
+        if isinstance(p, bool) or not isinstance(p, (int, float)) or not 0 <= p <= 100:
+            raise SystemExit("Peso non valido: da 0 a 100")
+        nuovi_v.append({"m": giusta(m), "v": float(v), "tipo": tipo, "p": float(p), "d": d, "x": str(n.get("x", "")).strip()[:200]})
     colv = db.collection("voti")
     gia = {(x.get("m"), float(x.get("v", -1)), x.get("tipo"), x.get("d"))
            for x in (s.to_dict() or {} for s in colv.where("per", "==", persona).stream())}
