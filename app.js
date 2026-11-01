@@ -1480,7 +1480,7 @@
     openSheet(`<h3>Nuovo voto</h3><form class="stack" id="fVo" data-di="${di}">
       ${mat ? `<div class="cmh" style="--mc:${colM[mat] || 'var(--acc)'}"><i></i><b>${esc(mat)}</b></div><input type="hidden" id="voM" value="${esc(mat)}">`
       : `<label>Materia</label><div class="tipi">${Object.keys(colM).concat(altre).map(x => `<button type="button" class="tp tap mt" data-vomat="${esc(x)}" style="--mc:${colM[x] || 'var(--muted)'}"><i></i>${esc(x)}</button>`).join('')}<button type="button" class="tp tap" data-vomat="+">+ Altra materia</button></div>
-        <input type="hidden" id="voM" value=""><input id="voAltra" class="voh" maxlength="60" autocomplete="off" placeholder="Nome della materia (es. Educazione civica)">`}
+        <input type="hidden" id="voM" value=""><input id="voAltra" class="voh" maxlength="60" autocomplete="off" placeholder="Quale? Es. Latino">`}
       <div class="vprev"><span class="vbig" id="voPrev" style="--vc:var(--muted)">–</span></div>
       <div class="vnum">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<button type="button" class="tap" data-vonum="${n}">${n}</button>`).join('')}</div>
       ${segHtml('vomod', [['0', 'Pieno'], ['0.25', '+'], ['0.5', '½'], ['-0.25', '−']], '0')}

@@ -643,8 +643,10 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .cfr{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--soft)}
 .cfr svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .cgr{display:grid;grid-template-columns:repeat(var(--c),1fr);gap:4px}
-.cgr-av,.cgr-in{animation:fm-cal .32s var(--ease) both}
-@keyframes fm-cal{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+/* Cambio mese con una direzione, mai di lato (Sasha): il mese dopo sale dal basso, quello prima scende dall'alto */
+.cgr-av{animation:fm-cal-av .32s var(--ease) both}.cgr-in{animation:fm-cal-in .32s var(--ease) both}
+@keyframes fm-cal-av{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes fm-cal-in{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:none}}
 .cgh{text-align:center;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;padding-bottom:2px}
 .cg{position:relative;min-height:46px;border-radius:12px;display:grid;place-items:center;align-content:center;gap:3px;background:var(--soft);transition:background-color .2s,color .2s,transform .12s var(--ease)}
 .cg.fuori{background:none}
