@@ -578,7 +578,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .sgiorni button.oggi b{color:var(--me)}
 .sgiorni button.no{opacity:.45}
 .lgiorno{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 2px}
-.lgiorno b{font:650 17px var(--f-disp)}.lgiorno b::first-letter{text-transform:uppercase}
+.lgiorno b{font:650 17px var(--f-disp)}
 .lgiorno small{color:var(--muted);font-size:13px;white-space:nowrap}
 .lez{display:grid;gap:6px}
 .lz{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:10px;padding:9px 10px 9px 6px;border-radius:14px;background:color-mix(in srgb,var(--mc) 9%,transparent);text-align:left;width:100%;position:relative;overflow:hidden}

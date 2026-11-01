@@ -1273,7 +1273,7 @@
         let d = s.dal ? new Date(s.dal + 'T12:00:00') : addDays(TODAY, -6); while (d.getDay() !== g) d = addDays(d, 1);
         const ore = l.reduce((n, x) => n + x.a - x.da + 1, 0), tutte = l.every(x => x.h);
         out.push({ id: `scuola-${pid}-${g}`, t: '🎒 Scuola', d: iso(d), h: tutte ? l[0].h : '', fine: tutte ? l[l.length - 1].fine : '', who: [pid],
-          n: `${ore} ore: ${[...new Set(l.map(x => x.m))].join(', ')}`, ripeti: 'settimanale', al: s.al || '', pause: pause(s), fonte: `scuola:${pid}`, scuola: g, virtuale: true });
+          n: `${ore} ore`, ripeti: 'settimanale', al: s.al || '', pause: pause(s), fonte: `scuola:${pid}`, scuola: g, virtuale: true });
       }
     }
     for (const c of mieiC()) {
