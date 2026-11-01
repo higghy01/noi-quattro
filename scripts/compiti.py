@@ -3,7 +3,7 @@
 Si avvia a mano (workflow "Note di scuola") con l'ingresso "note", un JSON:
   {"persona": "p3", "note": [{"m": "Matematica", "tipo": "verifica", "d": "2026-11-05", "x": "equazioni"}],
    "voti": [{"m": "Inglese", "v": 7.5, "tipo": "orale", "d": "2026-10-20", "x": ""}]}
-voti: v da 0 a 10 (7+ = 7.25, 7½ = 7.5, 8− = 7.75), tipo scritto, orale o pratico, p = peso in % (facoltativo, 100). Un voto uguale non si ripete.
+voti: v da 0.75 a 10, cioè da 1− a 10 come nell'app (7+ = 7.25, 7½ = 7.5, 8− = 7.75), tipo scritto, orale o pratico, p = peso in % (facoltativo, 100). Un voto uguale non si ripete.
 tipo: interrogazione, verifica, compito, portare, altro (come nell'app). Una nota uguale
 (stessa materia, tipo e giorno) già presente non si ripete: si aggiorna solo il testo.
 L'ingresso si legge dal file dell'evento, così non finisce nel registro.
@@ -58,24 +58,24 @@ def main():
     col = db.collection("compiti")
     vecchie = {(v.get("m"), v.get("tipo"), v.get("d")): s.reference
                for s in col.where("per", "==", persona).stream() for v in [s.to_dict() or {}]}
-    b, aggiunte, cambiate, adesso = db.batch(), 0, 0, int(time.time() * 1000)
+    scritture, aggiunte, cambiate, adesso = [], 0, 0, int(time.time() * 1000)
     for n in nuove:
         ref = vecchie.get((n["m"], n["tipo"], n["d"]))
         if ref:
             if n["x"]:
-                b.update(ref, {"x": n["x"]})
+                scritture.append(("update", ref, {"x": n["x"]}))
                 cambiate += 1
         else:
             ref = col.document()
-            b.set(ref, dict(n, per=persona, di=persona, by=persona, creato=adesso, fatto=False))
+            scritture.append(("set", ref, dict(n, per=persona, di=persona, by=persona, creato=adesso, fatto=False)))
             vecchie[(n["m"], n["tipo"], n["d"])] = ref  # la stessa nota due volte nell'ingresso entra una volta
             aggiunte += 1
     nuovi_v = []
     for n in voti:
         m, tipo, d = str(n.get("m", "")).strip()[:60], str(n.get("tipo", "")), str(n.get("d", ""))
         v = n.get("v")
-        if not m or tipo not in TIPI_V or isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 10:
-            raise SystemExit("Voto non valido: servono materia, voto da 0 a 10 e tipo")
+        if not m or tipo not in TIPI_V or isinstance(v, bool) or not isinstance(v, (int, float)) or not 0.75 <= v <= 10:
+            raise SystemExit("Voto non valido: servono materia, voto da 0.75 a 10 e tipo")
         giorno(d)
         p = n.get("p")
         p = 100 if p is None else p
@@ -90,9 +90,15 @@ def main():
         if (n["m"], n["v"], n["tipo"], n["d"]) in gia:
             continue
         gia.add((n["m"], n["v"], n["tipo"], n["d"]))
-        b.set(colv.document(), dict(n, per=persona, di=persona, by=persona, creato=adesso))
+        scritture.append(("set", colv.document(), dict(n, per=persona, di=persona, by=persona, creato=adesso)))
         voti_messi += 1
-    b.commit()
+    # Firestore accetta al massimo 500 scritture per batch: oltre si salva a blocchi. Se un blocco fallisce,
+    # rilanciare va bene: le note e i voti già messi non si ripetono.
+    for i in range(0, len(scritture), 400):
+        b = db.batch()
+        for tipo, ref, d in scritture[i:i + 400]:
+            (b.update if tipo == "update" else b.set)(ref, d)
+        b.commit()
     print(f"Note di scuola: {aggiunte} aggiunte, {cambiate} aggiornate; voti: {voti_messi} messi")
 
 

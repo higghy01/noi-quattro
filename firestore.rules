@@ -111,7 +111,7 @@ service cloud.firestore {
         && request.resource.data.di is string && request.resource.data.di.size() <= 4
         && request.resource.data.m is string && request.resource.data.m.size() <= 60
         && request.resource.data.d is string && request.resource.data.d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-        && request.resource.data.v is number && request.resource.data.v >= 0 && request.resource.data.v <= 10
+        && request.resource.data.v is number && request.resource.data.v >= 0.75 && request.resource.data.v <= 10
         && request.resource.data.tipo in ['scritto', 'orale', 'pratico']
         && request.resource.data.get('p', 100) is number && request.resource.data.get('p', 100) >= 0 && request.resource.data.get('p', 100) <= 100
         && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 200; }

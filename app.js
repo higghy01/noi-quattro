@@ -1302,13 +1302,17 @@
     return out;
   }
 
-  let mioDay = null, mioNuova = false;
+  let mioNuova = false;
+  // Calendario della scuola: mese, giorno scelto e animazione per ogni sezione (la propria e le copie di prova non si muovono insieme).
+  const scSt = {};
+  const scStato = (di) => scSt[di] || (scSt[di] = { day: null, mese: null, anim: '' });
+  const scAzzera = () => { for (const k in scSt) delete scSt[k]; };
   const mioAperto = () => $('#mio').classList.contains('on');
   // alPostoDelFoglio: aperta da un foglio, prende il suo posto nella cronologia (così "indietro" resta giusto).
   function openMio(alPostoDelFoglio) {
     if (alPostoDelFoglio === true && history.state && history.state.foglio) history.replaceState({ schermo: 'mio' }, '');
     else if (!mioAperto()) history.pushState({ schermo: 'mio' }, '');
-    mioDay = null; scMese = null; scAnim = ''; mioNuova = true; rMio(); mioNuova = false;
+    scAzzera(); mioNuova = true; rMio(); mioNuova = false;
     $('#mio').scrollTop = 0; $('#mio').classList.add('on'); $('#fab').classList.add('via');
   }
   function closeMio(daIndietro) {
@@ -1344,14 +1348,15 @@
   }
   // Calendario della scuola (Sasha, 01/11/2026): un mese alla volta, solo i giorni di scuola (lun-ven o lun-sab),
   // con le interrogazioni, le verifiche e i compiti segnati. Sotto, le lezioni e le note del giorno scelto.
-  let scMese = null, scAnim = '';
+  const PROVA = ['verifica', 'interrogazione'];
   function scOrario(m, s, colM) {
-    if (!mioDay || !aScuola(s, mioDay) && mioDay < T && !scMese) mioDay = giornoScuola(s);
-    if (!scMese) scMese = mioDay.slice(0, 7);
+    const st = scStato(m.di);
+    if (!st.day || !aScuola(s, st.day) && st.day < T && !st.mese) st.day = giornoScuola(s);
+    if (!st.mese) st.mese = st.day.slice(0, 7);
+    const mioDay = st.day, scMese = st.mese;
     const ultimo = Math.min(6, Math.max(5, ...(s.orario || []).map(x => +x.g)));
-    const y = +scMese.slice(0, 4), mo = +scMese.slice(5, 7), primo = new Date(y, mo - 1, 1, 12), nG = fineMese(scMese + '-01');
+    const y = +scMese.slice(0, 4), mo = +scMese.slice(5, 7), primo = new Date(y, mo - 1, 1, 12);
     const note = mieiC(m.di), daFare = (d) => note.filter(c => c.d === d && !c.fatto);
-    const PROVA = ['verifica', 'interrogazione'];
     const celle = []; let lun = inizioSettimana(primo);
     if (iso(addDays(lun, ultimo - 1)).slice(0, 7) < scMese) lun = addDays(lun, 7); // la prima settimana inizia nel weekend
     while (iso(lun).slice(0, 7) <= scMese) {
@@ -1360,19 +1365,19 @@
         if (d.slice(0, 7) !== scMese) { celle.push('<span class="cg fuori" aria-hidden="true"></span>'); continue; }
         const nn = daFare(d), pr = nn.filter(c => PROVA.includes(c.tipo));
         const lab = `${fmt(d, { weekday: 'long', day: 'numeric', month: 'long' })}${nn.length ? `: ${nn.map(c => esc((TIPO_C[c.tipo] || TIPO_C.altro).n)).join(', ')}` : ''}`;
-        celle.push(`<button type="button" class="cg tap${d === mioDay ? ' on' : ''}${d === T ? ' oggi' : ''}${aScuola(s, d) ? '' : ' no'}${pr.length ? ' prova' : ''}" data-mioday="${d}" aria-label="${lab}"><b>${+d.slice(8)}</b>${nn.length ? `<span class="cgd">${nn.slice(0, 3).map(c => `<i style="--mc:${colM[c.m] || 'var(--acc)'}"></i>`).join('')}</span>` : ''}</button>`);
+        celle.push(`<button type="button" class="cg tap${d === mioDay ? ' on' : ''}${d === T ? ' oggi' : ''}${aScuola(s, d) ? '' : ' no'}${pr.length ? ' prova' : ''}" data-mioday="${d}" data-di="${m.di}" aria-label="${lab}"><b>${+d.slice(8)}</b>${nn.length ? `<span class="cgd">${nn.slice(0, 3).map(c => `<i style="--mc:${colM[c.m] || 'var(--acc)'}"></i>`).join('')}</span>` : ''}</button>`);
       }
       lun = addDays(lun, 7);
     }
     const nMese = note.filter(c => c.d.slice(0, 7) === scMese && !c.fatto), nProve = nMese.filter(c => PROVA.includes(c.tipo)).length;
     const lz = aScuola(s, mioDay) ? lezioni(s, gSett(mioDay)) : [];
     const delGiornoC = note.filter(c => c.d === mioDay), conLez = new Set(lz.map(x => x.m)), altre = delGiornoC.filter(c => !conLez.has(c.m));
-    const anim = scAnim; scAnim = '';
+    const anim = st.anim; st.anim = '';
     return `<div class="card scuola">
        <div class="cmese"><button type="button" class="tap cfr" data-scmese="-1" data-di="${m.di}" aria-label="Mese prima"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
          <div><b>${fmt(scMese + '-01', { month: 'long', year: 'numeric' })}</b><small>${nMese.length ? `${nMese.length} da fare${nProve ? ` · ${nProve} ${nProve === 1 ? 'prova' : 'prove'}` : ''}` : 'Niente segnato'}</small></div>
          <button type="button" class="tap cfr" data-scmese="1" data-di="${m.di}" aria-label="Mese dopo"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
-       <div class="cgr${anim ? ' cgr-' + anim : ''}" style="--c:${ultimo}">${GG.slice(1, ultimo + 1).map(g => `<span class="cgh">${g.slice(0, 1)}</span>`).join('')}${celle.join('')}</div>
+       <div class="cgr${anim ? ' cgr-' + anim : ''}" data-di="${m.di}" style="--c:${ultimo}">${GG.slice(1, ultimo + 1).map(g => `<span class="cgh">${g.slice(0, 1)}</span>`).join('')}${celle.join('')}</div>
        <div class="lgiorno"><b>${mioDay === T ? 'Oggi' : mioDay === iso(addDays(TODAY, 1)) ? 'Domani' : fmt(mioDay, { weekday: 'long', day: 'numeric', month: 'long' })}</b>${lz.length && lz[0].h ? `<small>${esc(lz[0].h)}–${esc(lz[lz.length - 1].fine)}</small>` : ''}</div>
        ${lz.length ? `<div class="lez">${lz.map(x => { const nn = delGiornoC.filter(c => c.m === x.m);
          return `<button type="button" class="lz tap" data-lez="${esc(x.m)}" data-di="${m.di}" style="--mc:${colM[x.m]}"><span class="lo"><b>${x.da}ª${x.a > x.da ? `–${x.a}ª` : ''}</b>${x.h ? `<small>${esc(x.h)}</small>` : ''}</span><span class="lm"><b>${esc(x.m)}</b>${x.prof ? `<small>${esc(x.prof)}</small>` : ''}${nn.length ? `<span class="lzn">${nn.map(c => `<span class="${c.fatto ? 'ok' : ''}">${(TIPO_C[c.tipo] || TIPO_C.altro).e} ${esc((TIPO_C[c.tipo] || TIPO_C.altro).n)}</span>`).join('')}</span>` : ''}</span><span class="lzp" aria-hidden="true">+</span></button>`; }).join('')}</div>
@@ -1381,19 +1386,20 @@
        : `${altre.length ? `<div class="cmpl">${altre.map(c => rigaC(c, colM)).join('')}</div>` : ''}<div class="empty">${inPausa(s, mioDay) ? 'Vacanza: niente scuola 🎉' : 'Niente scuola questo giorno.'}</div>`}
      </div>`;
   }
-  // Cambio mese: il giorno scelto diventa oggi (se è il mese di oggi) o il primo giorno di scuola del mese.
-  function cambiaMese(dir, s) {
-    const y = +scMese.slice(0, 4), mo = +scMese.slice(5, 7) - 1 + dir, n = new Date(y, mo, 1, 12);
-    scMese = iso(n).slice(0, 7); scAnim = dir > 0 ? 'av' : 'in';
-    if (T.slice(0, 7) === scMese) { mioDay = T; return; }
-    for (let i = 0; i < 31; i++) { const d = iso(addDays(n, i)); if (d.slice(0, 7) !== scMese) break; if (aScuola(s, d)) { mioDay = d; return; } }
-    mioDay = scMese + '-01';
+  // Cambio mese: il giorno scelto diventa il prossimo giorno di scuola (se cade in quel mese, come quando si apre),
+  // altrimenti il primo giorno di scuola del mese. Mai un sabato o una domenica che nella griglia non c'è.
+  function cambiaMese(dir, s, st) {
+    const y = +st.mese.slice(0, 4), mo = +st.mese.slice(5, 7) - 1 + dir, n = new Date(y, mo, 1, 12);
+    st.mese = iso(n).slice(0, 7); st.anim = dir > 0 ? 'av' : 'in';
+    const g = giornoScuola(s); if (g.slice(0, 7) === st.mese) { st.day = g; return; }
+    for (let i = 0; i < 31; i++) { const d = iso(addDays(n, i)); if (d.slice(0, 7) !== st.mese) break; if (aScuola(s, d)) { st.day = d; return; } }
+    st.day = T.slice(0, 7) === st.mese ? T : st.mese + '-01';
   }
   const rigaC = (c, colM) => `<div class="cmp${c.fatto ? ' fatto' : ''}" style="--mc:${colM[c.m] || 'var(--acc)'}"><button type="button" class="ck tap" data-cmpfatto="${c.id}" aria-label="${c.fatto ? 'Da rifare' : 'Fatto'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><button type="button" class="cmx tap" data-cmp="${c.id}"><b>${esc(titoloC(c))}</b><small>${quando(c.d)}${c.x ? ' · ' + esc(c.x) : ''}</small></button></div>`;
   function scAgenda(m, s, colM) {
     const note = mieiC(m.di), ord = (a, b) => a.d.localeCompare(b.d) || (a.creato || 0) - (b.creato || 0);
     const arrivo = note.filter(c => c.d >= T).sort(ord);
-    const prove = arrivo.filter(c => !c.fatto && ['verifica', 'interrogazione'].includes(c.tipo)).length;
+    const prove = arrivo.filter(c => !c.fatto && PROVA.includes(c.tipo)).length;
     const passate = note.filter(c => c.d < T).sort((a, b) => ord(b, a)).slice(0, 8);
     return `<div class="card">
        <div class="agtop"><b>In arrivo</b><small>${arrivo.filter(c => !c.fatto).length ? `${arrivo.filter(c => !c.fatto).length} da fare${prove ? ` · ${prove} ${prove === 1 ? 'prova' : 'prove'}` : ''}` : 'Tutto fatto ✨'}</small></div>
@@ -1462,7 +1468,8 @@
      ${mat.length ? `<div class="card"><div class="vmat">${mat.map(x => { const r = vm[x], q = r && corrente && perIlSei(r.l); return `<button type="button" class="vm tap${r ? '' : ' vuota'}" data-votimat="${esc(x)}" data-di="${m.di}" data-anno="${voAnno}" style="--mc:${colM[x] || 'var(--muted)'}"><i></i><span><b>${esc(x)}</b><small>${r ? `${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'} · ultimo ${fmtVoto(r.l[0].v)}` : 'Nessun voto'}</small>${q ? `<small class="vsei">${fraseSei(q, true)}</small>` : ''}</span>${r && r.media != null ? `<span class="vch" style="--vc:${coloreVoto(r.media)}">${fmtMedia(r.media)}</span>` : '<span class="vch nv">—</span>'}</button>`; }).join('')}</div></div>` : ''}`;
   }
   function sheetVotiMat(di, mat, anno) {
-    const s = S.scuola[di]; if (!s) return; anno = anno || voAnno || annoOra(); r = votiPerMateria(di, anno)[mat], c = coloriMat(s)[mat] || 'var(--acc)';
+    const s = S.scuola[di]; if (!s) return; anno = anno || voAnno || annoOra();
+    const r = votiPerMateria(di, anno)[mat], c = coloriMat(s)[mat] || 'var(--acc)';
     const prof = ((s.orario || []).find(x => x.m === mat && x.prof) || {}).prof;
     const parti = r ? TIPI_V.map(([k, n]) => [n, mediaP(r.l.filter(v => (v.tipo || 'scritto') === k)), r.l.filter(v => (v.tipo || 'scritto') === k).length]).filter(x => x[2]) : [];
     const q = r && anno === annoOra() && perIlSei(r.l);
@@ -1521,7 +1528,7 @@
   // e toccare il tipo salva subito.
   function sheetNuovoC(di, mat) {
     const s = S.scuola[di]; if (!s) return;
-    const da = mioDay && mioDay > T ? mioDay : iso(addDays(TODAY, 1));
+    const g = scStato(di).day, da = g && g > T ? g : iso(addDays(TODAY, 1));
     const date = prossimeLezioni(s, mat, da, 3); if (!date.length) date.push(da);
     openSheet(`<h3 class="cmh" style="--mc:${coloriMat(s)[mat] || 'var(--acc)'}"><i></i>${esc(mat)}</h3><form class="stack" id="fCm" data-di="${di}" data-m="${esc(mat)}">
       <label>Per quando</label>
@@ -2009,8 +2016,13 @@
     if (t.id === 'mioBtn') return openMio();
     if (t.id === 'mioBack') return closeMio();
     if (d.apriMio) { closeSheet(true); return openMio(true); }
-    if (d.mioday) { mioDay = d.mioday; return rMio(); }
-    if (d.scmese) { const di = d.di || (moduli(S.me)[0] || {}).di; if (!di || !S.scuola[di] || !scMese) return; cambiaMese(+d.scmese, S.scuola[di]); return rMio(); }
+    if (d.mioday) { scStato(d.di).day = d.mioday; return rMio(); }
+    if (d.scmese) {
+      const st = scStato(d.di); if (!S.scuola[d.di] || !st.mese) return; cambiaMese(+d.scmese, S.scuola[d.di], st); rMio();
+      // La griglia resta lo stesso elemento (morphdom): l'animazione va fatta ripartire, anche con due tocchi sulla stessa freccia.
+      const gr = document.querySelector(`#mio .cgr[data-di="${d.di}"]`); if (gr) { gr.style.animation = 'none'; void gr.offsetWidth; gr.style.animation = ''; }
+      return;
+    }
     if (d.sctab) { if (scTab === d.sctab) return; scTab = d.sctab; LS.set('noi4-scuola-tab', scTab); segSet(t.parentElement, TABS_S.findIndex(x => x[0] === scTab)); return rMio(); }
     if (d.votimat) return sheetVotiMat(d.di, d.votimat, d.anno);
     if (d.votonuovo) return sheetVoto(d.votonuovo, d.mat || '');
@@ -2287,7 +2299,7 @@
     if (!avviato) return;
     avviato = false;
     stopDati.splice(0).forEach(f => { try { f(); } catch (e) {} });
-    mioDay = null; scMese = null; voAnno = null;
+    scAzzera(); voAnno = null;
     if (stopCena) { stopCena(); stopCena = null; }
     if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
     for (const k in stopSorp) { stopSorp[k](); delete stopSorp[k]; }
