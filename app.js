@@ -1308,7 +1308,7 @@
   function openMio(alPostoDelFoglio) {
     if (alPostoDelFoglio === true && history.state && history.state.foglio) history.replaceState({ schermo: 'mio' }, '');
     else if (!mioAperto()) history.pushState({ schermo: 'mio' }, '');
-    mioDay = null; mioNuova = true; rMio(); mioNuova = false;
+    mioDay = null; scMese = null; scAnim = ''; mioNuova = true; rMio(); mioNuova = false;
     $('#mio').scrollTop = 0; $('#mio').classList.add('on'); $('#fab').classList.add('via');
   }
   function closeMio(daIndietro) {
@@ -1369,9 +1369,9 @@
     const delGiornoC = note.filter(c => c.d === mioDay), conLez = new Set(lz.map(x => x.m)), altre = delGiornoC.filter(c => !conLez.has(c.m));
     const anim = scAnim; scAnim = '';
     return `<div class="card scuola">
-       <div class="cmese"><button type="button" class="tap cfr" data-scmese="-1" aria-label="Mese prima"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+       <div class="cmese"><button type="button" class="tap cfr" data-scmese="-1" data-di="${m.di}" aria-label="Mese prima"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
          <div><b>${fmt(scMese + '-01', { month: 'long', year: 'numeric' })}</b><small>${nMese.length ? `${nMese.length} da fare${nProve ? ` · ${nProve} ${nProve === 1 ? 'prova' : 'prove'}` : ''}` : 'Niente segnato'}</small></div>
-         <button type="button" class="tap cfr" data-scmese="1" aria-label="Mese dopo"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
+         <button type="button" class="tap cfr" data-scmese="1" data-di="${m.di}" aria-label="Mese dopo"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
        <div class="cgr${anim ? ' cgr-' + anim : ''}" style="--c:${ultimo}">${GG.slice(1, ultimo + 1).map(g => `<span class="cgh">${g.slice(0, 1)}</span>`).join('')}${celle.join('')}</div>
        <div class="lgiorno"><b>${mioDay === T ? 'Oggi' : mioDay === iso(addDays(TODAY, 1)) ? 'Domani' : fmt(mioDay, { weekday: 'long', day: 'numeric', month: 'long' })}</b>${lz.length && lz[0].h ? `<small>${esc(lz[0].h)}–${esc(lz[lz.length - 1].fine)}</small>` : ''}</div>
        ${lz.length ? `<div class="lez">${lz.map(x => { const nn = delGiornoC.filter(c => c.m === x.m);
@@ -1406,7 +1406,7 @@
     const ore = {}; (s.orario || []).forEach(x => { ore[x.m] = (ore[x.m] || 0) + 1; });
     const prof = {}; (s.orario || []).forEach(x => { if (x.prof) prof[x.m] = x.prof; });
     const vm = votiPerMateria(m.di);
-    return `<div class="card"><div class="mat">${Object.keys(colM).map(x => `<button type="button" class="tap" data-votimat="${esc(x)}" data-di="${m.di}" style="--mc:${colM[x]}"><i></i><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'} a settimana${prof[x] ? ' · ' + esc(prof[x]) : ''}</small>${vm[x] && vm[x].media != null ? `<small>media ${fmtMedia(vm[x].media)}</small>` : ''}</button>`).join('')}</div></div>`;
+    return `<div class="card"><div class="mat">${Object.keys(colM).map(x => `<button type="button" class="tap" data-votimat="${esc(x)}" data-di="${m.di}" data-anno="${annoOra()}" style="--mc:${colM[x]}"><i></i><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'} a settimana${prof[x] ? ' · ' + esc(prof[x]) : ''}</small>${vm[x] && vm[x].media != null ? `<small>media ${fmtMedia(vm[x].media)}</small>` : ''}</button>`).join('')}</div></div>`;
   }
   /* Voti (regole di Sasha del 01/11/2026): da 1 a 10 con i decimali (6+ = 6,25, 6½, 7− = 6,75, o un numero qualsiasi),
      scritto/orale/pratico, un peso per i voti che non contano al 100%, tutte le materie, gli anni scolastici separati,
@@ -1426,7 +1426,8 @@
   let voAnno = null;
   const mieiV = (di) => S.voti.filter(v => v.per === S.me && v.di === di && typeof v.v === 'number' && /^\d{4}-\d{2}-\d{2}$/.test(v.d || ''));
   // Media pesata: Σ(voto × peso) / Σ(peso). I voti che "non contano" (peso 0) si vedono ma non cambiano la media.
-  function mediaP(l) { const P = l.reduce((n, x) => n + pesoV(x), 0); return P ? l.reduce((n, x) => n + x.v * pesoV(x), 0) / P : null; }
+  // Arrotondata a 2 decimali una volta sola: il numero, il colore e "sotto il 6" vanno sempre d'accordo.
+  function mediaP(l) { const P = l.reduce((n, x) => n + pesoV(x), 0); return P ? Math.round(l.reduce((n, x) => n + x.v * pesoV(x), 0) / P * 100) / 100 : null; }
   function votiPerMateria(di, anno) {
     const out = {}, a = anno || annoOra();
     for (const v of mieiV(di).filter(v => annoV(v.d) === a)) (out[v.m] = out[v.m] || { l: [] }).l.push(v);
@@ -1437,7 +1438,7 @@
   // Se servirebbe più di 10, si dice quanti 10 servono: mai un numero impossibile.
   function perIlSei(l) {
     const P = l.reduce((n, x) => n + pesoV(x), 0), S0 = l.reduce((n, x) => n + x.v * pesoV(x), 0);
-    if (!P || S0 / P >= 6) return null;
+    if (!P || Math.round(S0 / P * 100) / 100 >= 6) return null;
     const x = Math.ceil(((6 * (P + 100) - S0) / 100) * 4 - 1e-9) / 4;
     if (x <= 10) return { v: Math.max(6, x) };
     return { dieci: Math.ceil((6 * P - S0) / 400 - 1e-9) };
@@ -1450,7 +1451,7 @@
     const vm = votiPerMateria(m.di, voAnno), corrente = voAnno === annoOra();
     const mat = (corrente ? Object.keys(colM) : []).concat(Object.keys(vm).filter(x => !(corrente && colM[x])).sort((a, b) => a.localeCompare(b)));
     const conMedia = mat.filter(x => vm[x] && vm[x].media != null), tutti = mat.flatMap(x => vm[x] ? vm[x].l : []);
-    const gen = conMedia.length ? conMedia.reduce((n, x) => n + vm[x].media, 0) / conMedia.length : null, tot = mediaP(tutti);
+    const gen = conMedia.length ? Math.round(conMedia.reduce((n, x) => n + vm[x].media, 0) / conMedia.length * 100) / 100 : null, tot = mediaP(tutti);
     const sotto = conMedia.filter(x => vm[x].media < 6).length;
     return `${anni.length > 1 ? `<div class="vanni">${segHtml('voanno', anni.slice(0, 4).map(a => [a, a]), voAnno)}</div>` : ''}
      <div class="card vgen">${gen == null ? `<div class="empty">${corrente ? 'Ancora nessun voto. Quando ne prendi uno, segnalo qui: la media si calcola da sola.' : `Nessun voto nel ${voAnno}.`}</div>`
@@ -1458,13 +1459,13 @@
        ${tot != null ? `<div class="vtot"><span>Media di tutti i voti</span><span class="vch" style="--vc:${coloreVoto(tot)}">${fmtMedia(tot)}</span></div>` : ''}
        <div class="vtot"><span>${tutti.length} ${tutti.length === 1 ? 'voto' : 'voti'}</span><small>${sotto ? `${sotto} sotto il 6` : 'tutte sufficienti ✨'}</small></div>`}
        <button type="button" class="btn tap" data-votonuovo="${m.di}">+ Aggiungi un voto</button></div>
-     ${mat.length ? `<div class="card"><div class="vmat">${mat.map(x => { const r = vm[x], q = r && perIlSei(r.l); return `<button type="button" class="vm tap${r ? '' : ' vuota'}" data-votimat="${esc(x)}" data-di="${m.di}" style="--mc:${colM[x] || 'var(--muted)'}"><i></i><span><b>${esc(x)}</b><small>${r ? `${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'} · ultimo ${fmtVoto(r.l[0].v)}` : 'Nessun voto'}</small>${q ? `<small class="vsei">${fraseSei(q, true)}</small>` : ''}</span>${r && r.media != null ? `<span class="vch" style="--vc:${coloreVoto(r.media)}">${fmtMedia(r.media)}</span>` : '<span class="vch nv">—</span>'}</button>`; }).join('')}</div></div>` : ''}`;
+     ${mat.length ? `<div class="card"><div class="vmat">${mat.map(x => { const r = vm[x], q = r && corrente && perIlSei(r.l); return `<button type="button" class="vm tap${r ? '' : ' vuota'}" data-votimat="${esc(x)}" data-di="${m.di}" data-anno="${voAnno}" style="--mc:${colM[x] || 'var(--muted)'}"><i></i><span><b>${esc(x)}</b><small>${r ? `${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'} · ultimo ${fmtVoto(r.l[0].v)}` : 'Nessun voto'}</small>${q ? `<small class="vsei">${fraseSei(q, true)}</small>` : ''}</span>${r && r.media != null ? `<span class="vch" style="--vc:${coloreVoto(r.media)}">${fmtMedia(r.media)}</span>` : '<span class="vch nv">—</span>'}</button>`; }).join('')}</div></div>` : ''}`;
   }
-  function sheetVotiMat(di, mat) {
-    const s = S.scuola[di]; if (!s) return; const anno = voAnno || annoOra(), r = votiPerMateria(di, anno)[mat], c = coloriMat(s)[mat] || 'var(--acc)';
+  function sheetVotiMat(di, mat, anno) {
+    const s = S.scuola[di]; if (!s) return; anno = anno || voAnno || annoOra(); r = votiPerMateria(di, anno)[mat], c = coloriMat(s)[mat] || 'var(--acc)';
     const prof = ((s.orario || []).find(x => x.m === mat && x.prof) || {}).prof;
     const parti = r ? TIPI_V.map(([k, n]) => [n, mediaP(r.l.filter(v => (v.tipo || 'scritto') === k)), r.l.filter(v => (v.tipo || 'scritto') === k).length]).filter(x => x[2]) : [];
-    const q = r && perIlSei(r.l);
+    const q = r && anno === annoOra() && perIlSei(r.l);
     openSheet(`<h3 class="cmh" style="--mc:${c}"><i></i>${esc(mat)}</h3><div class="muted">${prof ? esc(prof) + ' · ' : ''}${anno}</div>
       ${r ? `<div class="vmed"><span class="vbig" style="--vc:${r.media == null ? 'var(--muted)' : coloreVoto(r.media)}">${r.media == null ? '—' : fmtMedia(r.media)}</span><div><b>Media</b><small>${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'}</small></div></div>
       ${parti.length > 1 || (parti.length === 1 && parti[0][1] != null) ? `<div class="vparti">${parti.map(([n, md, k]) => `<div><small>${n}</small><span class="vch${md == null ? ' nv' : ''}" style="--vc:${md == null ? 'var(--muted)' : coloreVoto(md)}">${md == null ? '—' : fmtMedia(md)}</span></div>`).join('')}</div>` : ''}
@@ -1494,7 +1495,12 @@
   // Il voto scelto nel foglio: il numero scritto a mano (se c'è), altrimenti numero + segno (pieno, +, ½, −), da 1 a 10.
   function votoScelto() {
     const lib = ($('#voLib') || {}).value || '';
-    if (lib.trim()) { const v = parseFloat(lib.replace(',', '.')); return isFinite(v) && v >= 1 && v <= 10 ? Math.round(v * 100) / 100 : NaN; }
+    // Scritto a mano: "7,3", "7.3", "6+", "6-", "6½" (il segno vale come nei pulsanti). Tutto il resto non è un voto.
+    if (lib.trim()) {
+      const m = /^(\d{1,2})(?:[.,](\d{1,2}))?\s*([+\-−½])?$/.exec(lib.trim()); if (!m || (m[2] && m[3])) return NaN;
+      const v = +m[1] + (m[2] ? +('0.' + m[2]) : 0) + (m[3] === '+' ? 0.25 : m[3] === '½' ? 0.5 : m[3] ? -0.25 : 0);
+      return v >= 0.75 && v <= 10 ? Math.round(v * 100) / 100 : NaN;
+    }
     const n = document.querySelector('[data-vonum].on'), md = document.querySelector('[data-vomod].on');
     if (!n) return null; return Math.max(0, Math.min(10, +n.dataset.vonum + (md ? +md.dataset.vomod : 0)));
   }
@@ -2004,9 +2010,9 @@
     if (t.id === 'mioBack') return closeMio();
     if (d.apriMio) { closeSheet(true); return openMio(true); }
     if (d.mioday) { mioDay = d.mioday; return rMio(); }
-    if (d.scmese) { const md = moduli(S.me)[0]; if (!md || !scMese) return; cambiaMese(+d.scmese, S.scuola[md.di]); return rMio(); }
+    if (d.scmese) { const di = d.di || (moduli(S.me)[0] || {}).di; if (!di || !S.scuola[di] || !scMese) return; cambiaMese(+d.scmese, S.scuola[di]); return rMio(); }
     if (d.sctab) { if (scTab === d.sctab) return; scTab = d.sctab; LS.set('noi4-scuola-tab', scTab); segSet(t.parentElement, TABS_S.findIndex(x => x[0] === scTab)); return rMio(); }
-    if (d.votimat) return sheetVotiMat(d.di, d.votimat);
+    if (d.votimat) return sheetVotiMat(d.di, d.votimat, d.anno);
     if (d.votonuovo) return sheetVoto(d.votonuovo, d.mat || '');
     if (d.votoid) return sheetVotoDett(d.votoid);
     if (d.vomat) { t.parentElement.querySelectorAll('.tp').forEach(b => b.classList.toggle('on', b === t));
@@ -2203,7 +2209,9 @@
         render(); toast(per === S.me ? 'Aggiunto alla tua lista 🎁' : 'Idea salvata: resta un segreto 🤫');
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'fVo') {
-      const v = votoScelto(), al = $('#voAltra'), mat = ($('#voM').value || (al && !al.classList.contains('voh') ? al.value : '')).trim().replace(/\s+/g, ' ').slice(0, 60);
+      const v = votoScelto(), al = $('#voAltra'), scritta = ($('#voM').value || (al && !al.classList.contains('voh') ? al.value : '')).trim().replace(/\s+/g, ' ').slice(0, 60);
+      // "matematica" scritta a mano diventa la "Matematica" che c'è già (orario o voti).
+      const note = [...Object.keys(coloriMat(S.scuola[f.dataset.di] || {})), ...mieiV(f.dataset.di).map(x => x.m)], mat = note.find(x => x.toLowerCase() === scritta.toLowerCase()) || scritta;
       const tp = f.querySelector('[data-votipo].on'), pe = f.querySelector('[data-vopeso].on'), dd = $('#voD').value;
       if (!mat) return toast('Scegli la materia');
       if (v == null) return toast('Scegli il voto');
@@ -2279,10 +2287,11 @@
     if (!avviato) return;
     avviato = false;
     stopDati.splice(0).forEach(f => { try { f(); } catch (e) {} });
+    mioDay = null; scMese = null; voAnno = null;
     if (stopCena) { stopCena(); stopCena = null; }
     if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
     for (const k in stopSorp) { stopSorp[k](); delete stopSorp[k]; }
-    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [] });
+    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], scuolaEv: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [] });
     seen.clear();
   }
   DATI.avvia((persona, errore) => {

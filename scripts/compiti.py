@@ -77,7 +77,8 @@ def main():
         if not m or tipo not in TIPI_V or isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 10:
             raise SystemExit("Voto non valido: servono materia, voto da 0 a 10 e tipo")
         giorno(d)
-        p = n.get("p", 100)
+        p = n.get("p")
+        p = 100 if p is None else p
         if isinstance(p, bool) or not isinstance(p, (int, float)) or not 0 <= p <= 100:
             raise SystemExit("Peso non valido: da 0 a 100")
         nuovi_v.append({"m": giusta(m), "v": float(v), "tipo": tipo, "p": float(p), "d": d, "x": str(n.get("x", "")).strip()[:200]})
