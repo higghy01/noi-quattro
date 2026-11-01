@@ -127,8 +127,9 @@
   // Il sì/no per la cena: quello toccato a mano, altrimenti "no" da solo se è impegnato all'ora di cena.
   const cenaDi = (id) => S.cena[id] === 'si' || S.cena[id] === 'no' ? { v: S.cena[id] } : fuoriCena(id) ? { v: 'no', auto: fuoriCena(id) } : { v: '?' };
   function statoOra(id) {
-    const ora = oraAdesso(), oggi = delGiorno(T, e => (e.who || []).includes(id));
-    const ades = oggi.find(e => e.h && e.h <= ora && e.fine && e.fine > ora);
+    // Le note di scuola non sono un'attività; se c'è un impegno vero durante la scuola, vince quello.
+    const ora = oraAdesso(), oggi = delGiorno(T, e => (e.who || []).includes(id) && !e.cmp);
+    const orora = oggi.filter(e => e.h && e.h <= ora && e.fine && e.fine > ora), ades = orora.find(e => !e.virtuale) || orora[0];
     // t = frase intera (pagina della persona), c = versione corta (sotto il cerchio in Oggi)
     const r = rientro(id);
     if (ades && r && ades.id === r.turno.id) return { t: `Al lavoro fino alle ${ades.fine}, a casa verso le ${r.ora}`, c: `Lavoro, 🏠 ${r.ora}`, k: 'occ' };
@@ -173,10 +174,10 @@
     const a = minuti(e.h), b = e.fine ? minuti(e.fine) : a + 60; return [a, b > a ? b : 24 * 60];
   };
   function accavallati(e, d, chi) {
-    // La scuola e le note di scuola non danno avvisi: sono già nell'orario.
+    // La scuola e le note di scuola non danno avvisi loro; un impegno vero durante la scuola invece sì.
     if (!e.h || e.virtuale) return [];
     const [a1, b1] = intervallo(e, d);
-    return delGiorno(d, x => x.id !== e.id && x.h && !x.virtuale && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
+    return delGiorno(d, x => x.id !== e.id && x.h && !x.cmp && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
   }
   // Impegni importanti: con tutta la famiglia, segnati con la stella, o con parole da grande occasione.
   const PAROLE_IMP = ['matrimonio', 'laurea', 'battesimo', 'comunione', 'cresima', 'funerale', 'viaggio', 'partenza', 'volo', 'trasloco', 'esame', 'concerto', 'vacanza', 'ferie', 'natale', 'capodanno', 'pasqua'];
@@ -1233,7 +1234,7 @@
   const gSett = (d) => new Date(d + 'T12:00:00').getDay();
   // Le ore della scuola: "08:00-09:00", una per ora di lezione (1ª, 2ª…). Se mancano, si mostra solo il numero dell'ora.
   // Un giorno può avere orari suoi (oreG: {"1": [...]} per il lunedì, con ricreazioni diverse).
-  const oraDi = (s, o, g) => { const l = (s.oreG && s.oreG[g]) || s.ore || []; const m = /^(\d{2}:\d{2})-(\d{2}:\d{2})$/.exec(l[o - 1] || ''); return m ? [m[1], m[2]] : null; };
+  const oraDi = (s, o, g) => { const l = s.oreG && s.oreG[g] && s.oreG[g].length ? s.oreG[g] : s.ore || []; const m = /^(\d{2}:\d{2})-(\d{2}:\d{2})$/.exec(l[o - 1] || (s.ore || [])[o - 1] || ''); return m ? [m[1], m[2]] : null; };
   // Le lezioni di un giorno della settimana (1 = lunedì), con le ore uguali di fila unite: "Lettere, 2ª-3ª".
   function lezioni(s, g) {
     const out = [];

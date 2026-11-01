@@ -20,6 +20,25 @@ ORE = re.compile(r"^\d{2}:\d{2}-\d{2}:\d{2}$")
 PERSONA = re.compile(r"^p\d$")
 
 
+def orari(lista, errore):
+    """Lista di "08:00-09:00": ore vere, inizio prima della fine, in ordine e senza sovrapporsi."""
+    if lista is None:
+        return []
+    if not isinstance(lista, list) or len(lista) > 12:
+        raise SystemExit(errore)
+    out, prima = [], "00:00"
+    for h in lista:
+        h = str(h)
+        if not ORE.match(h):
+            raise SystemExit(errore)
+        a, b = h.split("-")
+        if not all(int(t[:2]) < 24 and int(t[3:]) < 60 for t in (a, b)) or not (prima <= a < b):
+            raise SystemExit(errore)
+        out.append(h)
+        prima = b
+    return out
+
+
 def data(x):
     x = str(x or "")
     if x:
@@ -51,16 +70,22 @@ def main():
             raise SystemExit("Due lezioni nella stessa ora")
         viste.add((g, o))
         lezioni.append({"g": g, "o": o, "m": m, "prof": str(x.get("prof", "")).strip()[:40]})
-    ore = [str(h) for h in dati.get("ore") or []]
-    if any(not ORE.match(h) for h in ore) or len(ore) > 12:
-        raise SystemExit("Ore non valide")
+    ore = orari(dati.get("ore"), "Ore non valide")
     # Orari diversi per un giorno (es. il lunedì): {"1": ["08:15-09:10", ...]}.
-    ore_g = {}
-    for g, lista in (dati.get("oreG") or {}).items():
-        lista = [str(h) for h in lista or []]
-        if str(g) not in "123456" or len(str(g)) != 1 or any(not ORE.match(h) for h in lista) or len(lista) > 12:
+    ore_g, og = {}, dati.get("oreG") or {}
+    if not isinstance(og, dict):
+        raise SystemExit("Ore del giorno non valide")
+    for g, lista in og.items():
+        if str(g) not in "123456" or len(str(g)) != 1:
             raise SystemExit("Ore del giorno non valide")
-        ore_g[str(g)] = lista
+        lista = orari(lista, "Ore del giorno non valide")
+        if lista:  # una lista vuota non cancella le ore normali
+            ore_g[str(g)] = lista
+    # Ogni lezione deve avere il suo orario, se gli orari ci sono.
+    for x in lezioni:
+        lista = ore_g.get(str(x["g"])) or ore
+        if lista and x["o"] > len(lista):
+            raise SystemExit(f"Manca l'orario della {x['o']}ª ora del giorno {x['g']}")
     pause = []
     for p in dati.get("pause") or []:
         if not (isinstance(p, list) and len(p) == 2):
