@@ -1232,12 +1232,13 @@
   const titoloC = (c) => { const t = TIPO_C[c.tipo] || TIPO_C.altro; return c.tipo === 'altro' ? `${t.e} ${c.m}` : c.tipo === 'portare' ? `${t.e} Da portare: ${c.m}` : `${t.e} ${t.n} di ${c.m}`; };
   const gSett = (d) => new Date(d + 'T12:00:00').getDay();
   // Le ore della scuola: "08:00-09:00", una per ora di lezione (1ª, 2ª…). Se mancano, si mostra solo il numero dell'ora.
-  const oraDi = (s, o) => { const m = /^(\d{2}:\d{2})-(\d{2}:\d{2})$/.exec((s.ore || [])[o - 1] || ''); return m ? [m[1], m[2]] : null; };
+  // Un giorno può avere orari suoi (oreG: {"1": [...]} per il lunedì, con ricreazioni diverse).
+  const oraDi = (s, o, g) => { const l = (s.oreG && s.oreG[g]) || s.ore || []; const m = /^(\d{2}:\d{2})-(\d{2}:\d{2})$/.exec(l[o - 1] || ''); return m ? [m[1], m[2]] : null; };
   // Le lezioni di un giorno della settimana (1 = lunedì), con le ore uguali di fila unite: "Lettere, 2ª-3ª".
   function lezioni(s, g) {
     const out = [];
     for (const x of (s.orario || []).filter(x => +x.g === g).sort((a, b) => a.o - b.o)) {
-      const p = out[out.length - 1], t = oraDi(s, +x.o);
+      const p = out[out.length - 1], t = oraDi(s, +x.o, g);
       if (p && p.m === x.m && p.a + 1 === +x.o) { p.a = +x.o; if (t) p.fine = t[1]; }
       else out.push({ m: String(x.m || ''), prof: String(x.prof || ''), da: +x.o, a: +x.o, h: t ? t[0] : '', fine: t ? t[1] : '' });
     }
