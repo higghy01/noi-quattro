@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       note:
-        description: "JSON con persona e note (vedi scripts/compiti.py)"
+        description: "JSON con persona, note e voti (vedi scripts/compiti.py)"
         required: true
 concurrency: { group: compiti, cancel-in-progress: false }
 jobs:

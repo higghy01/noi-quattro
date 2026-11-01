@@ -603,9 +603,35 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .cmp .cmx small{font-size:13px;color:var(--muted)}
 .cmp.fatto .cmx{opacity:.55}.cmp.fatto .cmx b{text-decoration:line-through}
 .mat{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
-.mat span{display:grid;grid-template-columns:12px 1fr;column-gap:10px;align-items:center}
+.mat>button{display:grid;grid-template-columns:12px 1fr;column-gap:10px;align-items:center;text-align:left;min-height:44px;align-content:center}
 .mat i,.cmh i,.tp.mt i{width:12px;height:12px;border-radius:999px;background:var(--mc);display:inline-block;flex:none}
 .mat b{font-weight:600;font-size:14px}.mat small{grid-column:2;font-size:12px;color:var(--muted)}
 .cmh{display:flex;align-items:center;gap:10px}
 .tp.mt{padding-left:12px}
 .sgiorni .sdot{position:absolute;bottom:5px;left:50%;width:5px;height:5px;margin-left:-2.5px;border-radius:999px;background:var(--p-ambra)}
+
+/* Scuola come un diario (v45): parti Orario/Agenda/Voti/Materie e voti con le medie */
+.sctabs .seg{margin-bottom:0}
+.scbody{display:grid;gap:12px}
+.agtop{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.agtop b{font:650 17px var(--f-disp)}.agtop small{color:var(--muted);font-size:13px}
+.cmpl.passate .cmx{opacity:.7}
+.vmed{display:flex;align-items:center;gap:14px}
+.vmed b{display:block;font-weight:600}.vmed small{color:var(--muted);font-size:13px}
+.vbig{min-width:64px;height:64px;padding:0 10px;border-radius:20px;display:grid;place-items:center;font:700 26px var(--f-disp);color:var(--vc);background:color-mix(in srgb,var(--vc) 14%,var(--panel));transition:color .24s,background-color .24s}
+.vmat,.vlist{display:grid;gap:4px}
+.vm,.vr{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;min-height:52px;text-align:left;width:100%;border-radius:12px}
+.vr{grid-template-columns:auto 1fr}
+.vm i{width:12px;height:12px;border-radius:999px;background:var(--mc)}
+.vm span:not(.vch),.vr span:not(.vch){display:grid;gap:1px;min-width:0}
+.vm b,.vr b{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vm small,.vr small{font-size:12px;color:var(--muted)}
+.vm.vuota{opacity:.6}
+.vch{min-width:46px;height:34px;padding:0 8px;border-radius:12px;display:grid;place-items:center;font:650 16px var(--f-disp);color:var(--vc);background:color-mix(in srgb,var(--vc) 14%,var(--panel))}
+.vch.nv{--vc:var(--muted)}
+.vprev{display:flex;justify-content:center}
+.vprev .vbig{min-width:84px;height:84px;font-size:34px;border-radius:26px}
+.vnum{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.vnum button{min-height:48px;border-radius:14px;background:var(--soft);font:650 18px var(--f-disp);transition:background-color .2s,color .2s,transform .12s var(--ease)}
+.vnum button.on{background:var(--me);color:#fff}
+.tp.mt.on{background:color-mix(in srgb,var(--mc) 18%,transparent);border-color:var(--mc)}

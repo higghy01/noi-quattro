@@ -1,7 +1,9 @@
 """Mette nella sezione Personale le note di scuola lette da Claude (es. screenshot di School Planner).
 
 Si avvia a mano (workflow "Note di scuola") con l'ingresso "note", un JSON:
-  {"persona": "p3", "note": [{"m": "Matematica", "tipo": "verifica", "d": "2026-11-05", "x": "equazioni"}]}
+  {"persona": "p3", "note": [{"m": "Matematica", "tipo": "verifica", "d": "2026-11-05", "x": "equazioni"}],
+   "voti": [{"m": "Inglese", "v": 7.5, "tipo": "orale", "d": "2026-10-20", "x": ""}]}
+voti: v da 0 a 10 (7+ = 7.25, 7½ = 7.5, 8− = 7.75), tipo scritto, orale o pratico. Un voto uguale non si ripete.
 tipo: interrogazione, verifica, compito, portare, altro (come nell'app). Una nota uguale
 (stessa materia, tipo e giorno) già presente non si ripete: si aggiorna solo il testo.
 L'ingresso si legge dal file dell'evento, così non finisce nel registro.
@@ -16,6 +18,7 @@ from comune import database
 
 PERSONA = re.compile(r"^p\d$")
 TIPI = {"interrogazione", "verifica", "compito", "portare", "altro"}
+TIPI_V = {"scritto", "orale", "pratico"}
 
 
 def main():
@@ -24,9 +27,9 @@ def main():
     persona = str(dati.get("persona", ""))
     if not PERSONA.match(persona):
         raise SystemExit("Manca la persona")
-    note = dati.get("note")
-    if not isinstance(note, list) or not note:
-        raise SystemExit("Nessuna nota")
+    note, voti = dati.get("note") or [], dati.get("voti") or []
+    if not isinstance(note, list) or not isinstance(voti, list) or not (note or voti):
+        raise SystemExit("Nessuna nota e nessun voto")
     db = database()
     if not db.collection("persone").document(persona).get().exists:
         raise SystemExit("Persona sconosciuta")
@@ -50,8 +53,26 @@ def main():
         else:
             b.set(col.document(), dict(n, per=persona, di=persona, by=persona, creato=adesso, fatto=False))
             aggiunte += 1
+    nuovi_v = []
+    for n in voti:
+        m, tipo, d = str(n.get("m", "")).strip()[:60], str(n.get("tipo", "")), str(n.get("d", ""))
+        v = n.get("v")
+        if not m or tipo not in TIPI_V or isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 10:
+            raise SystemExit("Voto non valido: servono materia, voto da 0 a 10 e tipo")
+        dt.date.fromisoformat(d)
+        nuovi_v.append({"m": m, "v": float(v), "tipo": tipo, "d": d, "x": str(n.get("x", "")).strip()[:200]})
+    colv = db.collection("voti")
+    gia = {(x.get("m"), float(x.get("v", -1)), x.get("tipo"), x.get("d"))
+           for x in (s.to_dict() or {} for s in colv.where("per", "==", persona).stream())}
+    voti_messi = 0
+    for n in nuovi_v:
+        if (n["m"], n["v"], n["tipo"], n["d"]) in gia:
+            continue
+        gia.add((n["m"], n["v"], n["tipo"], n["d"]))
+        b.set(colv.document(), dict(n, per=persona, di=persona, by=persona, creato=adesso))
+        voti_messi += 1
     b.commit()
-    print(f"Note di scuola: {aggiunte} aggiunte, {cambiate} aggiornate")
+    print(f"Note di scuola: {aggiunte} aggiunte, {cambiate} aggiornate; voti: {voti_messi} messi")
 
 
 if __name__ == "__main__":
