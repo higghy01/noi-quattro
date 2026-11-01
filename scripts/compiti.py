@@ -21,6 +21,17 @@ TIPI = {"interrogazione", "verifica", "compito", "portare", "altro"}
 TIPI_V = {"scritto", "orale", "pratico"}
 
 
+def giorno(d):
+    """Solo date AAAA-MM-GG (Python accetterebbe anche 20261021 o 2026-W45-1)."""
+    try:
+        ok = dt.date.fromisoformat(d).isoformat() == d
+    except ValueError:
+        ok = False
+    if not ok:
+        raise SystemExit("Data non valida: serve AAAA-MM-GG")
+    return d
+
+
 def main():
     with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
         dati = json.loads((json.load(f).get("inputs") or {}).get("note") or "{}")
@@ -33,13 +44,17 @@ def main():
     db = database()
     if not db.collection("persone").document(persona).get().exists:
         raise SystemExit("Persona sconosciuta")
+    # Le materie si scrivono come nell'orario (es. "inglese" diventa "Inglese").
+    sc = db.collection("scuola").document(persona).get()
+    materie = {x.get("m", "").lower(): x.get("m") for x in ((sc.to_dict() or {}).get("orario") or [])} if sc.exists else {}
+    giusta = lambda m: materie.get(m.lower(), m)
     nuove = []
     for n in note:
         m, tipo, d = str(n.get("m", "")).strip()[:60], str(n.get("tipo", "")), str(n.get("d", ""))
         if not m or tipo not in TIPI:
             raise SystemExit("Nota non valida: servono materia e tipo")
-        dt.date.fromisoformat(d)  # data non valida = errore
-        nuove.append({"m": m, "tipo": tipo, "d": d, "x": str(n.get("x", "")).strip()[:200]})
+        giorno(d)
+        nuove.append({"m": giusta(m), "tipo": tipo, "d": d, "x": str(n.get("x", "")).strip()[:200]})
     col = db.collection("compiti")
     vecchie = {(v.get("m"), v.get("tipo"), v.get("d")): s.reference
                for s in col.where("per", "==", persona).stream() for v in [s.to_dict() or {}]}
@@ -51,7 +66,9 @@ def main():
                 b.update(ref, {"x": n["x"]})
                 cambiate += 1
         else:
-            b.set(col.document(), dict(n, per=persona, di=persona, by=persona, creato=adesso, fatto=False))
+            ref = col.document()
+            b.set(ref, dict(n, per=persona, di=persona, by=persona, creato=adesso, fatto=False))
+            vecchie[(n["m"], n["tipo"], n["d"])] = ref  # la stessa nota due volte nell'ingresso entra una volta
             aggiunte += 1
     nuovi_v = []
     for n in voti:
@@ -59,8 +76,8 @@ def main():
         v = n.get("v")
         if not m or tipo not in TIPI_V or isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 10:
             raise SystemExit("Voto non valido: servono materia, voto da 0 a 10 e tipo")
-        dt.date.fromisoformat(d)
-        nuovi_v.append({"m": m, "v": float(v), "tipo": tipo, "d": d, "x": str(n.get("x", "")).strip()[:200]})
+        giorno(d)
+        nuovi_v.append({"m": giusta(m), "v": float(v), "tipo": tipo, "d": d, "x": str(n.get("x", "")).strip()[:200]})
     colv = db.collection("voti")
     gia = {(x.get("m"), float(x.get("v", -1)), x.get("tipo"), x.get("d"))
            for x in (s.to_dict() or {} for s in colv.where("per", "==", persona).stream())}
