@@ -4,6 +4,7 @@ Si avvia a mano (workflow "Orario scolastico") con l'ingresso "orario", un JSON:
   {"persona": "p3", "copie": ["p1"], "classe": "3A", "dal": "2026-10-12", "al": "2027-06-10",
    "pause": [["2026-12-23", "2027-01-06"]], "ore": ["08:00-09:00", "09:00-10:00"],
    "lezioni": [{"g": 1, "o": 1, "m": "Matematica", "prof": "Rossi M."}]}
+"oreG": {"1": [...]} = orari diversi per un giorno (facoltativo).
 g = giorno della settimana (1 lunedì ... 6 sabato), o = numero dell'ora, ore = inizio-fine di ogni ora (facoltative).
 "copie": chi vede una copia della sezione per provarla. {"persona": "p3", "togli": true} toglie tutto.
 Sostituisce tutto il documento scuola/<persona>. L'ingresso si legge dal file dell'evento, così non finisce nel registro.
@@ -53,6 +54,13 @@ def main():
     ore = [str(h) for h in dati.get("ore") or []]
     if any(not ORE.match(h) for h in ore) or len(ore) > 12:
         raise SystemExit("Ore non valide")
+    # Orari diversi per un giorno (es. il lunedì): {"1": ["08:15-09:10", ...]}.
+    ore_g = {}
+    for g, lista in (dati.get("oreG") or {}).items():
+        lista = [str(h) for h in lista or []]
+        if str(g) not in "123456" or len(str(g)) != 1 or any(not ORE.match(h) for h in lista) or len(lista) > 12:
+            raise SystemExit("Ore del giorno non valide")
+        ore_g[str(g)] = lista
     pause = []
     for p in dati.get("pause") or []:
         if not (isinstance(p, list) and len(p) == 2):
@@ -69,11 +77,11 @@ def main():
     copie = [str(c) for c in dati.get("copie") or [] if PERSONA.match(str(c)) and str(c) != persona]
     if not lezioni:
         raise SystemExit("Nessuna lezione")
-    doc.set({"orario": lezioni, "ore": ore, "classe": str(dati.get("classe", ""))[:20], "dal": dal,
+    doc.set({"orario": lezioni, "ore": ore, "oreG": ore_g, "classe": str(dati.get("classe", ""))[:20], "dal": dal,
              # Firestore non accetta liste dentro liste: ogni vacanza è "da|a".
              "al": al, "pause": [f"{a}|{b}" for a, b in pause], "copie": copie})
     giorni = len({x["g"] for x in lezioni})
-    print(f"Orario scolastico: {len(lezioni)} ore in {giorni} giorni, {len(ore)} orari, {len(pause)} vacanze, {len(copie)} copie")
+    print(f"Orario scolastico: {len(lezioni)} ore in {giorni} giorni, {len(ore)} orari ({len(ore_g)} giorni con orari loro), {len(pause)} vacanze, {len(copie)} copie")
 
 
 if __name__ == "__main__":
