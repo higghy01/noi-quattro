@@ -116,6 +116,11 @@
       db.compiti = { [uid()]: { per: 'p1', di: 'p3', m: 'Matematica', tipo: 'verifica', d: iso(3), x: 'Equazioni', by: 'p1', creato: Date.now(), fatto: false },
         [uid()]: { per: 'p3', di: 'p3', m: 'Inglese', tipo: 'interrogazione', d: iso(2), x: '', by: 'p3', creato: Date.now(), fatto: false } };
     }
+    if (!db.voti) {
+      const v = (per, m, voto, tipo, g) => ({ per, di: 'p3', m, v: voto, tipo, d: iso(-g), x: '', by: per, creato: Date.now() - g * 864e5 });
+      db.voti = {}; [v('p1', 'Matematica', 7.5, 'scritto', 9), v('p1', 'Matematica', 6.25, 'orale', 3), v('p1', 'Inglese', 8, 'orale', 5), v('p1', 'Storia', 5.5, 'scritto', 12),
+        v('p3', 'Italiano', 7, 'scritto', 4)].forEach(x => { db.voti[uid()] = x; });
+    }
     // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
     const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };
     const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} subs.forEach(s => s()); };
