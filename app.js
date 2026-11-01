@@ -1377,13 +1377,14 @@
     const ore = {}; (s.orario || []).forEach(x => { ore[x.m] = (ore[x.m] || 0) + 1; });
     const prof = {}; (s.orario || []).forEach(x => { if (x.prof) prof[x.m] = x.prof; });
     const vm = votiPerMateria(m.di);
-    return `<div class="card"><div class="mat">${Object.keys(colM).map(x => `<button type="button" class="tap" data-votimat="${esc(x)}" data-di="${m.di}" style="--mc:${colM[x]}"><i></i><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'} a settimana${prof[x] ? ' · ' + esc(prof[x]) : ''}${vm[x] ? ` · media ${fmtMedia(vm[x].media)}` : ''}</small></button>`).join('')}</div></div>`;
+    return `<div class="card"><div class="mat">${Object.keys(colM).map(x => `<button type="button" class="tap" data-votimat="${esc(x)}" data-di="${m.di}" style="--mc:${colM[x]}"><i></i><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'} a settimana${prof[x] ? ' · ' + esc(prof[x]) : ''}</small>${vm[x] ? `<small>media ${fmtMedia(vm[x].media)}</small>` : ''}</button>`).join('')}</div></div>`;
   }
   /* Voti: il voto all'italiana (7+, 7½, 8−), la media di ogni materia e la media generale (media delle materie). */
   const TIPI_V = [['scritto', 'Scritto'], ['orale', 'Orale'], ['pratico', 'Pratico']];
   const fmtVoto = (v) => { const n = Math.round(v * 4) / 4, i = Math.floor(n), r = n - i; return r === 0 ? `${i}` : r === 0.25 ? `${i}+` : r === 0.5 ? `${i}½` : `${i + 1}−`; };
   const fmtMedia = (v) => v.toFixed(2).replace('.', ',').replace(/,?0+$/, '');
-  const coloreVoto = (v) => v >= 6 ? 'var(--p-verde)' : v >= 5 ? 'var(--p-ambra)' : 'var(--p-corallo)';
+  // Mai i colori delle persone (verde, rosso, blu, grigio): sufficiente viola, quasi ambra, insufficiente rosa.
+  const coloreVoto = (v) => v >= 6 ? 'var(--p-viola)' : v >= 5 ? 'var(--p-ambra)' : 'var(--p-rosa)';
   const mieiV = (di) => S.voti.filter(v => v.per === S.me && v.di === di && typeof v.v === 'number');
   function votiPerMateria(di) {
     const out = {};
