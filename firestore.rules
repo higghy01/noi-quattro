@@ -107,8 +107,10 @@ service cloud.firestore {
     // I voti di scuola: come le note, ognuno legge e scrive solo i suoi.
     match /voti/{id} {
       function ok() { return request.resource.data.per == io() && request.resource.data.by == io()
+        && request.resource.data.keys().hasOnly(['per', 'di', 'm', 'v', 'tipo', 'd', 'x', 'by', 'creato'])
+        && request.resource.data.di is string && request.resource.data.di.size() <= 4
         && request.resource.data.m is string && request.resource.data.m.size() <= 60
-        && request.resource.data.d is string && request.resource.data.d.size() == 10
+        && request.resource.data.d is string && request.resource.data.d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.v is number && request.resource.data.v >= 0 && request.resource.data.v <= 10
         && request.resource.data.tipo in ['scritto', 'orale', 'pratico']
         && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 200; }

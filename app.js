@@ -1384,7 +1384,7 @@
   const fmtVoto = (v) => { const n = Math.round(v * 4) / 4, i = Math.floor(n), r = n - i; return r === 0 ? `${i}` : r === 0.25 ? `${i}+` : r === 0.5 ? `${i}½` : `${i + 1}−`; };
   const fmtMedia = (v) => v.toFixed(2).replace('.', ',').replace(/,?0+$/, '');
   // Mai i colori delle persone (verde, rosso, blu, grigio): sufficiente viola, quasi ambra, insufficiente rosa.
-  const coloreVoto = (v) => v >= 6 ? 'var(--p-viola)' : v >= 5 ? 'var(--p-ambra)' : 'var(--p-rosa)';
+  const coloreVoto = (v) => (v = Math.round(v * 100) / 100) >= 6 ? 'var(--p-viola)' : v >= 5 ? 'var(--p-ambra)' : 'var(--p-rosa)';
   const mieiV = (di) => S.voti.filter(v => v.per === S.me && v.di === di && typeof v.v === 'number');
   function votiPerMateria(di) {
     const out = {};
@@ -1416,7 +1416,7 @@
       ${mat ? `<div class="cmh" style="--mc:${colM[mat] || 'var(--acc)'}"><i></i><b>${esc(mat)}</b></div><input type="hidden" id="voM" value="${esc(mat)}">`
       : `<label>Materia</label><div class="tipi">${Object.keys(colM).map(x => `<button type="button" class="tp tap mt" data-vomat="${esc(x)}" style="--mc:${colM[x]}"><i></i>${esc(x)}</button>`).join('')}</div><input type="hidden" id="voM" value="">`}
       <div class="vprev"><span class="vbig" id="voPrev" style="--vc:var(--muted)">–</span></div>
-      <div class="vnum">${[3, 4, 5, 6, 7, 8, 9, 10].map(n => `<button type="button" class="tap" data-vonum="${n}">${n}</button>`).join('')}</div>
+      <div class="vnum">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<button type="button" class="tap" data-vonum="${n}">${n}</button>`).join('')}</div>
       ${segHtml('vomod', [['0', 'Pieno'], ['0.25', '+'], ['0.5', '½'], ['-0.25', '−']], '0')}
       ${segHtml('votipo', TIPI_V, 'scritto')}
       <label>Quando<input type="date" id="voD" value="${T}" max="${T}"></label>
@@ -1426,9 +1426,13 @@
   // Il voto scelto nel foglio: numero + segno (pieno, +, ½, −), mai sopra il 10.
   function votoScelto() {
     const n = document.querySelector('[data-vonum].on'), md = document.querySelector('[data-vomod].on');
-    if (!n) return null; return Math.max(1, Math.min(10, +n.dataset.vonum + (md ? +md.dataset.vomod : 0)));
+    if (!n) return null; return Math.max(0, Math.min(10, +n.dataset.vonum + (md ? +md.dataset.vomod : 0)));
   }
-  function aggiornaPrev() { const v = votoScelto(), el = $('#voPrev'); if (!el) return; el.textContent = v == null ? '–' : fmtVoto(v); el.style.setProperty('--vc', v == null ? 'var(--muted)' : coloreVoto(v)); }
+  function aggiornaPrev() {
+    // Sopra il 10 non si va: con il 10 il segno torna "Pieno" (o "−").
+    const n = document.querySelector('[data-vonum].on'), md = document.querySelector('[data-vomod].on');
+    if (n && +n.dataset.vonum === 10 && md && +md.dataset.vomod > 0) segSet(md.parentElement, 0);
+    const v = votoScelto(), el = $('#voPrev'); if (!el) return; el.textContent = v == null ? '–' : fmtVoto(v); el.style.setProperty('--vc', v == null ? 'var(--muted)' : coloreVoto(v)); }
   function sheetVotoDett(id) {
     const v = S.voti.find(x => x.id === id); if (!v) return;
     openSheet(`<h3>${esc(v.m)}: ${fmtVoto(v.v)}</h3><div>${(TIPI_V.find(t => t[0] === v.tipo) || TIPI_V[0])[1]} · ${fmt(v.d, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
@@ -1934,7 +1938,9 @@
     if (d.vonum) { t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); return aggiornaPrev(); }
     if (d.vomod != null || d.votipo) { const b = [...t.parentElement.querySelectorAll('button')]; segSet(t.parentElement, b.indexOf(t)); return aggiornaPrev(); }
     if (d.votovia) {
-      if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare'; return; }
+      // Due tocchi separati: un doppio tocco veloce per sbaglio non elimina.
+      if (!t.dataset.sicuro) { t.dataset.sicuro = Date.now(); t.textContent = 'Tocca ancora per eliminare'; return; }
+      if (Date.now() - +t.dataset.sicuro < 500) return;
       closeSheet(); return DATI.elimina('voti', d.votovia).then(() => toast('Voto eliminato')).catch(sbaglio);
     }
     if (d.lez && d.di) return sheetNuovoC(d.di, d.lez);
