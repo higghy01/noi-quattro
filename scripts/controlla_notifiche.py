@@ -6,3 +6,6 @@ from comune import ROMA, database
 s = database().collection("sistema").document("notifiche").get().to_dict() or {}
 quando = dt.datetime.fromtimestamp(s.get("ultimo", 0) / 1000, ROMA)
 print(f"Ultimo giro: {quando:%d/%m/%Y %H:%M:%S} (ora italiana), da: {s.get('da', 'sconosciuto')}, avvisi ricordati: {len(s.get('inviati') or {})}")
+e = database().collection("sistema").document("notifiche-errore").get().to_dict()
+if e:
+    print(f"Ultimo errore della funzione ({e.get('quando')}):\n{e.get('errore')}")
