@@ -761,7 +761,10 @@ html.scorso .topbar b{transform:none}
 .mst.arr{background:color-mix(in srgb,var(--me) 16%,transparent);color:var(--me)}
 .mbt{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .mbt a,.mbt button{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:var(--fg);text-decoration:none;transition:background .24s,border-color .24s,color .24s}
-.mvo.on{background:color-mix(in srgb,var(--p-rosso) 14%,transparent);border-color:var(--p-rosso);color:var(--p-rosso)}
+.mvo.on{background:color-mix(in srgb,var(--me) 14%,transparent);border-color:var(--me);color:var(--me)}
+/* Mostre (v63): i due pulsanti in una riga sotto foto e testo, non uno sopra l'altro nella colonna stretta */
+.mos>.mbt{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;margin-top:0}
+.mos>.mbt>*{justify-content:center}.mos>.mbt>:only-child{grid-column:1/-1}
 .mnota{text-align:center;padding:0 8px}
 .mcat .seg{margin-bottom:0}
 .mcat .seg button{font-size:12.5px;padding-inline:2px}

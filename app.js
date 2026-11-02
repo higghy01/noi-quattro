@@ -1450,7 +1450,7 @@
       const stato = !inCorso ? `<span class="mst arr">Dal ${fmt(x.dal, { day: 'numeric', month: 'short' }).replace(/\./g, '')}</span>` : fine <= 14 ? `<span class="mst fine">Ultimi giorni</span>` : `<span class="mst ora">In corso</span>`;
       return `<div class="mos">${x.img ? `<img src="${esc(x.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="mimg" aria-hidden="true">🖼️</span>'}
         <div class="mtx">${stato}<b>${esc(x.t)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}<small>${x.dal ? fmt(x.dal, { day: 'numeric', month: 'short' }).replace(/\./g, '') : ''}${x.al ? ` – ${fmt(x.al, { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, '')}` : ''}</small>
-          <span class="mbt">${x.link ? `<a class="tap" href="${esc(x.link)}" target="_blank" rel="noopener">Scopri di più</a>` : ''}<button type="button" class="tap mvo${mia ? ' on' : ''}" data-mvoglio="${esc(x.id)}" aria-pressed="${mia ? 'true' : 'false'}">${mia ? '♥ Ci voglio andare' : '♡ Ci voglio andare'}</button></span></div></div>`;
+        </div><span class="mbt">${x.link ? `<a class="tap" href="${esc(x.link)}" target="_blank" rel="noopener">Scopri di più</a>` : ''}<button type="button" class="tap mvo${mia ? ' on' : ''}" data-mvoglio="${esc(x.id)}" aria-pressed="${mia ? 'true' : 'false'}">${mia ? '♥ Ci voglio andare' : '♡ Ci voglio andare'}</button></span></div>`;
     };
     return `${!l.length ? `<div class="card"><div class="empty">${info.agg ? 'Nessuna mostra trovata in questo momento.' : 'Le mostre arrivano al primo aggiornamento (ogni lunedì e giovedì mattina).'}</div></div>` : ''}
      ${luoghi.map(lu => `<div class="card mcard"><div class="agtop"><b>${esc(lu)}</b></div>${l.filter(x => x.luogo === lu).sort((a, b) => (a.dal || '').localeCompare(b.dal || '')).map(riga).join('')}</div>`).join('')}
@@ -1462,7 +1462,7 @@
     const riga = (x) => `<button type="button" class="mriga tap" data-mie="${x.id}"><span class="mtx"><b>${esc(x.t)}</b>${x.x ? `<small>${esc(x.x.length > 70 ? x.x.slice(0, 70) + '…' : x.x)}</small>` : ''}</span>${x.stelle ? `<span class="mstelle" aria-label="${x.stelle} stelle su 5">${'★'.repeat(x.stelle)}<i>${'★'.repeat(5 - x.stelle)}</i></span>` : ''}</button>`;
     const gruppo = (s, aperto) => { const l = g(s); return l.length ? `<div class="agg">${statoN(lsCat, s)} · ${l.length}</div>${l.map(riga).join('')}` : ''; };
     const ph = { serie: 'Una serie da vedere…', doc: 'Un documentario…', libro: 'Un libro (es. un giallo)…', beauty: 'Un prodotto, un look, un link…' }[lsCat];
-    return `<div class="mcat">${segHtml('mcat', LISTE.map(([k, e, n]) => [k, `${e} ${n}`]), lsCat)}</div>
+    return `<div class="mcat">${segHtml('mcat', LISTE.map(([k, e, n]) => [k, n]), lsCat)}</div>
      <div class="card mcard">
        <form class="mlin" id="fLi"><input id="liT" maxlength="80" autocomplete="off" placeholder="${ph}" aria-label="${ph}"><button class="tap" aria-label="Aggiungi">+</button></form>
        ${tutte.length ? gruppo('ora') + gruppo('da') + gruppo('fatto') : `<div class="empty">Ancora niente qui. Scrivi un titolo e tocca +.</div>`}
