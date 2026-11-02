@@ -1,3 +1,8 @@
 __pycache__/
 *.json.key
 chiave*.json
+functions/venv/
+functions/__pycache__/
+functions/notifiche.py
+functions/comune.py
+functions/sincronizza_calendari.py
