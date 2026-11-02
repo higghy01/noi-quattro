@@ -1349,9 +1349,9 @@
     $('#mio').classList.remove('on'); if (!impAperto() && !persAperto() && !tripAperto()) $('#fab').classList.remove('via');
     if (daIndietro !== true && history.state && history.state.schermo) { ignoraPop++; history.back(); }
   }
-  // Il pallino sul pulsante: c'è qualcosa per oggi o domani.
+  // Il pallino sul pulsante: c'è qualcosa per oggi o domani. Solo le mie note: quelle di una sezione che guardo in copia non accendono il mio pallino.
   function pallinoMio() {
-    const dom = iso(addDays(TODAY, 1)), n = mieiC().filter(c => !c.fatto && (c.d === T || c.d === dom)).length;
+    const dom = iso(addDays(TODAY, 1)), n = mieiC().filter(c => c.per === S.me && !c.fatto && (c.d === T || c.d === dom)).length;
     const b = $('#mioBtn'); if (b) { b.classList.toggle('dot', n > 0); b.setAttribute('aria-label', n ? `Personale: ${n} ${n === 1 ? 'cosa' : 'cose'} per oggi o domani` : 'Personale'); }
   }
   function rMio() {
