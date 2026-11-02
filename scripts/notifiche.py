@@ -1,4 +1,5 @@
-"""Manda le notifiche di NDSZ. Gira su GitHub ogni 15 minuti.
+"""Manda le notifiche di NDSZ. Gira dentro Firebase ogni 5 minuti (functions/main.py, scelta di Sasha del 02/11/2026);
+si può ancora lanciare a mano da GitHub (workflow Notifiche).
 
 - promemoria: circa un'ora prima di un impegno, a chi partecipa;
 - nuovi: quando qualcuno ti aggiunge a un impegno;
@@ -29,7 +30,7 @@ URL_APP = os.environ.get("URL_APP") or "https://higghy01.github.io/noi-quattro/"
 
 
 def main():
-    if not os.environ.get("FIREBASE_CHIAVE"):
+    if not os.environ.get("FIREBASE_CHIAVE") and not os.environ.get("K_SERVICE"):
         print("Chiave di Firebase non ancora inserita: niente da fare.")
         return
     db = database()

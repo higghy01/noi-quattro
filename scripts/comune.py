@@ -14,7 +14,9 @@ ROMA = ZoneInfo("Europe/Rome")
 def database():
     """Collega il database con la chiave dell'account di servizio (segreto FIREBASE_CHIAVE su GitHub)."""
     if not firebase_admin._apps:
-        firebase_admin.initialize_app(credentials.Certificate(json.loads(os.environ["FIREBASE_CHIAVE"])))
+        # Dentro Firebase (funzione "Notifiche") la chiave non serve: si usa l'account del progetto.
+        chiave = os.environ.get("FIREBASE_CHIAVE")
+        firebase_admin.initialize_app(credentials.Certificate(json.loads(chiave)) if chiave else None)
     return firestore.client()
 
 
