@@ -716,3 +716,24 @@ html.scorso .topbar b{transform:none}
 .mat>button>span small{grid-column:auto}
 .anello b.lungo{font-size:12px}
 .anello.big b.lungo{font-size:19px}
+
+/* Scuola in tre schede (v58, 02/11/2026): Oggi (settimana + lezioni), Agenda (mese + elenco per giorno), Voti */
+.ssett{display:grid;grid-template-columns:36px 1fr 36px;align-items:center;gap:2px}
+.ssett .cfr{width:36px;height:44px}
+.ssett .sgiorni{min-width:0}
+.sgiorni button{position:relative}
+.sgiorni .sdot{background:var(--muted)}
+.sgiorni .sdot.pr{background:var(--p-ambra)}
+.sgiorni button.on .sdot{background:currentColor}
+.aglist{display:grid;gap:8px}
+.agg{font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 2px 0}
+.agg:first-child{padding-top:0}
+.agg::first-letter{text-transform:uppercase}
+.agg.tardi{color:var(--p-rosso)}
+.agtutto{font-size:13px;font-weight:600;color:var(--me);min-height:36px;padding:0 4px}
+.agpass{justify-self:center;font-size:13px;font-weight:600;color:var(--muted);min-height:40px;padding:0 12px}
+.vinfo{font-size:14px;color:var(--muted)}.vinfo b{color:var(--fg);font-weight:600}
+.sgiorni button{padding-bottom:7px}
+.sgiorni .sdot{bottom:4px}
+.agtutto{white-space:nowrap}
+.agtop>span{min-width:0}.agtop small{white-space:nowrap}
