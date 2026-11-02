@@ -10,6 +10,8 @@ service cloud.firestore {
       return request.auth != null && exists(/databases/$(db)/documents/membri/$(email()));
     }
     function io() { return get(/databases/$(db)/documents/membri/$(email())).data.persona; }
+    // Chi è in scuola/<p>.copie vede la sezione di scuola di p così com'è: le sue note e i suoi voti, in sola lettura.
+    function vedeCopia(p) { return io() in get(/databases/$(db)/documents/scuola/$(p)).data.get('copie', []); }
 
     // Elenco della famiglia: ognuno legge solo il proprio, nessuno lo cambia dall'app.
     match /membri/{em} {
@@ -97,8 +99,8 @@ service cloud.firestore {
         && request.resource.data.d is string && request.resource.data.d.size() == 10
         && request.resource.data.tipo in ['interrogazione', 'verifica', 'compito', 'portare', 'altro']
         && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 200; }
-      // Le legge solo chi le ha scritte.
-      allow read: if membro() && resource.data.per == io();
+      // Le legge chi le ha scritte e chi ha la copia della sua sezione di scuola (scuola/<persona>.copie, scelta di Sasha 02/11/2026).
+      allow read: if membro() && (resource.data.per == io() || vedeCopia(resource.data.per));
       allow create: if membro() && ok();
       allow update: if membro() && resource.data.per == io() && ok();
       allow delete: if membro() && resource.data.per == io();
@@ -115,7 +117,7 @@ service cloud.firestore {
         && request.resource.data.tipo in ['scritto', 'orale', 'pratico']
         && request.resource.data.get('p', 100) is number && request.resource.data.get('p', 100) >= 0 && request.resource.data.get('p', 100) <= 100
         && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 200; }
-      allow read: if membro() && resource.data.per == io();
+      allow read: if membro() && (resource.data.per == io() || vedeCopia(resource.data.per));
       allow create: if membro() && ok();
       allow update: if membro() && resource.data.per == io() && ok();
       allow delete: if membro() && resource.data.per == io();

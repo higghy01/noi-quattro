@@ -122,7 +122,7 @@
       const v = (per, m, voto, tipo, g, p) => ({ per, di: 'p3', m, v: voto, tipo, p: p == null ? 100 : p, d: iso(-g), x: '', by: per, creato: Date.now() - g * 864e5 });
       db.voti = {}; [v('p1', 'Matematica', 7.5, 'scritto', 9), v('p1', 'Matematica', 6.25, 'orale', 3), v('p1', 'Inglese', 8, 'orale', 5), v('p1', 'Storia', 5.5, 'scritto', 12),
         v('p1', 'Storia', 4.75, 'orale', 6), v('p1', 'Storia', 6, 'scritto', 2, 50), v('p1', 'Educazione civica', 8.5, 'orale', 7), v('p1', 'Matematica', 6.5, 'scritto', 260),
-        v('p1', 'Inglese', 5.75, 'scritto', 300), v('p3', 'Italiano', 7, 'scritto', 4)].forEach(x => { db.voti[uid()] = x; });
+        v('p1', 'Inglese', 5.75, 'scritto', 300), v('p3', 'Italiano', 7, 'scritto', 4), v('p3', 'Matematica', 5.5, 'scritto', 6), v('p3', 'Inglese', 8.25, 'orale', 2)].forEach(x => { db.voti[uid()] = x; });
     }
     // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
     const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };
@@ -134,7 +134,7 @@
       cambiaPersona(id) { db.me = id; save(); this._cb(id); },
       ricomincia() { db = esempio(); save(); this._cb(db.me); },
       login() {}, reset() {}, esci() {},
-      ascolta(col, cb, dove) { const s = () => cb(dove ? list(col).filter(x => x[dove[0]] === dove[2]) : list(col)); subs.push(s); s(); },
+      ascolta(col, cb, dove) { const s = () => cb(dove ? list(col).filter(x => x[dove[0]] === dove[2]) : list(col)); subs.push(s); s(); return () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); }; },
       ascoltaDoc(col, id, cb) { const s = () => cb((db[col] || {})[id] || {}); subs.push(s); s(); return () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); }; },
       async aggiungi(col, data) { const id = uid(); (db[col] = db[col] || {})[id] = data; save(); return id; },
       // Come Firebase: "cuori.p1" cambia solo quel pezzo dentro "cuori".
