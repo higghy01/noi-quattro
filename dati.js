@@ -112,7 +112,7 @@
       const g = [['Matematica', 'Italiano', 'Italiano', 'Storia', 'Inglese', 'Arte'], ['Inglese', 'Matematica', 'Scienze', 'Scienze', 'Italiano', ''],
         ['Educazione fisica', 'Educazione fisica', 'Inglese', 'Italiano', 'Storia', 'Geografia'], ['Matematica', 'Arte', 'Scienze', 'Inglese', 'Italiano', ''], ['Geografia', 'Storia', 'Matematica', 'Matematica', 'Italiano', 'Italiano']];
       const orario = []; g.forEach((l, i) => l.forEach((m, o) => m && orario.push({ g: i + 1, o: o + 1, m })));
-      db.scuola = { p3: { classe: '3A', orario, ore, dal: iso(-30), al: iso(220), pause: [], copie: ['p1'] } };
+      db.scuola = { p3: { classe: '3A', orario, ore, dal: iso(-30), al: iso(220), pause: [], copie: ['p1'], prove: ['p1', 'p2'] } };
       db.compiti = { [uid()]: { per: 'p1', di: 'p3', m: 'Matematica', tipo: 'verifica', d: iso(3), x: 'Equazioni', by: 'p1', creato: Date.now(), fatto: false },
         [uid()]: { per: 'p3', di: 'p3', m: 'Inglese', tipo: 'interrogazione', d: iso(2), x: '', by: 'p3', creato: Date.now(), fatto: false },
         [uid()]: { per: 'p1', di: 'p3', m: 'Inglese', tipo: 'interrogazione', d: iso(8), x: '', by: 'p1', creato: Date.now(), fatto: false },
@@ -134,7 +134,8 @@
       cambiaPersona(id) { db.me = id; save(); this._cb(id); },
       ricomincia() { db = esempio(); save(); this._cb(db.me); },
       login() {}, reset() {}, esci() {},
-      ascolta(col, cb, dove) { const s = () => cb(dove ? list(col).filter(x => x[dove[0]] === dove[2]) : list(col)); subs.push(s); s(); return () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); }; },
+      ascolta(col, cb, dove) { const ff = !dove ? [] : Array.isArray(dove[0]) ? dove : [dove], va = (x, [k, op, v]) => op === 'in' ? v.includes(x[k]) : x[k] === v;
+        const s = () => cb(list(col).filter(x => ff.every(f => va(x, f)))); subs.push(s); s(); return () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); }; },
       ascoltaDoc(col, id, cb) { const s = () => cb((db[col] || {})[id] || {}); subs.push(s); s(); return () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); }; },
       async aggiungi(col, data) { const id = uid(); (db[col] = db[col] || {})[id] = data; save(); return id; },
       // Come Firebase: "cuori.p1" cambia solo quel pezzo dentro "cuori".
@@ -194,7 +195,7 @@
         return auth.signOut();
       },
       // dove = ['campo', '==', valore]: solo i documenti che servono (le regole non lasciano leggere gli altri).
-      ascolta(col, cb, dove) { return (dove ? fs.collection(col).where(...dove) : fs.collection(col)).onSnapshot(s => cb(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(col, e)); },
+      ascolta(col, cb, dove) { const ff = !dove ? [] : Array.isArray(dove[0]) ? dove : [dove]; return ff.reduce((q, f) => q.where(...f), fs.collection(col)).onSnapshot(s => cb(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(col, e)); },
       ascoltaDoc(col, id, cb) { return fs.collection(col).doc(id).onSnapshot(d => cb(d.data() || {}), () => cb({})); },
       // Senza rete Firebase tiene la modifica sul telefono e la manda appena torna internet, ma la sua "conferma"
       // arriva solo allora: offline si risponde subito, così l'app dice "salvato" e non resta in attesa.

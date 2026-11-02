@@ -1,0 +1,26 @@
+# Quando esce una nuova versione (cambia sw.js su main), una notifica breve solo a chi è in AVVISA.
+name: Avviso aggiornamento
+on:
+  push:
+    branches: [main]
+    paths: [sw.js]
+  workflow_dispatch: {}
+concurrency: { group: aggiornamento, cancel-in-progress: false }
+jobs:
+  avvisa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: scripts/requisiti.txt }
+      - run: pip install -r scripts/requisiti.txt
+      # Aspetta che il sito sia pubblicato, così aprendo la notifica c'è già la versione nuova.
+      - run: sleep 75
+      - run: python scripts/aggiornamento.py
+        working-directory: .
+        env:
+          FIREBASE_CHIAVE: ${{ secrets.FIREBASE_CHIAVE }}
+          URL_APP: ${{ vars.URL_APP }}
+          AVVISA: p1
+          TITOLO: ${{ github.event.head_commit.message }}

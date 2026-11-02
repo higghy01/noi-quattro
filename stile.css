@@ -669,9 +669,9 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .vanni .seg{margin-bottom:0}
 .vtot{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px}
 .vtot small{color:var(--muted);font-size:13px}
-.vsei{color:var(--p-rosa)!important;font-weight:600}
-.vsei-box{padding:12px 14px;border-radius:14px;font-size:14px;line-height:1.4;background:color-mix(in srgb,var(--p-rosa) 12%,var(--panel));color:var(--fg)}
-.vsei-box b{color:var(--p-rosa);font-size:16px}
+.vsei{color:var(--p-rosso)!important;font-weight:600}
+.vsei-box{padding:12px 14px;border-radius:14px;font-size:14px;line-height:1.4;background:color-mix(in srgb,var(--p-rosso) 10%,var(--panel));color:var(--fg)}
+.vsei-box b{color:var(--p-rosso);font-size:16px}
 .vparti{display:flex;gap:12px;flex-wrap:wrap}
 .vparti div{display:flex;align-items:center;gap:8px}
 .vparti small{color:var(--muted);font-size:13px}
@@ -694,3 +694,23 @@ html.scorso .topbar b{transform:none}
 .head.cambia #hello,.head.cambia #today{animation:fm-page .42s var(--ease)}
 /* Al posto dei titoli doppi (Bacheca, Ricordi): solo il conteggio, piccolo (v53) */
 .conta{font-size:13px;color:var(--muted);margin:-4px 0 -2px 4px}
+
+/* Cerchietto della media (v57, Sasha 02/11/2026): anello che si riempie con la media su 10, verde dal 6, rosso sotto */
+.anello{--sz:44px;position:relative;width:var(--sz);height:var(--sz);flex:none;display:grid;place-items:center}
+.anello.big{--sz:76px}
+.anello svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.anello circle{fill:none;stroke-width:3.6}
+.anello.big circle{stroke-width:3.2}
+.anello .at{stroke:color-mix(in srgb,var(--vc) 16%,transparent)}
+.anello .af{stroke:var(--vc);stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:calc(100 - var(--p));transition:stroke-dashoffset .6s var(--ease),stroke .3s}
+.anello.anima .af{animation:fm-anello .9s var(--ease) both}
+@keyframes fm-anello{from{stroke-dashoffset:100}}
+.anello b{position:relative;font:650 14px var(--f-disp);color:var(--vc);letter-spacing:-.02em}
+.anello.big b{font-size:22px}
+.mat>button{grid-template-columns:12px 1fr auto}
+.mat>button>span{display:grid;gap:1px;min-width:0}
+@media (prefers-reduced-motion:reduce){.anello.anima .af{animation:none}}
+.mat{grid-template-columns:1fr;gap:6px}
+.mat>button>span small{grid-column:auto}
+.anello b.lungo{font-size:12px}
+.anello.big b.lungo{font-size:19px}

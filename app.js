@@ -92,6 +92,19 @@
     // mischiati): lezioni e note stanno nel Calendario della sua sezione Personale. Le lezioni servono solo a dire
     // "è a scuola" in Oggi e ad avvisarla se un impegno vero cade durante la scuola.
     S.scuolaEv = eventiScuola();
+    S.impegni = S.impegni.concat(proveComuni());
+  }
+  // Interrogazioni e verifiche nel calendario comune (Sasha, 02/11/2026): solo per chi è in scuola/<persona>.prove
+  // (le regole del database non le danno a nessun altro). Chi le ha scritte le vede nel suo Calendario della scuola.
+  function proveComuni() {
+    const out = [];
+    for (const c of S.compiti) {
+      const s = S.scuola[c.per];
+      if (c.per === S.me || c.via || c.di !== c.per || !['verifica', 'interrogazione'].includes(c.tipo) || !s || !(s.prove || []).includes(S.me) || !S.persone[c.per]) continue;
+      const lz = lezioni(s, gSett(c.d)).find(x => x.m === c.m);
+      out.push({ id: `cmp-${c.id}`, t: titoloC(c), d: c.d, h: lz ? lz.h : '', fine: lz ? lz.fine : '', who: [c.per], n: c.x || '', ripeti: '', fonte: 'compito:' + c.per, cmp: c.id, virtuale: true });
+    }
+    return out;
   }
   // Gli impegni di un giorno più le lezioni (solo per "dove è adesso" e per gli accavallamenti).
   const conScuola = (d, f) => S.impegni.concat(S.scuolaEv || []).filter(e => capita(e, d) && (!f || f(e))).sort((a, b) => (a.h || '').localeCompare(b.h || ''));
@@ -147,7 +160,7 @@
   const cenaDi = (id) => S.cena[id] === 'si' || S.cena[id] === 'no' ? { v: S.cena[id] } : fuoriCena(id) ? { v: 'no', auto: fuoriCena(id) } : { v: '?' };
   function statoOra(id) {
     // Le note di scuola non sono un'attività; se c'è un impegno vero durante la scuola, vince quello.
-    const ora = oraAdesso(), oggi = conScuola(T, e => (e.who || []).includes(id));
+    const ora = oraAdesso(), oggi = conScuola(T, e => (e.who || []).includes(id) && !e.cmp);
     const orora = oggi.filter(e => e.h && e.h <= ora && e.fine && e.fine > ora), ades = orora.find(e => !e.virtuale) || orora[0];
     // t = frase intera (pagina della persona), c = versione corta (sotto il cerchio in Oggi)
     const r = rientro(id);
@@ -196,7 +209,7 @@
     // La scuola e le note di scuola non danno avvisi loro; un impegno vero durante la scuola invece sì.
     if (!e.h || e.virtuale) return [];
     const [a1, b1] = intervallo(e, d);
-    return conScuola(d, x => x.id !== e.id && x.h && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
+    return conScuola(d, x => x.id !== e.id && x.h && !x.cmp && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
   }
   // Impegni importanti: con tutta la famiglia, segnati con la stella, o con parole da grande occasione.
   const PAROLE_IMP = ['matrimonio', 'laurea', 'battesimo', 'comunione', 'cresima', 'funerale', 'viaggio', 'partenza', 'volo', 'trasloco', 'esame', 'concerto', 'vacanza', 'ferie', 'natale', 'capodanno', 'pasqua'];
@@ -1370,6 +1383,7 @@
   function rScuola(m, sr, k) {
     const s = S.scuola[m.di], colM = coloriMat(s), nome = esc(P(m.di).nome);
     const corpo = { orario: scOrario, agenda: scAgenda, voti: scVoti, materie: scMaterie }[scTab](m, s, colM);
+    anelloAnim = false;
     return `${m.copia ? `<div class="hint mprova${sr(k * 3 + 1)}">👀 Stai guardando la sezione di ${nome}: vedi le sue lezioni, note e voti come li vede lei. Solo lei può cambiarli.</div>` : ''}
      <div class="sec${sr(k * 3 + 1)}">🎒 Scuola${s.classe ? ` · ${esc(s.classe)}` : ''}</div>
      <div class="sctabs${sr(k * 3 + 2)}">${segHtml('sctab', TABS_S, scTab)}</div>
@@ -1441,7 +1455,7 @@
     const ore = {}; (s.orario || []).forEach(x => { ore[x.m] = (ore[x.m] || 0) + 1; });
     const prof = {}; (s.orario || []).forEach(x => { if (x.prof) prof[x.m] = x.prof; });
     const vm = votiPerMateria(m.di);
-    return `<div class="card"><div class="mat">${Object.keys(colM).map(x => `<button type="button" class="tap" data-votimat="${esc(x)}" data-di="${m.di}" data-anno="${annoOra()}" style="--mc:${colM[x]}"><i></i><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'} a settimana${prof[x] ? ' · ' + esc(prof[x]) : ''}</small>${vm[x] && vm[x].media != null ? `<small>media ${fmtMedia(vm[x].media)}</small>` : ''}</button>`).join('')}</div></div>`;
+    return `<div class="card"><div class="mat">${Object.keys(colM).map(x => `<button type="button" class="tap" data-votimat="${esc(x)}" data-di="${m.di}" data-anno="${annoOra()}" style="--mc:${colM[x]}"><i></i><span><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'} a settimana${prof[x] ? ' · ' + esc(prof[x]) : ''}</small></span>${anello(vm[x] ? vm[x].media : null)}</button>`).join('')}</div></div>`;
   }
   /* Voti (regole di Sasha del 01/11/2026): da 1 a 10 con i decimali (6+ = 6,25, 6½, 7− = 6,75, o un numero qualsiasi),
      scritto/orale/pratico, un peso per i voti che non contano al 100%, tutte le materie, gli anni scolastici separati,
@@ -1453,7 +1467,13 @@
     const i = Math.floor(n), r = n - i; return r === 0 ? `${i}` : r === 0.25 ? `${i}+` : r === 0.5 ? `${i}½` : `${i + 1}−`; };
   const fmtMedia = (v) => v.toFixed(2).replace('.', ',').replace(/,?0+$/, '');
   // Mai i colori delle persone (verde, rosso, blu, grigio): sufficiente viola, quasi ambra, insufficiente rosa.
-  const coloreVoto = (v) => (v = Math.round(v * 100) / 100) >= 6 ? 'var(--p-viola)' : v >= 5 ? 'var(--p-ambra)' : 'var(--p-rosa)';
+  // Scelta di Sasha (02/11/2026): sufficiente (dal 6 compreso) verde, insufficiente rosso.
+  const coloreVoto = (v) => (v = Math.round(v * 100) / 100) >= 6 ? 'var(--p-verde)' : 'var(--p-rosso)';
+  // Il cerchietto della media (Sasha, 02/11/2026): l'anello si riempie in proporzione alla media su 10.
+  // Si anima solo quando la scheda appare (anelloAnim), non a ogni aggiornamento della pagina.
+  let anelloAnim = true;
+  const anello = (media, grande) => { const ok = media != null, pc = ok ? Math.max(0, Math.min(100, media * 10)) : 0;
+    return `<span class="anello${grande ? ' big' : ''}${anelloAnim ? ' anima' : ''}" style="--vc:${ok ? coloreVoto(media) : 'var(--muted)'};--p:${pc.toFixed(1)}" role="img" aria-label="${ok ? `media ${fmtMedia(media)} su 10` : 'nessuna media'}"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="at" cx="20" cy="20" r="17"/>${pc > 0 ? '<circle class="af" cx="20" cy="20" r="17" pathLength="100"/>' : ''}</svg><b${ok && fmtMedia(media).length > 3 ? ' class="lungo"' : ''}>${ok ? fmtMedia(media) : '—'}</b></span>`; };
   const pesoV = (x) => typeof x.p === 'number' && x.p >= 0 && x.p <= 100 ? x.p : 100;
   // L'anno scolastico parte il 1° settembre: un voto del 15/10/2026 è del 2026/27, uno del 10/5/2026 del 2025/26.
   const annoV = (d) => { const y = +d.slice(0, 4), m = +d.slice(5, 7); const a = m >= 9 ? y : y - 1; return `${a}/${String(a + 1).slice(2)}`; };
@@ -1494,7 +1514,7 @@
        ${tot != null ? `<div class="vtot"><span>Media di tutti i voti</span><span class="vch" style="--vc:${coloreVoto(tot)}">${fmtMedia(tot)}</span></div>` : ''}
        <div class="vtot"><span>${tutti.length} ${tutti.length === 1 ? 'voto' : 'voti'}</span><small>${sotto ? `${sotto} sotto il 6` : 'tutte sufficienti ✨'}</small></div>`}
        ${m.copia ? '' : `<button type="button" class="btn tap" data-votonuovo="${m.di}">+ Aggiungi un voto</button>`}</div>
-     ${mat.length ? `<div class="card"><div class="vmat">${mat.map(x => { const r = vm[x], q = r && corrente && perIlSei(r.l); return `<button type="button" class="vm tap${r ? '' : ' vuota'}" data-votimat="${esc(x)}" data-di="${m.di}" data-anno="${voAnno}" style="--mc:${colM[x] || 'var(--muted)'}"><i></i><span><b>${esc(x)}</b><small>${r ? `${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'} · ultimo ${fmtVoto(r.l[0].v)}` : 'Nessun voto'}</small>${q ? `<small class="vsei">${fraseSei(q, true)}</small>` : ''}</span>${r && r.media != null ? `<span class="vch" style="--vc:${coloreVoto(r.media)}">${fmtMedia(r.media)}</span>` : '<span class="vch nv">—</span>'}</button>`; }).join('')}</div></div>` : ''}`;
+     ${mat.length ? `<div class="card"><div class="vmat">${mat.map(x => { const r = vm[x], q = r && corrente && perIlSei(r.l); return `<button type="button" class="vm tap${r ? '' : ' vuota'}" data-votimat="${esc(x)}" data-di="${m.di}" data-anno="${voAnno}" style="--mc:${colM[x] || 'var(--muted)'}"><i></i><span><b>${esc(x)}</b><small>${r ? `${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'} · ultimo ${fmtVoto(r.l[0].v)}` : 'Nessun voto'}</small>${q ? `<small class="vsei">${fraseSei(q, true)}</small>` : ''}</span>${anello(r ? r.media : null)}</button>`; }).join('')}</div></div>` : ''}`;
   }
   function sheetVotiMat(di, mat, anno) {
     const s = S.scuola[di]; if (!s) return; anno = anno || voAnno || annoOra();
@@ -1503,7 +1523,7 @@
     const parti = r ? TIPI_V.map(([k, n]) => [n, mediaP(r.l.filter(v => (v.tipo || 'scritto') === k)), r.l.filter(v => (v.tipo || 'scritto') === k).length]).filter(x => x[2]) : [];
     const q = r && anno === annoOra() && perIlSei(r.l);
     openSheet(`<h3 class="cmh" style="--mc:${c}"><i></i>${esc(mat)}</h3><div class="muted">${prof ? esc(prof) + ' · ' : ''}${anno}</div>
-      ${r ? `<div class="vmed"><span class="vbig" style="--vc:${r.media == null ? 'var(--muted)' : coloreVoto(r.media)}">${r.media == null ? '—' : fmtMedia(r.media)}</span><div><b>Media</b><small>${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'}</small></div></div>
+      ${r ? `<div class="vmed">${(() => { anelloAnim = true; const h = anello(r.media, true); anelloAnim = false; return h; })()}<div><b>Media</b><small>${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'}</small></div></div>
       ${parti.length > 1 || (parti.length === 1 && parti[0][1] != null) ? `<div class="vparti">${parti.map(([n, md, k]) => `<div><small>${n}</small><span class="vch${md == null ? ' nv' : ''}" style="--vc:${md == null ? 'var(--muted)' : coloreVoto(md)}">${md == null ? '—' : fmtMedia(md)}</span></div>`).join('')}</div>` : ''}
       ${q ? `<div class="vsei-box">${fraseSei(q)}</div>` : ''}
       <div class="vlist">${r.l.map(v => `<button type="button" class="vr tap" data-votoid="${v.id}"><span class="vch" style="--vc:${coloreVoto(v.v)}">${fmtVoto(v.v)}</span><span><b>${(TIPI_V.find(t => t[0] === v.tipo) || TIPI_V[0])[1]}${pesoV(v) < 100 ? ` <em class="vpeso">${pesoV(v) ? `peso ${pesoV(v)}%` : 'non conta'}</em>` : ''}</b><small>${fmt(v.d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')}${v.x ? ' · ' + esc(v.x) : ''}</small></span></button>`).join('')}</div>`
@@ -1527,6 +1547,13 @@
       <label>Quando<input type="date" id="voD" value="${T}" max="${T}"></label>
       <input id="voX" maxlength="120" autocomplete="off" placeholder="Argomento, se vuoi">
       <button class="btn tap">Salva il voto</button></form>`);
+  }
+  function provaDelVoto(v) {
+    const da = iso(addDays(new Date(v.d + 'T12:00:00'), -28)), simile = v.tipo === 'orale' ? 'interrogazione' : 'verifica';
+    const l = S.compiti.filter(c => c.per === S.me && c.di === v.di && !c.via && !c.fatto && c.m.toLowerCase() === v.m.toLowerCase()
+      && ['verifica', 'interrogazione'].includes(c.tipo) && c.d >= da && c.d <= v.d)
+      .sort((a, b) => (b.tipo === simile) - (a.tipo === simile) || b.d.localeCompare(a.d));
+    return l[0] || null;
   }
   // Il voto scelto nel foglio: il numero scritto a mano (se c'è), altrimenti numero + segno (pieno, +, ½, −), da 1 a 10.
   function votoScelto() {
@@ -1574,7 +1601,7 @@
     const c = S.compiti.find(x => x.id === id); if (!c) return;
     const s = S.scuola[c.di], lz = s && lezioni(s, gSett(c.d)).find(x => x.m === c.m);
     openSheet(`<h3>${esc(titoloC(c))}</h3><div>${fmt(c.d, { weekday: 'long', day: 'numeric', month: 'long' })}${lz ? ` · ${lz.da}ª ora${lz.h ? ` (${esc(lz.h)})` : ''}` : ''}</div>
-      ${c.x ? `<div class="muted">${esc(c.x)}</div>` : ''}<div class="src">${c.per === S.me ? 'Lo vedete solo tu e chi ha la copia della tua sezione' : `È di ${esc(P(c.per).nome)}: solo lei può cambiarlo`}</div>
+      ${c.x ? `<div class="muted">${esc(c.x)}</div>` : ''}<div class="src">${c.per === S.me ? (['verifica', 'interrogazione'].includes(c.tipo) ? 'La vedi tu e chi è scelto per vedere le tue prove' : 'Lo vedi tu e chi ha la copia della tua sezione') : `È di ${esc(P(c.per).nome)}: solo lei può cambiarlo`}</div>
       ${c.per !== S.me ? '' : `<div class="row2"><button type="button" class="btn ${c.fatto ? 'ghost' : ''} tap" data-cmpfatto="${c.id}" data-chiudi="1">${c.fatto ? 'Non ancora fatto' : '✓ Fatto'}</button><button type="button" class="btn bad tap" data-cmpvia="${c.id}">Elimina</button></div>`}`);
   }
 
@@ -2063,7 +2090,7 @@
       const gr = document.querySelector(`#mio .cgr[data-di="${d.di}"]`); if (gr) { gr.style.animation = 'none'; void gr.offsetWidth; gr.style.animation = ''; }
       return;
     }
-    if (d.sctab) { if (scTab === d.sctab) return; scTab = d.sctab; LS.set('noi4-scuola-tab', scTab); segSet(t.parentElement, TABS_S.findIndex(x => x[0] === scTab)); return rMio(); }
+    if (d.sctab) { if (scTab === d.sctab) return; scTab = d.sctab; anelloAnim = true; LS.set('noi4-scuola-tab', scTab); segSet(t.parentElement, TABS_S.findIndex(x => x[0] === scTab)); return rMio(); }
     if (d.votimat) return sheetVotiMat(d.di, d.votimat, d.anno);
     if (d.votonuovo) return sheetVoto(d.votonuovo, d.mat || '');
     if (d.votoid) return sheetVotoDett(d.votoid);
@@ -2272,7 +2299,11 @@
       const voto = { per: S.me, di: f.dataset.di, m: mat, v, tipo: tp ? tp.dataset.votipo : 'scritto', p, d: /^\d{4}-\d{2}-\d{2}$/.test(dd) ? dd : T, x: $('#voX').value.trim().slice(0, 120), by: S.me, creato: Date.now() };
       closeSheet(); toast(v >= 6 ? `${fmtVoto(v)} in ${mat} 🎉` : `${fmtVoto(v)} in ${mat}: la prossima andrà meglio 💪`);
       if (v >= 8) festa(document.querySelector('#mio .vbig'));
-      try { await DATI.aggiungi('voti', voto); } catch (er) { sbaglio(er); }
+      try { await DATI.aggiungi('voti', voto); } catch (er) { return sbaglio(er); }
+      // Il voto chiude la prova (Sasha, 02/11/2026): l'interrogazione o la verifica di quella materia ancora da fare
+      // (dalle 4 settimane prima fino al giorno del voto) diventa fatta. Prima quella dello stesso tipo (orale → interrogazione).
+      const prova = provaDelVoto(voto);
+      if (prova) { try { await DATI.aggiorna('compiti', prova.id, { fatto: true }); toast(`${titoloC(prova)}: fatta ✓`); } catch (er) { sbaglio(er); } }
     } else if (f.id === 'fRi') {
       const t = $('#riT').value.trim().slice(0, 60); if (!t) return;
       const v = { t, porz: $('#riP').value.trim().slice(0, 20), ingr: $('#riI').value.split('\n').map(x => x.replace(/^[\s•\-*·]+/, '').trim()).filter(Boolean).map(x => x.slice(0, 80)).slice(0, 60), come: $('#riC').value.trim().slice(0, 4000) };
@@ -2339,12 +2370,19 @@
   // di compiti/voti deve averlo, altrimenti le regole rifiutano).
   const scDati = { c: {}, v: {} }, stopCopie = {};
   function unisciScuola() { S.compiti = [].concat(...Object.values(scDati.c)); S.voti = [].concat(...Object.values(scDati.v)); mappaImpegni(); render(); }
+  // Con la copia leggo tutto (compiti e voti); se sono solo in "prove", solo le interrogazioni e le verifiche
+  // (la richiesta deve chiedere proprio quei tipi, altrimenti le regole la rifiutano).
   function ascoltaCopie() {
-    const voglio = Object.entries(S.scuola).filter(([pid, s]) => pid !== S.me && (s.copie || []).includes(S.me)).map(([pid]) => pid);
-    for (const pid in stopCopie) if (!voglio.includes(pid)) { stopCopie[pid].forEach(f => { try { f && f(); } catch (e) {} }); delete stopCopie[pid]; delete scDati.c[pid]; delete scDati.v[pid]; unisciScuola(); }
-    for (const pid of voglio) if (!stopCopie[pid]) stopCopie[pid] = [
-      DATI.ascolta('compiti', l => { scDati.c[pid] = l; unisciScuola(); }, ['per', '==', pid]),
-      DATI.ascolta('voti', l => { scDati.v[pid] = l; unisciScuola(); }, ['per', '==', pid])];
+    const voglio = {};
+    for (const [pid, s] of Object.entries(S.scuola)) if (pid !== S.me) {
+      if ((s.copie || []).includes(S.me)) voglio[pid] = 'copia'; else if ((s.prove || []).includes(S.me)) voglio[pid] = 'prove';
+    }
+    for (const k in stopCopie) { const [pid, modo] = k.split(':'); if (voglio[pid] !== modo) { stopCopie[k].forEach(f => { try { f && f(); } catch (e) {} }); delete stopCopie[k]; delete scDati.c[pid]; delete scDati.v[pid]; unisciScuola(); } }
+    for (const [pid, modo] of Object.entries(voglio)) { const k = pid + ':' + modo; if (stopCopie[k]) continue;
+      stopCopie[k] = modo === 'copia' ? [
+        DATI.ascolta('compiti', l => { scDati.c[pid] = l; unisciScuola(); }, ['per', '==', pid]),
+        DATI.ascolta('voti', l => { scDati.v[pid] = l; unisciScuola(); }, ['per', '==', pid])]
+        : [DATI.ascolta('compiti', l => { scDati.c[pid] = l; unisciScuola(); }, [['per', '==', pid], ['tipo', 'in', ['interrogazione', 'verifica']]])]; }
   }
   function fermaTutto() {
     if (!avviato) return;
