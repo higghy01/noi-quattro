@@ -1446,7 +1446,7 @@
        <div class="cmese"><button type="button" class="tap cfr" data-scmese="-1" data-di="${m.di}" aria-label="Mese prima"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
          <div><b>${fmt(scMese + '-01', { month: 'long', year: 'numeric' })}</b><small>${daFare.length ? `${daFare.length} da fare${prove ? ` · ${prove} ${prove === 1 ? 'prova' : 'prove'}` : ''}` : 'Tutto fatto ✨'}</small></div>
          <button type="button" class="tap cfr" data-scmese="1" data-di="${m.di}" aria-label="Mese dopo"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
-       <div class="cgr${anim ? ' cgr-' + anim : ''}" style="--c:${ultimo}">${GG.slice(1, ultimo + 1).map(g => `<span class="cgh">${g.slice(0, 1)}</span>`).join('')}${celle.join('')}</div>
+       <div class="cgr${anim ? ' cgr-' + anim : ''}" data-di="${m.di}" style="--c:${ultimo}">${GG.slice(1, ultimo + 1).map(g => `<span class="cgh">${g.slice(0, 1)}</span>`).join('')}${celle.join('')}</div>
      </div>
      <div class="card aglist">
        ${st.ag ? `<div class="agtop"><span><b>${titoloG(st.ag).split(' · ')[0]}</b>${titoloG(st.ag).split(' · ')[1] ? `<small> · ${titoloG(st.ag).split(' · ')[1]}</small>` : ''}</span><button type="button" class="tap agtutto" data-agday="${st.ag}" data-di="${m.di}">Mostra tutto</button></div>` : ''}
