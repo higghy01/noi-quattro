@@ -764,7 +764,9 @@ html.scorso .topbar b{transform:none}
 .mvo.on{background:color-mix(in srgb,var(--me) 14%,transparent);border-color:var(--me);color:var(--me)}
 /* Mostre (v63): i due pulsanti in una riga sotto foto e testo, non uno sopra l'altro nella colonna stretta */
 .mos>.mbt{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;margin-top:0}
-.mos>.mbt>*{justify-content:center}.mos>.mbt>:only-child{grid-column:1/-1}
+.mos>.mbt>*{justify-content:center}
+/* Copia in sola lettura (v66): "♥ Ci vuole andare" è una scritta, non un pulsante, ma con la stessa forma a pillola */
+.mbt>span.mvo{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid;display:inline-flex;align-items:center;font-size:13px;font-weight:600}.mos>.mbt>:only-child{grid-column:1/-1}
 .mnota{text-align:center;padding:0 8px}
 .mcat .seg{margin-bottom:0}
 .mcat .seg button{font-size:12.5px;padding-inline:2px}

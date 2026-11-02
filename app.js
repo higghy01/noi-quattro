@@ -1457,7 +1457,7 @@
     return `${m.copia ? `<div class="hint mprova${sr(k * 3 + 1)}">👀 Stai guardando la sezione di ${esc(P(m.di).nome)}: vedi promemoria, scadenze, mostre e liste come li vede lei. Gli appuntamenti fissi restano solo suoi, e solo lei può cambiare le cose.</div>` : ''}
      <div class="sec${sr(k * 3 + 1)}">✨ Per me${m.copia ? ` · ${esc(P(m.di).nome)}` : ''}</div>
      <div class="sctabs${sr(k * 3 + 2)}">${segHtml('mtab', TABS_M, mTab)}</div>
-     <div class="scbody" data-tab="${mTab}">${corpo}</div>`;
+     <div class="scbody" data-tab="${mTab}"${m.copia ? ` style="--me:${col(m.di)}"` : ''}>${corpo}</div>`;
   }
   const rigaProm = (x) => {
     const ok = x.ult === T, q = promQuando(x), tardi = !ok && q < T ? gTra(q, T) : 0;
