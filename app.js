@@ -369,9 +369,9 @@
   }
   function sheetNota() {
     openSheet(`<h3>Nuova nota</h3><form class="stack" id="fNo">
-     <label>La nota<textarea id="noX" rows="4" maxlength="300" required placeholder="Es. Domani sono da babbo"></textarea></label>
+     <label>La nota<textarea id="notaX" rows="4" maxlength="300" required placeholder="Es. Domani sono da babbo"></textarea></label>
      <p class="hint">La vedono tutti e 4. Agli altri arriva un avviso che hai scritto una nota, senza il testo.</p>
-     <button class="btn tap">Attacca la nota</button></form>`, () => $('#noX').focus());
+     <button class="btn tap">Attacca la nota</button></form>`, () => setTimeout(() => { const t = $('#notaX'); if (t) t.focus(); }, 380));
   }
   function segSet(el, k) { el.style.setProperty('--k', k); el.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === k)); }
   /* ---------- Proposte: piccoli sondaggi aperti ----------
@@ -2523,7 +2523,7 @@
         else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('Impegno salvato: lo vedono tutti'); }
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'fNo') {
-      const x = $('#noX').value.trim().replace(/\n{3,}/g, '\n\n').slice(0, 300); if (!x) return toast('Scrivi la nota');
+      const x = $('#notaX').value.trim().replace(/\n{3,}/g, '\n\n').slice(0, 300); if (!x) return toast('Scrivi la nota');
       closeSheet(); seg = 'note'; LS.set('noi4-bacheca', seg);
       try { fresh = await DATI.aggiungi('note', { by: S.me, x, creato: Date.now() }); render(); toast('Nota attaccata: agli altri arriva un avviso 🔔'); } catch (er) { sbaglio(er); }
     } else if (f.id === 'fPr') {
