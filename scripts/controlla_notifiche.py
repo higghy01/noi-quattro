@@ -25,3 +25,19 @@ if not r.ok:
 for j in (r.json().get("jobs") or []) if r.ok else []:
     print(f"Sveglia {j.get('name', '').split('/')[-1]}: {j.get('state')}, orario '{j.get('schedule')}' {j.get('timeZone')}, "
           f"ultimo tentativo {j.get('lastAttemptTime')}, prossimo {j.get('scheduleTime')}, esito {j.get('status') or 'ok'}")
+
+# La funzione su Cloud Run: stato dell'ultima versione e, con PROVA=1, una chiamata diretta per vedere la risposta.
+r = s.get(f"https://run.googleapis.com/v2/projects/{chiave['project_id']}/locations/europe-west1/services/notifiche5")
+if r.ok:
+    sv = r.json()
+    print("Funzione:", sv.get("uri"), "| pronta:", [(c.get("type"), c.get("state"), c.get("message", "")[:300]) for c in sv.get("conditions", [])][:4])
+    if os.environ.get("PROVA") == "1" and sv.get("uri"):
+        from google.oauth2 import service_account as sa
+        from google.auth.transport.requests import Request
+        tok = sa.IDTokenCredentials.from_service_account_info(chiave, target_audience=sv["uri"])
+        tok.refresh(Request())
+        import requests
+        rr = requests.post(sv["uri"], headers={"Authorization": f"Bearer {tok.token}", "Content-Type": "application/json"}, json={}, timeout=200)
+        print("Chiamata diretta:", rr.status_code, rr.text[:1500])
+else:
+    print(f"Funzione: non leggibile ({r.status_code}) {r.text[:300]}")

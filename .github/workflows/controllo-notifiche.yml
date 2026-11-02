@@ -1,6 +1,9 @@
 # A mano: dice quando sono partiti per l'ultima volta gli avvisi e da dove (Firebase o GitHub).
 name: Controllo notifiche
-on: { workflow_dispatch: {} }
+on:
+  workflow_dispatch:
+    inputs:
+      prova: { description: "1 = chiama anche la funzione", required: false, default: "0" }
 jobs:
   controlla:
     runs-on: ubuntu-latest
@@ -13,3 +16,4 @@ jobs:
       - run: python scripts/controlla_notifiche.py
         env:
           FIREBASE_CHIAVE: ${{ secrets.FIREBASE_CHIAVE }}
+          PROVA: ${{ inputs.prova }}
