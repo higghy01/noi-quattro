@@ -116,8 +116,14 @@
           h, fine, fino: '', who: [S.me], ripeti: 'settimanale', mezzo: '', imp: false, fonte: 'app', creatoDa: S.me, appu: x.id, creato: e ? e.creato || Date.now() : Date.now() }))
         .catch(er => { appuFatti.delete(k); console.error(er); });
     }
+    // Un impegno senza più il suo appuntamento si toglie, ma dopo 15 secondi e solo se manca ancora: così una copia vecchia
+    // dei dati sul telefono (appena aperto, senza rete) non lo cancella per sbaglio.
     for (const e of S.impRaw || []) if (e.appu && e.creatoDa === S.me && !ids.has(e.id) && !appuFatti.has('via|' + e.id)) {
-      appuFatti.add('via|' + e.id); DATI.elimina('impegni', e.id).catch(() => appuFatti.delete('via|' + e.id));
+      appuFatti.add('via|' + e.id);
+      setTimeout(() => {
+        if (S.mie.some(x => x.per === S.me && x.k === 'appu' && 'appu-' + x.id === e.id) || !(S.impRaw || []).some(y => y.id === e.id)) return appuFatti.delete('via|' + e.id);
+        DATI.elimina('impegni', e.id).catch(() => appuFatti.delete('via|' + e.id));
+      }, 15000);
     }
   }
   // Interrogazioni e verifiche nel calendario comune (Sasha, 02/11/2026): solo per chi è in scuola/<persona>.prove
@@ -1525,7 +1531,7 @@
         <label>Quanto spesso</label>${segHtml('miogni', OGNI, String(v.ogni || '1'))}` : ''}
       ${k === 'appu' ? `<label>Che giorno</label>${segHtml('mig', giorni.map(g => [String(g), GG[g]]), String(v.g))}
         <label for="miH">A che ora</label><input id="miH" type="time" value="${esc(v.h || '')}">
-        <div class="muted">Il titolo lo vedi solo tu: nel calendario comune gli altri vedono «Occupato». La sera prima ti arriva un avviso.</div>` : ''}
+        <div class="muted">Il titolo lo vedi solo tu: nel calendario comune gli altri vedono «Occupato». Ti arriva un avviso prima dell'appuntamento.</div>` : ''}
       ${k === 'scad' ? `<label for="miM">Che mese</label><select id="miM">${MESI.map((n, i) => `<option value="${i + 1}"${+v.mese === i + 1 ? ' selected' : ''}>${n}</option>`).join('')}</select>
         <label for="miA">La prima volta (anno)</label><input id="miA" type="number" inputmode="numeric" min="2020" max="2100" value="${esc(String(v.anno || T.slice(0, 4)))}">
         <label>Quanto spesso</label>${segHtml('miogni', [['1', 'Ogni anno'], ['2', 'Ogni 2 anni'], ['3', 'Ogni 3 anni']], String(v.ogni || '1'))}
