@@ -8,7 +8,7 @@ si può ancora lanciare a mano da GitHub (workflow Notifiche).
 - proposte: una proposta nuova (a tutti tranne chi l'ha fatta), "hanno votato tutti" (a chi l'ha fatta)
   e cosa si è deciso (a tutti tranne chi ha deciso);
 - conflitti: a chi ha due impegni che si accavallano oggi, domani o dopodomani;
-- note: quando una nota nuova è messa in evidenza (le note non si scrivono più, restano le vecchie);
+- note: quando qualcuno scrive una nota nella Bacheca, a tutti gli altri, senza il testo;
 - mie (sezione "Per me", 02/11/2026): i promemoria all'ora giusta (e di nuovo dopo mezz'ora se non è stato toccato
   "Fatto"), le scadenze il mese prima e una settimana prima della fine del mese,
   le mostre segnate una settimana prima che chiudano e le mostre nuove a chi le segue.
@@ -86,7 +86,7 @@ def main():
         da_mandare.append((p, titolo, testo))
         inviati[chiave] = oggi
 
-    # Promemoria: impegni che iniziano tra 30 e 80 minuti (anche subito dopo mezzanotte, guardando domani).
+    # Promemoria: impegni che iniziano tra 30 e 62 minuti (anche subito dopo mezzanotte, guardando domani).
     for giorno in (oggi, domani):
         for e in impegni:
             if not e.get("h") or not capita(e, giorno):
@@ -169,13 +169,12 @@ def main():
             if cena.get(p) not in ("si", "no") and not fuori_cena(p):
                 manda(p, "cena", "A cena stasera?", "Rispondi con un tocco nella scheda Oggi.", f"cena|{oggi}|{p}")
 
-    # Note nuove in evidenza.
+    # Note nuove della Bacheca (02/11/2026, Sasha): a tutti tranne chi l'ha scritta, senza il testo.
     for d in db.collection("note").where("creato", ">", recente).stream():
-        n = d.to_dict()
-        if n.get("pin"):
-            for p in persone:
-                if p != n.get("by"):
-                    manda(p, "note", f"Nota di {nome(n.get('by'))}", n.get("x", "")[:120], f"nota|{d.id}|{p}")
+        n = d.to_dict() or {}
+        for p in persone:
+            if p != n.get("by"):
+                manda(p, "note", f"{nome(n.get('by'))} ha scritto una nota", "Leggila nella Bacheca, tra le Note.", f"nota|{d.id}|{p}")
 
     # Due impegni della stessa persona alla stessa ora (oggi, domani, dopodomani: "inviati" ricorda per 2 giorni).
     for k in range(3):

@@ -785,3 +785,12 @@ html .topbar.on b{transform:none}
 /* Sola lettura (Sasha guarda la sezione di un altro, v65): il fieldset non deve mostrare bordi. */
 .mro{border:0;margin:0;padding:0;min-width:0}
 .mro:disabled .seg button,.mro:disabled input,.mro:disabled select,.mro:disabled textarea{opacity:1;color:var(--fg);-webkit-text-fill-color:var(--fg)}
+/* Note della Bacheca (v72): foglietti nel colore di chi scrive, due per riga */
+.fogli{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.foglio{position:relative;display:grid;align-content:space-between;gap:8px;min-width:0;min-height:108px;padding:14px 12px 8px;border-radius:14px;background:color-mix(in srgb,var(--pc) 12%,var(--panel));border:1px solid color-mix(in srgb,var(--pc) 26%,transparent);box-shadow:0 1px 3px rgb(0 0 0 / .06)}
+.foglio::before{content:"";position:absolute;top:-5px;left:50%;width:34px;height:10px;margin-left:-17px;border-radius:3px;background:color-mix(in srgb,var(--pc) 35%,var(--panel));opacity:.9}
+.foglio p{margin:0;font-size:14.5px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-wrap;-webkit-user-select:text;user-select:text}
+.foglio p b{color:color-mix(in srgb,var(--pc) 70%,var(--fg))}
+.fby{display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:32px}
+.fby small{color:var(--muted);font-size:12px}
+.foglio .gx{margin:-6px -6px -6px 0}

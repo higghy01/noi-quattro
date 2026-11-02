@@ -10,7 +10,7 @@
   // [chiave, testo, orario scelto (facoltativo), ore possibili, ora solita]
   const NOTIF = [['promemoria', 'Promemoria un\'ora prima dei miei impegni'], ['nuovi', 'Quando qualcuno mi aggiunge a un impegno'],
     ['riepilogo', 'La sera: gli impegni di domani', 'oraRiepilogo', [19, 20, 21, 22], 21],
-    ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['proposte', 'Nuove proposte, quando hanno votato tutti e cosa si è deciso'], ['conflitti', 'Se ho due impegni alla stessa ora']];
+    ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['proposte', 'Nuove proposte, quando hanno votato tutti e cosa si è deciso'], ['note', 'Quando qualcuno scrive una nota (senza il testo)'], ['conflitti', 'Se ho due impegni alla stessa ora']];
   // Icone a linee per i titoli delle schede (02/11/2026): più sobrie delle emoji, stesso tratto della barra in basso.
   const SV = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
   const ICO = {
@@ -26,7 +26,7 @@
   };
   const SCHEDE = ['oggi', 'cal', 'note', 'viaggi', 'spesa'];
   const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', viaggi: 'Ricordi', spesa: 'Spesa' };
-  const SOTTO = { cal: 'Gli impegni di tutta la famiglia', note: 'Proposte da votare e liste dei regali', viaggi: 'Foto e video dei momenti insieme', spesa: 'Quello che serve in casa' };
+  const SOTTO = { cal: 'Gli impegni di tutta la famiglia', note: 'Proposte, note per tutti e regali', viaggi: 'Foto e video dei momenti insieme', spesa: 'Quello che serve in casa' };
   const NOMI_COLORI = { blu: 'blu', rosa: 'rosa', ambra: 'ambra', verde: 'verde', viola: 'viola', corallo: 'corallo', rosso: 'rosso', grigio: 'grigio' };
   // Preferenze di questo telefono (aspetto, scheda di apertura): restano solo qui.
   const LS = {
@@ -39,7 +39,7 @@
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
   const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {} };
-  let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = LS.get('noi4-bacheca', 'proposte') === 'regali' ? 'regali' : 'proposte';
+  let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = ['regali', 'note'].includes(LS.get('noi4-bacheca', 'proposte')) ? LS.get('noi4-bacheca', 'proposte') : 'proposte';
   const seen = new Set(); let fresh = null; let avviato = false;
 
   function inizioSettimana(d) { const x = new Date(d); return addDays(x, -((x.getDay() + 6) % 7)); }
@@ -351,9 +351,27 @@
   function rNote() {
     const el = $('#p-note');
     // Il selettore resta fermo (così la pillola scorre), cambia solo il contenuto sotto.
-    if (!$('#segNote')) el.innerHTML = `<div class="seg" id="segNote" style="--n:2"><i class="spill"></i><button class="tap" data-seg="proposte">Proposte</button><button class="tap" data-seg="regali">Regali</button></div><div id="noteBody"></div>`;
-    segSet($('#segNote'), seg === 'regali' ? 1 : 0);
-    $('#noteBody').innerHTML = seg === 'regali' ? rRegali() : rProposte();
+    if (!$('#segNote')) el.innerHTML = `<div class="seg" id="segNote" style="--n:3"><i class="spill"></i><button class="tap" data-seg="proposte">Proposte</button><button class="tap" data-seg="note">Note</button><button class="tap" data-seg="regali">Regali</button></div><div id="noteBody"></div>`;
+    segSet($('#segNote'), seg === 'regali' ? 2 : seg === 'note' ? 1 : 0);
+    $('#noteBody').innerHTML = seg === 'regali' ? rRegali() : seg === 'note' ? rFoglietti() : rProposte();
+  }
+  /* ---------- Note (02/11/2026, Sasha): foglietti per tutti e 4, tipo "Sasha: domani sono da babbo".
+     Chi scrive la nota la può togliere; agli altri arriva un avviso "X ha scritto una nota", senza il testo. */
+  function rFoglietti() {
+    const nuova = !seen.has(vista()), lista = [...S.note].sort((a, b) => (b.creato || 0) - (a.creato || 0));
+    if (!lista.length) return `<div class="empty big${ri(0)}"><b>📝</b><span>Nessuna nota. Tocca + per scrivere qualcosa per tutti, tipo «domani sono da babbo».</span></div>`;
+    return `<div class="fogli">${lista.map((n, i) => {
+      const mio = n.by === S.me, anim = n.id === fresh ? ' pop' : nuova ? ' rise' : '';
+      return `<div class="foglio${anim}" style="--pc:${col(n.by)};--i:${Math.min(i, 6)}">
+        <p><b>${esc(P(n.by).nome)}:</b> ${esc(n.x)}</p>
+        <div class="fby"><small>${fa(n.creato || Date.now())}</small>${mio ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div></div>`;
+    }).join('')}</div>`;
+  }
+  function sheetNota() {
+    openSheet(`<h3>Nuova nota</h3><form class="stack" id="fNo">
+     <label>La nota<textarea id="noX" rows="4" maxlength="300" required placeholder="Es. Domani sono da babbo"></textarea></label>
+     <p class="hint">La vedono tutti e 4. Agli altri arriva un avviso che hai scritto una nota, senza il testo.</p>
+     <button class="btn tap">Attacca la nota</button></form>`, () => $('#noX').focus());
   }
   function segSet(el, k) { el.style.setProperty('--k', k); el.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === k)); }
   /* ---------- Proposte: piccoli sondaggi aperti ----------
@@ -379,11 +397,9 @@
     const decise = S.proposte.filter(p => p.chiusa).sort((a, b) => (b.decisa || 0) - (a.decisa || 0)).slice(0, 6);
     let k = 0;
     const card = (p) => propCard(p, nuova ? ++k : 0);
-    const vecchie = [...S.note].sort((a, b) => (b.creato || 0) - (a.creato || 0));
     return `<div class="stack">${aperte.length ? `<div class="conta${ri(0)}">${aperte.length} ${aperte.length === 1 ? 'proposta aperta' : 'proposte aperte'}</div>` : ''}
     ${aperte.length ? aperte.map(card).join('') : `<div class="empty big${ri(1)}"><b>🗳️</b><span>Nessuna proposta aperta. Tocca + per chiedere cosa si mangia, dove si va, cosa si fa.</span></div>`}
-    ${decise.length ? `<div class="sec">Già decise</div>${decise.map(card).join('')}` : ''}
-    ${vecchie.length ? `<div class="sec">Vecchie note</div><div class="card">${vecchie.map(n => `<div class="pn vn" style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="vnx">${esc(n.x)}</span>${n.by === S.me ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div>`).join('')}</div>` : ''}</div>`;
+    ${decise.length ? `<div class="sec">Già decise</div>${decise.map(card).join('')}` : ''}</div>`;
   }
   function propCard(p, k) {
     const ops = opzioniDi(p), ids = IDS(), mio = p.by === S.me, t = PTIPO[p.tipo] || PTIPO.altro;
@@ -1143,7 +1159,7 @@
     fresh = null;
     if (a === 'itemTx' && $('#itemTx')) $('#itemTx').focus();
     $('#fab').hidden = page === 'spesa' && segSpesa !== 'ricette';
-    $('#fab').setAttribute('aria-label', page === 'spesa' && segSpesa === 'ricette' ? 'Nuova ricetta' : page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : 'Nuova proposta') : page === 'viaggi' ? 'Nuovo ricordo' : 'Nuovo impegno');
+    $('#fab').setAttribute('aria-label', page === 'spesa' && segSpesa === 'ricette' ? 'Nuova ricetta' : page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : seg === 'note' ? 'Nuova nota' : 'Nuova proposta') : page === 'viaggi' ? 'Nuovo ricordo' : 'Nuovo impegno');
   }
   function banner() {
     const b = $('#banner');
@@ -2116,7 +2132,7 @@
     if (t.id === 'legoVia') { const f = $('#fRe'); delete f.dataset.lego; $('#legoSel').innerHTML = ''; $('#legoOn').textContent = '🧱 Cerca un set LEGO'; return; }
     if (d.go) return go(d.go);
     if (t.id === 'fab' && page === 'spesa' && segSpesa === 'ricette') return sheetNuovaRicetta();
-    if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : sheetProposta('cena')) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
+    if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : seg === 'note' ? sheetNota() : sheetProposta('cena')) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
     if (d.filtror) { filtroR = d.filtror; return rViaggi(); }
     if (d.tipo) { t.parentElement.querySelectorAll('.tp').forEach(b => b.classList.toggle('on', b === t)); return; }
     if (d.viaggio) { openTrip(d.viaggio); if (d.apriFoto) setTimeout(() => openViewer(d.apriFoto), 300); return; }
@@ -2506,6 +2522,10 @@
         }
         else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('Impegno salvato: lo vedono tutti'); }
       } catch (er) { sbaglio(er); }
+    } else if (f.id === 'fNo') {
+      const x = $('#noX').value.trim().replace(/\n{3,}/g, '\n\n').slice(0, 300); if (!x) return toast('Scrivi la nota');
+      closeSheet(); seg = 'note'; LS.set('noi4-bacheca', seg);
+      try { fresh = await DATI.aggiungi('note', { by: S.me, x, creato: Date.now() }); render(); toast('Nota attaccata: agli altri arriva un avviso 🔔'); } catch (er) { sbaglio(er); }
     } else if (f.id === 'fPr') {
       const q = $('#prQ').value.trim().slice(0, 80); if (!q) return toast('Scrivi la domanda');
       const tp = (f.querySelector('.tp.on') || { dataset: {} }).dataset.ptipo || 'altro', opzioni = {}, visti = new Set(), ora = Date.now();
