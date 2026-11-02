@@ -1,0 +1,19 @@
+# Le mostre di Firenze per la sezione "Per me": il lunedì e il giovedì verso le 8 di mattina (ora italiana).
+name: Mostre
+on:
+  schedule:
+    - cron: "5 6 * * 1,4"
+  workflow_dispatch: {}
+concurrency: { group: mostre, cancel-in-progress: false }
+jobs:
+  aggiorna:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: scripts/requisiti.txt }
+      - run: pip install -r scripts/requisiti.txt
+      - run: python scripts/mostre.py
+        env:
+          FIREBASE_CHIAVE: ${{ secrets.FIREBASE_CHIAVE }}

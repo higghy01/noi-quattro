@@ -124,6 +124,25 @@
         v('p1', 'Storia', 4.75, 'orale', 6), v('p1', 'Storia', 6, 'scritto', 2, 50), v('p1', 'Educazione civica', 8.5, 'orale', 7), v('p1', 'Matematica', 6.5, 'scritto', 260),
         v('p1', 'Inglese', 5.75, 'scritto', 300), v('p3', 'Italiano', 7, 'scritto', 4), v('p3', 'Matematica', 5.5, 'scritto', 6), v('p3', 'Inglese', 8.25, 'orale', 2)].forEach(x => { db.voti[uid()] = x; });
     }
+    // Sezione "Per me" di p2 (esempi finti) e le mostre come le scrive il programma "Mostre".
+    if (!db.mie) {
+      const m = (x) => Object.assign({ per: 'p2', creato: Date.now() }, x);
+      db.mie = { [uid()]: m({ k: 'prom', e: '💊', t: 'Vitamine', h: '13:30', ogni: 1, ult: '' }),
+        [uid()]: m({ k: 'prom', e: '🌙', t: 'Tisana della sera', h: '21:30', ogni: 1, ult: iso(-1) }),
+        [uid()]: m({ k: 'prom', e: '🪴', t: 'Annaffiare la pianta', h: '10:00', ogni: 7, ult: iso(-8) }),
+        [uid()]: m({ k: 'prom', e: '🌿', t: 'Concime alle piante', h: '10:00', ogni: 14, ult: iso(-3) }),
+        [uid()]: m({ k: 'appu', e: '📅', t: 'Corso di pittura', g: 3, h: '12:00' }),
+        [uid()]: m({ k: 'scad', e: '🚗', t: 'Bollo auto', mese: 9, anno: 2026, ogni: 1 }),
+        [uid()]: m({ k: 'scad', e: '🔧', t: 'Revisione auto', mese: 9, anno: 2030, ogni: 2 }),
+        [uid()]: m({ k: 'lista', cat: 'serie', t: 'Una serie crime', x: 'Consigliata da un\'amica', stato: 'ora', stelle: 0 }),
+        [uid()]: m({ k: 'lista', cat: 'serie', t: 'Un\'altra serie', x: '', stato: 'da', stelle: 0 }),
+        [uid()]: m({ k: 'lista', cat: 'serie', t: 'Serie finita', x: '', stato: 'fatto', stelle: 4 }),
+        [uid()]: m({ k: 'lista', cat: 'libro', t: 'Un giallo', x: 'Autore da cercare', stato: 'da', stelle: 0 }) };
+    }
+    if (!db.info) db.info = { mostre: { agg: Date.now() - 864e5, l: [
+      { id: 'ps-1', luogo: 'Palazzo Strozzi', t: 'Mostra in corso', sub: 'Sottotitolo della mostra', dal: iso(-40), al: iso(80), img: '', link: 'https://www.palazzostrozzi.org/' },
+      { id: 'ps-2', luogo: 'Palazzo Strozzi', t: 'Mostra in arrivo', sub: '', dal: iso(8), al: iso(90), img: '', link: 'https://www.palazzostrozzi.org/mostre-future/' },
+      { id: 'ci-1', luogo: 'Cattedrale dell\'Immagine', t: 'Mostra immersiva', sub: '', dal: iso(-170), al: iso(10), img: '', link: 'https://www.cattedraledellimmagine.it/' }] } };
     // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
     const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };
     const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} subs.forEach(s => s()); };

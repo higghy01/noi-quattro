@@ -38,7 +38,7 @@
 
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
-  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [] };
+  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {} };
   let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = LS.get('noi4-bacheca', 'proposte') === 'regali' ? 'regali' : 'proposte';
   const seen = new Set(); let fresh = null; let avviato = false;
 
@@ -1302,6 +1302,7 @@
   // Cosa vede una persona nella sua sezione: la sua scuola, o la copia di quella di qualcun altro.
   function moduli(id) {
     const out = [], ok = (s) => s && (s.orario || []).length;
+    if (CASA.includes(id)) out.push({ k: 'casa', di: id, copia: false });
     if (ok(S.scuola[id])) out.push({ k: 'scuola', di: id, copia: false });
     for (const [pid, s] of Object.entries(S.scuola)) if (pid !== id && ok(s) && (s.copie || []).includes(id) && S.persone[pid]) out.push({ k: 'scuola', di: pid, copia: true });
     return out;
@@ -1364,17 +1365,148 @@
   }
   // Il pallino sul pulsante: c'è qualcosa per oggi o domani. Solo le mie note: quelle di una sezione che guardo in copia non accendono il mio pallino.
   function pallinoMio() {
-    const dom = iso(addDays(TODAY, 1)), n = mieiC().filter(c => c.per === S.me && !c.fatto && (c.d === T || c.d === dom)).length;
+    const dom = iso(addDays(TODAY, 1)), n = mieiC().filter(c => c.per === S.me && !c.fatto && (c.d === T || c.d === dom)).length
+      + (CASA.includes(S.me) ? mie('prom').filter(x => promOggi(x) && x.ult !== T).length : 0);
     const b = $('#mioBtn'); if (b) { b.classList.toggle('dot', n > 0); b.setAttribute('aria-label', n ? `Personale: ${n} ${n === 1 ? 'cosa' : 'cose'} per oggi o domani` : 'Personale'); }
   }
   function rMio() {
     const sr = (i) => mioNuova ? ` rise" style="--i:${Math.min(i, 8)}` : '';
     const mods = moduli(S.me);
-    const corpo = mods.length ? mods.map((m, i) => rScuola(m, sr, i)).join('')
+    const corpo = mods.length ? mods.map((m, i) => (m.k === 'casa' ? rCasa : rScuola)(m, sr, i)).join('')
       : `<div class="card mvuoto${sr(1)}"><span class="mbig" aria-hidden="true">✨</span><b>La tua sezione</b><div class="empty">Qui arriveranno cose pensate per te, un po' alla volta.</div></div>`;
     $('#mioIn').innerHTML = `
      <div class="imp-top"><button class="back tap" id="mioBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Indietro</button></div>
      <h1 class="hello${sr(0)}">Personale</h1>${corpo}`;
+  }
+  /* Sezione "Per me" (Sasha, 02/11/2026: la sezione Personale della madre). Tre schede: Oggi (promemoria con "Fatto",
+     appuntamenti fissi, scadenze), Mostre (Firenze, aggiornate da sole), Liste (serie, documentari, libri, beauty e moda).
+     Tutto quello che c'è dentro lo scrive lei e lo vede solo lei (raccolta "mie", regola per == io): nel codice pubblico
+     nessun suo dato, solo esempi generici da toccare. */
+  const CASA = ['p2'];
+  const TABS_M = [['oggi', 'Oggi'], ['mostre', 'Mostre'], ['liste', 'Liste']];
+  let mTab = LS.get('noi4-mie-tab', 'oggi'); if (!TABS_M.some(t => t[0] === mTab)) mTab = 'oggi';
+  const LISTE = [['serie', '📺', 'Serie'], ['doc', '🌍', 'Docu'], ['libro', '📖', 'Libri'], ['beauty', '💄', 'Beauty']];
+  const LISTA = Object.fromEntries(LISTE.map(([k, e, n]) => [k, { e, n }]));
+  let lsCat = LS.get('noi4-mie-lista', 'serie'); if (!LISTA[lsCat]) lsCat = 'serie';
+  const STATI_L = { libro: ['Da leggere', 'Sto leggendo', 'Letto'], beauty: ['Da provare', 'Lo uso', 'Provato'], altro: ['Da vedere', 'Sto guardando', 'Visto'] };
+  const statoN = (cat, k) => (STATI_L[cat] || STATI_L.altro)[['da', 'ora', 'fatto'].indexOf(k)] || '';
+  const GGL = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+  const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+  const OGNI = [['1', 'Ogni dì'], ['2', '2 giorni'], ['3', '3 giorni'], ['7', '1 sett.'], ['14', '2 sett.']];
+  const mie = (k) => S.mie.filter(x => x.per === S.me && x.k === k);
+  const gTra = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
+  const traG = (n) => n === 0 ? 'oggi' : n === 1 ? 'domani' : n < 0 ? `da ${-n} ${n === -1 ? 'giorno' : 'giorni'}` : `fra ${n} giorni`;
+  // Un promemoria tocca oggi se è di tutti i giorni, oppure se sono passati i suoi giorni dall'ultima volta (la pianta).
+  const promQuando = (x) => (+x.ogni || 1) === 1 || !x.ult ? T : iso(addDays(new Date(x.ult + 'T12:00:00'), +x.ogni));
+  const promOggi = (x) => x.ult === T || promQuando(x) <= T;
+  // Il prossimo appuntamento fisso: il primo giorno della settimana giusto da oggi (oggi compreso se l'ora non è passata).
+  function appuProssimo(x) {
+    const ora = new Date().toTimeString().slice(0, 5);
+    for (let i = 0; i < 8; i++) { const d = iso(addDays(TODAY, i)); if (gSett(d) === +x.g && (i > 0 || (x.h || '23:59') >= ora)) return d; }
+    return T;
+  }
+  // La prossima scadenza: dal primo anno, ogni N anni, il primo mese che non è già passato.
+  function scadProssima(x) {
+    const y0 = +T.slice(0, 4), m0 = +T.slice(5, 7); let y = +x.anno || y0; const ogni = Math.max(1, +x.ogni || 1);
+    while (y < y0 || (y === y0 && +x.mese < m0)) y += ogni;
+    return { y, m: +x.mese, mesi: (y - y0) * 12 + (+x.mese - m0) };
+  }
+  const mostraMia = (id) => mie('mostra').find(x => x.mid === id);
+  function rCasa(m, sr, k) {
+    const corpo = { oggi: mOggi, mostre: mMostre, liste: mListe }[mTab]();
+    return `<div class="sec${sr(k * 3 + 1)}">✨ Per me</div>
+     <div class="sctabs${sr(k * 3 + 2)}">${segHtml('mtab', TABS_M, mTab)}</div>
+     <div class="scbody" data-tab="${mTab}">${corpo}</div>`;
+  }
+  const rigaProm = (x) => {
+    const ok = x.ult === T, q = promQuando(x), tardi = !ok && q < T ? gTra(q, T) : 0;
+    return `<div class="cmp${ok ? ' fatto' : ''}" style="--mc:var(--me)"><button type="button" class="ck tap" data-mfatto="${x.id}" aria-label="${ok ? 'Da rifare' : 'Fatto'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><button type="button" class="cmx tap" data-mie="${x.id}"><b>${esc(x.e || '🔔')} ${esc(x.t)}</b><small>${x.h ? `alle ${esc(x.h)}` : 'oggi'}${(+x.ogni || 1) > 1 ? ` · ogni ${x.ogni} giorni` : ''}${tardi ? ` · <span class="mtardi">in ritardo di ${tardi} ${tardi === 1 ? 'giorno' : 'giorni'}</span>` : ''}</small></button></div>`;
+  };
+  const rigaInfo = (id, e, t, sub, sub2, forte) => `<button type="button" class="mriga tap${forte ? ' forte' : ''}" data-mie="${id}"><span class="mico" aria-hidden="true">${esc(e)}</span><span class="mtx"><b>${esc(t)}</b><small>${sub}</small></span>${sub2 ? `<span class="mdx">${sub2}</span>` : ''}</button>`;
+  function mOggi() {
+    const prom = mie('prom').sort((a, b) => (a.h || '99').localeCompare(b.h || '99'));
+    const oggi = prom.filter(promOggi), poi = prom.filter(x => !promOggi(x)).sort((a, b) => promQuando(a).localeCompare(promQuando(b)));
+    const fatti = oggi.filter(x => x.ult === T).length;
+    const appu = mie('appu').map(x => ({ x, d: appuProssimo(x) })).sort((a, b) => a.d.localeCompare(b.d) || (a.x.h || '').localeCompare(b.x.h || ''));
+    const scad = mie('scad').map(x => ({ x, p: scadProssima(x) })).sort((a, b) => a.p.mesi - b.p.mesi);
+    const vuoto = !prom.length && !appu.length && !scad.length;
+    return `<div class="card mcard">
+       <div class="agtop"><b>Da fare oggi</b>${oggi.length ? `<small>${fatti === oggi.length ? 'Tutto fatto ✨' : `${fatti} di ${oggi.length}`}</small>` : ''}</div>
+       ${oggi.length ? `<div class="cmpl">${oggi.map(rigaProm).join('')}</div>` : `<div class="empty">${vuoto ? 'Qui arrivano i tuoi promemoria: le medicine, la pianta, quello che non vuoi dimenticare. Ti avviso io sul telefono.' : 'Niente per oggi.'}</div>`}
+       ${poi.length ? `<div class="mpoi">${poi.map(x => rigaInfo(x.id, x.e || '🔔', x.t, `ogni ${x.ogni} giorni`, traG(gTra(T, promQuando(x))))).join('')}</div>` : ''}
+     </div>
+     ${appu.length ? `<div class="card mcard"><div class="agtop"><b>Appuntamenti fissi</b><small>solo tu li vedi</small></div>
+       ${appu.map(({ x, d }) => rigaInfo(x.id, x.e || '📅', x.t, `ogni ${GGL[+x.g]}${x.h ? ` alle ${esc(x.h)}` : ''}`, d === T ? 'oggi' : d === iso(addDays(TODAY, 1)) ? 'domani' : fmt(d, { weekday: 'short', day: 'numeric' }).replace(/\./g, ''), d === T)).join('')}</div>` : ''}
+     ${scad.length ? `<div class="card mcard"><div class="agtop"><b>Scadenze</b></div>
+       ${scad.map(({ x, p }) => rigaInfo(x.id, x.e || '📌', x.t, `${MESI[p.m - 1]} ${p.y}${(+x.ogni || 1) > 1 ? `, poi ogni ${x.ogni} anni` : ', ogni anno'}`, p.mesi === 0 ? 'questo mese' : p.mesi === 1 ? 'il mese prossimo' : `fra ${p.mesi} mesi`, p.mesi <= 1)).join('')}</div>` : ''}
+     <button type="button" class="btn tap" data-mnuovo="prom">+ Aggiungi</button>`;
+  }
+  function mMostre() {
+    const info = S.mostre || {}, l = (info.l || []).filter(x => x.al >= T || !x.al);
+    const luoghi = [...new Set(l.map(x => x.luogo))];
+    const voglio = mie('mostra').filter(x => !x.al || x.al >= T).length;
+    const riga = (x) => {
+      const inCorso = !x.dal || x.dal <= T, fine = x.al ? gTra(T, x.al) : 99, mia = mostraMia(x.id);
+      const stato = !inCorso ? `<span class="mst arr">Dal ${fmt(x.dal, { day: 'numeric', month: 'short' }).replace(/\./g, '')}</span>` : fine <= 14 ? `<span class="mst fine">Ultimi giorni</span>` : `<span class="mst ora">In corso</span>`;
+      return `<div class="mos">${x.img ? `<img src="${esc(x.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="mimg" aria-hidden="true">🖼️</span>'}
+        <div class="mtx">${stato}<b>${esc(x.t)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}<small>${x.dal ? fmt(x.dal, { day: 'numeric', month: 'short' }).replace(/\./g, '') : ''}${x.al ? ` – ${fmt(x.al, { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, '')}` : ''}</small>
+          <span class="mbt">${x.link ? `<a class="tap" href="${esc(x.link)}" target="_blank" rel="noopener">Scopri di più</a>` : ''}<button type="button" class="tap mvo${mia ? ' on' : ''}" data-mvoglio="${esc(x.id)}" aria-pressed="${mia ? 'true' : 'false'}">${mia ? '♥ Ci voglio andare' : '♡ Ci voglio andare'}</button></span></div></div>`;
+    };
+    return `${!l.length ? `<div class="card"><div class="empty">${info.agg ? 'Nessuna mostra trovata in questo momento.' : 'Le mostre arrivano al primo aggiornamento (ogni lunedì e giovedì mattina).'}</div></div>` : ''}
+     ${luoghi.map(lu => `<div class="card mcard"><div class="agtop"><b>${esc(lu)}</b></div>${l.filter(x => x.luogo === lu).sort((a, b) => (a.dal || '').localeCompare(b.dal || '')).map(riga).join('')}</div>`).join('')}
+     <div class="empty mnota">${voglio ? `Ne hai segnate ${voglio}: ti avviso una settimana prima che chiudano. ` : ''}Quando apre una mostra nuova ti arriva un avviso.${info.agg ? ` Aggiornato ${fmt(new Date(info.agg).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }).replace(/\./g, '')}.` : ''}</div>`;
+  }
+  function mListe() {
+    const tutte = mie('lista').filter(x => x.cat === lsCat), ord = (a, b) => (b.creato || 0) - (a.creato || 0);
+    const g = (s) => tutte.filter(x => (x.stato || 'da') === s).sort(ord);
+    const riga = (x) => `<button type="button" class="mriga tap" data-mie="${x.id}"><span class="mtx"><b>${esc(x.t)}</b>${x.x ? `<small>${esc(x.x.length > 70 ? x.x.slice(0, 70) + '…' : x.x)}</small>` : ''}</span>${x.stelle ? `<span class="mstelle" aria-label="${x.stelle} stelle su 5">${'★'.repeat(x.stelle)}<i>${'★'.repeat(5 - x.stelle)}</i></span>` : ''}</button>`;
+    const gruppo = (s, aperto) => { const l = g(s); return l.length ? `<div class="agg">${statoN(lsCat, s)} · ${l.length}</div>${l.map(riga).join('')}` : ''; };
+    const ph = { serie: 'Una serie da vedere…', doc: 'Un documentario…', libro: 'Un libro (es. un giallo)…', beauty: 'Un prodotto, un look, un link…' }[lsCat];
+    return `<div class="mcat">${segHtml('mcat', LISTE.map(([k, e, n]) => [k, `${e} ${n}`]), lsCat)}</div>
+     <div class="card mcard">
+       <form class="mlin" id="fLi"><input id="liT" maxlength="80" autocomplete="off" placeholder="${ph}" aria-label="${ph}"><button class="tap" aria-label="Aggiungi">+</button></form>
+       ${tutte.length ? gruppo('ora') + gruppo('da') + gruppo('fatto') : `<div class="empty">Ancora niente qui. Scrivi un titolo e tocca +.</div>`}
+     </div>`;
+  }
+  // Foglio per aggiungere o cambiare un promemoria, un appuntamento fisso o una scadenza (k), o una cosa di una lista.
+  const SUGG = {
+    prom: [['💊', 'Medicina', { h: '14:00' }], ['🪴', 'Annaffiare la pianta', { ogni: '7', h: '10:00' }], ['💧', 'Bere un bicchiere d\'acqua', { h: '16:00' }]],
+    appu: [['📅', 'Appuntamento fisso', {}], ['🏋️', 'Ginnastica', {}]],
+    scad: [['🚗', 'Bollo auto', { mese: '9', ogni: '1' }], ['🔧', 'Revisione auto', { mese: '9', ogni: '2' }], ['🛡️', 'Assicurazione auto', {}]]
+  };
+  function sheetMie(id, kNuovo) {
+    const x = id ? S.mie.find(y => y.id === id) : null; if (id && !x) return;
+    const k = x ? x.k : kNuovo || 'prom';
+    if (k === 'lista') return sheetLista(x);
+    const v = x || { e: '', t: '', h: k === 'prom' ? '09:00' : '', ogni: '1', g: 3, mese: String(+T.slice(5, 7)), anno: T.slice(0, 4) };
+    const giorni = [1, 2, 3, 4, 5, 6, 0];
+    openSheet(`<h3>${x ? 'Cambia' : 'Nuovo'}</h3><form class="stack" id="fMi" data-id="${x ? x.id : ''}" data-k="${k}">
+      ${x ? '' : segHtml('mik', [['prom', 'Promemoria'], ['appu', 'Fisso'], ['scad', 'Scadenza']], k)}
+      ${x ? '' : `<div class="tipi">${SUGG[k].map(([e, t, o], i) => `<button type="button" class="tp tap" data-msug="${i}"><b>${e}</b>${esc(t)}</button>`).join('')}</div>`}
+      <input type="hidden" id="miE" value="${esc(v.e || '')}">
+      <label for="miT">Cosa</label><input id="miT" maxlength="60" autocomplete="off" value="${esc(v.t || '')}" placeholder="${k === 'prom' ? 'es. Medicina della sera' : k === 'appu' ? 'es. Corso di inglese' : 'es. Bollo auto'}">
+      ${k === 'prom' ? `<label for="miH">A che ora</label><input id="miH" type="time" value="${esc(v.h || '09:00')}">
+        <label>Quanto spesso</label>${segHtml('miogni', OGNI, String(v.ogni || '1'))}` : ''}
+      ${k === 'appu' ? `<label>Che giorno</label>${segHtml('mig', giorni.map(g => [String(g), GG[g]]), String(v.g))}
+        <label for="miH">A che ora</label><input id="miH" type="time" value="${esc(v.h || '')}">
+        <div class="muted">Lo vedi solo tu. La sera prima ti arriva un avviso.</div>` : ''}
+      ${k === 'scad' ? `<label for="miM">Che mese</label><select id="miM">${MESI.map((n, i) => `<option value="${i + 1}"${+v.mese === i + 1 ? ' selected' : ''}>${n}</option>`).join('')}</select>
+        <label for="miA">La prima volta (anno)</label><input id="miA" type="number" inputmode="numeric" min="2020" max="2100" value="${esc(String(v.anno || T.slice(0, 4)))}">
+        <label>Quanto spesso</label>${segHtml('miogni', [['1', 'Ogni anno'], ['2', 'Ogni 2 anni'], ['3', 'Ogni 3 anni']], String(v.ogni || '1'))}
+        <div class="muted">Ti avviso il mese prima e una settimana prima della fine del mese.</div>` : ''}
+      <button class="btn tap">${x ? 'Salva' : 'Aggiungi'}</button>
+      ${x ? `<button type="button" class="btn bad tap" data-mvia="${x.id}">Elimina</button>` : ''}</form>`);
+  }
+  function sheetLista(x) {
+    const st = x.stato || 'da', cerca = encodeURIComponent(x.t), link = /^https?:\/\//.test(x.x || '') ? x.x.split(/\s/)[0] : '';
+    const dove = x.cat === 'libro' ? `https://www.google.com/search?tbm=bks&q=${cerca}` : x.cat === 'beauty' ? `https://www.google.com/search?q=${cerca}` : `https://www.justwatch.com/it/cerca?q=${cerca}`;
+    openSheet(`<h3>${LISTA[x.cat] ? LISTA[x.cat].e : ''} ${esc(x.t)}</h3><form class="stack" id="fLd" data-id="${x.id}">
+      ${segHtml('lstato', [['da', statoN(x.cat, 'da')], ['ora', statoN(x.cat, 'ora')], ['fatto', statoN(x.cat, 'fatto')]], st)}
+      <label>Quanto ti è piaciuto</label><div class="mvota" data-v="${x.stelle || 0}">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="tap${(x.stelle || 0) >= n ? ' on' : ''}" data-lstelle="${n}" aria-label="${n} stelle">★</button>`).join('')}</div>
+      <label for="ldT">Titolo</label><input id="ldT" maxlength="80" value="${esc(x.t)}">
+      <label for="ldX">Note o link</label><textarea id="ldX" maxlength="300" rows="3" placeholder="${x.cat === 'libro' ? 'es. autore, consigliato da…' : x.cat === 'beauty' ? 'es. link del prodotto, dove si compra' : 'es. su che app si vede, consigliata da…'}">${esc(x.x || '')}</textarea>
+      <div class="mbt">${link ? `<a class="tap" href="${esc(link)}" target="_blank" rel="noopener">Apri il link</a>` : ''}<a class="tap" href="${dove}" target="_blank" rel="noopener">${x.cat === 'libro' ? 'Cerca il libro' : x.cat === 'beauty' ? 'Cerca' : 'Dove vederla'}</a></div>
+      <button class="btn tap">Salva</button><button type="button" class="btn bad tap" data-mvia="${x.id}">Elimina</button></form>`);
   }
   // La scheda Scuola ha quattro parti, come un diario di scuola: Orario, Agenda, Voti, Materie (scelta di Sasha del 01/11/2026:
   // "praticamente uguale" all'app che usa la sorella).
@@ -2112,6 +2244,33 @@
       const gr = document.querySelector(`#mio .cgr[data-di="${d.di}"]`); if (gr) { gr.style.animation = 'none'; void gr.offsetWidth; gr.style.animation = ''; }
       return;
     }
+    if (d.mtab) { if (mTab === d.mtab) return; mTab = d.mtab; LS.set('noi4-mie-tab', mTab); segSet(t.parentElement, TABS_M.findIndex(x => x[0] === mTab)); return rMio(); }
+    if (d.mcat) { if (lsCat === d.mcat) return; lsCat = d.mcat; LS.set('noi4-mie-lista', lsCat); segSet(t.parentElement, LISTE.findIndex(x => x[0] === lsCat)); return rMio(); }
+    if (d.mnuovo) return sheetMie(null, d.mnuovo);
+    if (d.mik) return sheetMie(null, d.mik);
+    if (d.msug != null) {
+      const f = t.closest('form'), sg = SUGG[f.dataset.k][+d.msug]; if (!sg) return;
+      $('#miE').value = sg[0]; $('#miT').value = sg[1];
+      if (sg[2].h && $('#miH')) $('#miH').value = sg[2].h;
+      if (sg[2].mese && $('#miM')) $('#miM').value = sg[2].mese;
+      const og = f.querySelector('[data-miogni]'); if (sg[2].ogni && og) { const b = [...og.parentElement.querySelectorAll('button')], i = b.findIndex(x => x.dataset.miogni === sg[2].ogni); if (i >= 0) segSet(og.parentElement, i); }
+      t.parentElement.querySelectorAll('.on').forEach(b => b.classList.remove('on')); t.classList.add('on'); return;
+    }
+    if (d.miogni || d.mig || d.lstato) { const b = [...t.parentElement.querySelectorAll('button')]; return segSet(t.parentElement, b.indexOf(t)); }
+    if (d.lstelle) { const w = t.parentElement, n = +d.lstelle, v = +(w.dataset.v || 0) === n ? 0 : n; w.dataset.v = v; w.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i < v)); return; }
+    if (d.mfatto) {
+      const x = S.mie.find(y => y.id === d.mfatto); if (!x || x.per !== S.me) return;
+      const fatto = x.ult === T; if (!fatto) { const r = t.closest('.cmp'); if (r) r.classList.add('fatto'); }
+      return DATI.aggiorna('mie', x.id, fatto ? { ult: x.prima || '' } : { ult: T, prima: x.ult || '' }).catch(sbaglio);
+    }
+    if (d.mie) return sheetMie(d.mie);
+    if (d.mvoglio) {
+      const mia = mostraMia(d.mvoglio); if (mia) return DATI.elimina('mie', mia.id).catch(sbaglio);
+      const m = ((S.mostre || {}).l || []).find(y => y.id === d.mvoglio); if (!m) return;
+      toast('♥ Segnata: ti avviso una settimana prima che chiuda');
+      return DATI.aggiungi('mie', { per: S.me, k: 'mostra', mid: m.id, t: String(m.t).slice(0, 80), al: m.al || '', creato: Date.now() }).catch(sbaglio);
+    }
+    if (d.mvia) { closeSheet(); return DATI.elimina('mie', d.mvia).then(() => toast('Eliminato')).catch(sbaglio); }
     if (d.sctab) { if (scTab === d.sctab) return; scTab = d.sctab; anelloAnim = true; LS.set('noi4-scuola-tab', scTab); segSet(t.parentElement, TABS_S.findIndex(x => x[0] === scTab)); return rMio(); }
     if (d.votimat) return sheetVotiMat(d.di, d.votimat, d.anno);
     if (d.votonuovo) return sheetVoto(d.votonuovo, d.mat || '');
@@ -2318,6 +2477,25 @@
         else { fresh = rid(); await DATI.imposta('sorprese', per, { idee: { [fresh]: Object.assign({ x, n, by: S.me, creato: Date.now() }, extra) } }); }
         render(); toast(per === S.me ? 'Aggiunto alla tua lista 🎁' : 'Idea salvata: resta un segreto 🤫');
       } catch (er) { sbaglio(er); }
+    } else if (f.id === 'fMi') {
+      const k = f.dataset.k, id = f.dataset.id, tt = $('#miT').value.trim().replace(/\s+/g, ' ').slice(0, 60);
+      if (!tt) return toast('Scrivi cosa');
+      const on = (n) => { const b = f.querySelector(`[data-${n}].on`); return b ? b.dataset[n] : null; };
+      const doc = { per: S.me, k, t: tt, e: $('#miE').value || ({ prom: '🔔', appu: '📅', scad: '📌' })[k] };
+      if (k === 'prom') { const h = $('#miH').value; if (!/^\d\d:\d\d$/.test(h)) return toast('Scegli l\'ora'); doc.h = h; doc.ogni = +(on('miogni') || 1); }
+      if (k === 'appu') { const g = on('mig'); doc.g = g == null ? 3 : +g; doc.h = /^\d\d:\d\d$/.test($('#miH').value) ? $('#miH').value : ''; }
+      if (k === 'scad') { const a = +$('#miA').value; if (!(a >= 2020 && a <= 2100)) return toast('Scrivi l\'anno'); doc.mese = +$('#miM').value; doc.anno = a; doc.ogni = +(on('miogni') || 1); }
+      closeSheet();
+      try { if (id) await DATI.aggiorna('mie', id, doc); else { doc.creato = Date.now(); if (k === 'prom') doc.ult = ''; await DATI.aggiungi('mie', doc); } toast(id ? 'Salvato' : `${doc.e} Aggiunto`); } catch (er) { return sbaglio(er); }
+    } else if (f.id === 'fLi') {
+      const tt = $('#liT').value.trim().replace(/\s+/g, ' ').slice(0, 80); if (!tt) return;
+      $('#liT').value = '';
+      try { await DATI.aggiungi('mie', { per: S.me, k: 'lista', cat: lsCat, t: tt, x: '', stato: 'da', stelle: 0, creato: Date.now() }); } catch (er) { return sbaglio(er); }
+    } else if (f.id === 'fLd') {
+      const st = f.querySelector('[data-lstato].on'), v = +(f.querySelector('.mvota').dataset.v || 0), tt = $('#ldT').value.trim().replace(/\s+/g, ' ').slice(0, 80);
+      if (!tt) return toast('Scrivi il titolo');
+      closeSheet();
+      try { await DATI.aggiorna('mie', f.dataset.id, { t: tt, x: $('#ldX').value.trim().slice(0, 300), stato: st ? st.dataset.lstato : 'da', stelle: v }); } catch (er) { return sbaglio(er); }
     } else if (f.id === 'fNo') {
       const mt = f.querySelector('[data-nom].on'), tp = f.querySelector('[data-notipo].on'), dd = $('#noD').value;
       if (!mt) return toast('Scegli la materia');
@@ -2433,7 +2611,7 @@
     if (stopCena) { stopCena(); stopCena = null; }
     if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
     for (const k in stopSorp) { stopSorp[k](); delete stopSorp[k]; }
-    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], scuolaEv: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [] });
+    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], scuolaEv: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {} });
     seen.clear();
   }
   DATI.avvia((persona, errore) => {
@@ -2449,6 +2627,13 @@
       // Compiti e voti: i miei, più quelli delle sezioni di cui ho la copia (le regole lo permettono solo a chi è in "copie").
       a(DATI.ascolta('compiti', l => { scDati.c.io = l; unisciScuola(); }, ['per', '==', persona]));
       a(DATI.ascolta('voti', l => { scDati.v.io = l; unisciScuola(); }, ['per', '==', persona]));
+      // Sezione "Per me": le mie cose (solo mie, regola per == io) e le mostre, solo per chi ha la sezione.
+      if (CASA.includes(persona)) {
+        a(DATI.ascolta('mie', l => { S.mie = l; render(); }, ['per', '==', persona]));
+        a(DATI.ascoltaDoc('info', 'mostre', d => { S.mostre = d || {}; render(); }));
+        // Gli avvisi delle mostre nuove partono per chi ha questo segno (lo legge il programma "Mostre").
+        DATI.imposta('mie', persona + '-avvisi', { per: persona, k: 'avvisi', mostre: true }).catch(() => {});
+      }
       a(DATI.ascolta('ricette', l => { S.ricette = l; render(); if (ricAperta) sheetRicetta(ricAperta, true); }));
       a(DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); }));
       a(DATI.ascolta('viaggi', l => { S.viaggi = l; render(); }));
