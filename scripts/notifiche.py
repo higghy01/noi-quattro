@@ -36,6 +36,7 @@ def main():
     ora = adesso()
     oggi = ora.date().isoformat()
     domani = (ora.date() + dt.timedelta(days=1)).isoformat()
+    ieri = (ora.date() - dt.timedelta(days=1)).isoformat()
     stato_ref = db.collection("sistema").document("notifiche")
     stato = (stato_ref.get().to_dict() or {})
     inviati = {k: v for k, v in (stato.get("inviati") or {}).items() if v >= (ora.date() - dt.timedelta(days=2)).isoformat()}
@@ -219,6 +220,11 @@ def main():
             # Il secondo avviso solo se il primo è partito in un giro prima (mai due di fila).
             elif dt.timedelta(minutes=30) <= dopo <= dt.timedelta(hours=3) and f"mie1|{x['id']}|{oggi}" in gia:
                 manda(p, "mie", f"Ancora da fare: {t}", "Tocca Fatto nell'app quando hai fatto.", f"mie2|{x['id']}|{oggi}")
+            # Un promemoria di fine giornata (es. 23:50) che nessun giro ha preso prima di mezzanotte arriva subito dopo,
+            # una volta sola; il secondo avviso no (dopo mezzanotte nell'app conta già il giorno nuovo).
+            elif ult != ieri and (ogni == 1 or not ult or dovuto <= ieri) and f"mie1|{x['id']}|{ieri}" not in gia \
+                    and dt.timedelta(0) <= ora - dt.datetime.fromisoformat(f"{ieri}T{x['h']}").replace(tzinfo=ROMA) <= dt.timedelta(minutes=90):
+                manda(p, "mie", f"{e} {t}".strip(), "Quando hai fatto, tocca Fatto nell'app.", f"mie1|{x['id']}|{ieri}")
         elif k == "appu" and ora.hour == 20:
             g = (ora.date().weekday() + 2) % 7  # domani, contato come nell'app (0 = domenica)
             if int(x.get("g", -1)) == g:
