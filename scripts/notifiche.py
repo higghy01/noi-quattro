@@ -267,7 +267,7 @@ def main():
             except Exception as e:
                 print(f"Invio non riuscito ({type(e).__name__})")
 
-    stato_ref.set({"ultimo": int(ora.timestamp() * 1000), "inviati": inviati})
+    stato_ref.set({"ultimo": int(ora.timestamp() * 1000), "da": "firebase" if os.environ.get("K_SERVICE") else "github", "inviati": inviati})
     print(f"Notifiche mandate: {mandate}")
 
 
