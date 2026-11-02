@@ -41,3 +41,20 @@ if r.ok:
         print("Chiamata diretta:", rr.status_code, rr.text[:1500])
 else:
     print(f"Funzione: non leggibile ({r.status_code}) {r.text[:300]}")
+
+# Note della Bacheca (revisione 02/11/2026): solo id, autore (pX), ora e lunghezza, mai il testo.
+db = database()
+st = db.collection("sistema").document("notifiche").get().to_dict() or {}
+inv = st.get("inviati") or {}
+tok = {}
+for d in db.collection("token").stream():
+    tok.setdefault(d.to_dict().get("persona"), 0)
+    tok[d.to_dict().get("persona")] += 1
+print("Token per persona:", tok)
+print("Interruttore note:", {d.id: ((d.to_dict() or {}).get("notifiche") or {}).get("note", "predefinito") for d in db.collection("persone").stream()})
+for d in db.collection("note").stream():
+    n = d.to_dict() or {}
+    c = n.get("creato")
+    print(f"Nota {d.id}: by={n.get('by')} creato={c!r} ({type(c).__name__}) "
+          f"{dt.datetime.fromtimestamp(c / 1000, ROMA):%d/%m %H:%M}" if isinstance(c, (int, float)) else f"Nota {d.id}: by={n.get('by')} creato={c!r}",
+          f"len={len(n.get('x') or '')} pin={n.get('pin')!r} chiavi={sorted(n)} avvisi={[k.split('|')[2] for k in inv if k.startswith('nota|' + d.id + '|')]}")
