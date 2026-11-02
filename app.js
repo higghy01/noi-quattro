@@ -86,7 +86,7 @@
   // I compleanni arrivati dai calendari prima della regola non si vedono più.
   function mappaImpegni() {
     const det = S.priv.dettagli || {};
-    S.impegni = (S.impRaw || []).map(e => e.nascosto && (mioCal(e) || (e.appu && e.creatoDa === S.me)) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e)
+    S.impegni = (S.impRaw || []).map(e => e.nascosto && (mioCal(e) || e.creatoDa === S.me) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e)
       .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')));
     // La scuola non entra nel calendario di famiglia (scelta di Sasha del 01/11/2026: la sorella non vuole impegni e scuola
     // mischiati): lezioni e note stanno nel Calendario della sua sezione Personale. Le lezioni servono solo a dire
@@ -1222,16 +1222,19 @@
   const pickHtml = (sel) => `<div class="pick">${IDS().map(i => `<button type="button" class="pk tap${sel.includes(i) ? ' on' : ''}" data-pk="${i}" style="--pc:${col(i)}"><i>${avt(i)}</i>${esc(P(i).nome)}</button>`).join('')}</div>`;
 
   function sheetEvento(e) {
-    e = e || { t: '', d: page === 'cal' ? selDay : T, h: '18:00', fine: '', who: [S.me], n: '', ripeti: '' };
+    e = e || { t: '', d: page === 'cal' ? selDay : T, h: '18:00', fine: '19:00', who: [S.me], n: '', ripeti: '' };
+    // Privato (Sasha, 02/11/2026): chi l'ha scritto vede il titolo, gli altri «Occupato». Solo per gli impegni scritti nell'app.
+    const puoPriv = !e.id || (e.fonte === 'app' && e.creatoDa === S.me && !e.appu);
     openSheet(`<h3>${e.id ? 'Modifica impegno' : 'Nuovo impegno'}</h3><form class="stack" id="fEv" data-id="${e.id || ''}">
      <label>Cosa<input id="evT" required maxlength="80" value="${esc(e.t)}" placeholder="Es. visita, partita, compleanno"></label>
      <div class="row2"><label>Giorno<input id="evD" type="date" value="${esc(e.d)}" required></label><label>Si ripete<select id="evR">${Object.entries(RIPETI).map(([k, v]) => `<option value="${k}"${(e.ripeti || '') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label></div>
      <label>Fino al giorno (facoltativo, per più giorni)<input id="evFino" type="date" value="${esc(e.fino || '')}"></label>
      <label class="sw">Tutto il giorno<input type="checkbox" id="evAll"${e.h ? '' : ' checked'}></label>
-     <div class="row2" id="evOre"${e.h ? '' : ' hidden'}><label>Dalle<input id="evH" type="time" value="${esc(e.h || '18:00')}"></label><label>Alle (facoltativo)<input id="evF" type="time" value="${esc(e.fine || '')}"></label></div>
+     <div class="row2" id="evOre"${e.h ? '' : ' hidden'}><label>Dalle<input id="evH" type="time" value="${esc(e.h || '18:00')}"></label><label>Alle<input id="evF" type="time" value="${esc(e.fine || (e.h ? `${String(Math.min(23, +e.h.slice(0, 2) + 1)).padStart(2, '0')}${e.h.slice(2)}` : '19:00'))}"></label></div>
      <label>Chi c'è</label>${pickHtml(e.who || [S.me])}
      <label>Come ci andate (facoltativo)</label>${mezziHtml(e.mezzo || '', 'data-mzf')}
      <label>Nota<input id="evN" maxlength="200" value="${esc(e.n)}" placeholder="Facoltativa"></label>
+     ${puoPriv ? `<label class="sw">🔒 Privato: gli altri vedono solo «Occupato»<input type="checkbox" id="evPriv"${e.nascosto ? ' checked' : ''}></label>` : ''}
      <label class="sw">⭐ Importante (va in cima a Impegni)<input type="checkbox" id="evImp"${e.imp ? ' checked' : ''}></label>
      <button class="btn tap">${e.id ? 'Salva le modifiche' : 'Salva impegno'}</button></form>`, () => { if (!e.id) setTimeout(() => $('#evT').focus(), 380); });
   }
@@ -1246,6 +1249,7 @@
       ${mioCal(e) ? `<div class="vis" data-vise="${e.id}"><label>Gli altri vedono</label>${segHtml('vis', [['mostra', '👁️ Tutto'], ['nascondi', '🔒 Solo occupato']], e.privato ? 'nascondi' : 'mostra')}
         <div class="empty" id="visPerche">${regolaCal(e.t, regole()).perche} La scelta vale anche per gli altri impegni «${esc(e.t)}».</div></div>` : ''}
       ${e.appu ? `<div class="empty">${e.creatoDa === S.me ? 'È un tuo appuntamento fisso: gli altri vedono solo «Occupato». Si cambia nella tua sezione Personale.' : 'Un appuntamento fisso: il titolo lo vede solo chi l\'ha scritto.'}</div>${e.creatoDa === S.me ? '<button class="btn ghost tap" data-apri-mio="1">Apri la sezione Personale</button>' : ''}`
+      : e.nascosto && e.fonte === 'app' && e.creatoDa !== S.me ? `<div class="empty">È un impegno privato: il titolo lo vede solo chi l'ha scritto.</div>`
       : modificabile(e) ? `<div class="row2"><button class="btn ghost tap" data-modifica="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">Elimina</button></div>` : `<div class="empty">${e.scuola ? 'Arriva dall\'orario della scuola: cambia quando arriva l\'orario nuovo.' : 'Si cambia dal calendario di chi l\'ha scritto.'}</div>`}`);
   }
   function sheetProposta(tp) {
@@ -2466,6 +2470,9 @@
       const mzOn = f.querySelector('.mz.on');
       const e = { t: $('#evT').value.trim(), d: $('#evD').value, h: all ? '' : $('#evH').value, fine: all ? '' : $('#evF').value, who, n: $('#evN').value.trim(), ripeti: $('#evR').value, mezzo: mzOn ? mzOn.dataset.mzf : '', imp: $('#evImp').checked };
       const fino = $('#evFino').value; e.fino = fino && fino > e.d && !e.ripeti ? fino : '';
+      if (!all && !/^\d\d:\d\d$/.test(e.fine)) return toast('Scrivi a che ora finisce');
+      if (!all && e.fine === e.h) return toast('L\'ora di fine è uguale a quella di inizio');
+      const conPriv = !!$('#evPriv'), priv = conPriv && $('#evPriv').checked;
       closeSheet();
       if (page === 'cal') { selDay = e.d; weekStart = inizioSettimana(new Date(e.d + 'T12:00:00')); }
       try {
@@ -2476,9 +2483,20 @@
             await DATI.imposta('privati', S.me, { dettagli: { [f.dataset.id]: { t: e.t, n: e.n } } });
             Object.assign(e, { t: 'Occupato', n: '', nascosto: true });
           } else if (prima && mioCal(prima)) e.nascosto = false;
+          else if (conPriv) {
+            if (priv) { await DATI.imposta('privati', S.me, { dettagli: { [f.dataset.id]: { t: e.t, n: e.n } } }); Object.assign(e, { t: 'Occupato', n: '', nascosto: true, imp: false }); }
+            else e.nascosto = false;
+          }
           // Chi è stato aggiunto adesso riceve l'avviso "ti ha aggiunto" (lo manda il programma delle notifiche).
           if (prima && prima.fonte === 'app') Object.assign(e, { aggiunti: [...new Set([...(Date.now() - (prima.modificato || 0) < 864e5 ? prima.aggiunti || [] : []), ...who.filter(p => !(prima.who || []).includes(p))])].filter(p => who.includes(p)), modificato: Date.now(), modificatoDa: S.me });
           await DATI.aggiorna('impegni', f.dataset.id, e); toast('Impegno aggiornato');
+        }
+        else if (priv) {
+          // Prima il titolo vero nella mia parte privata, poi l'impegno «Occupato» con lo stesso nome.
+          const id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+          await DATI.imposta('privati', S.me, { dettagli: { [id]: { t: e.t, n: e.n } } });
+          await DATI.imposta('impegni', id, Object.assign(e, { t: 'Occupato', n: '', nascosto: true, imp: false, fonte: 'app', creatoDa: S.me, creato: Date.now() }));
+          fresh = id; render(); toast('🔒 Impegno salvato: gli altri vedono «Occupato»');
         }
         else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('Impegno salvato: lo vedono tutti'); }
       } catch (er) { sbaglio(er); }
