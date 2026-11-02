@@ -11,8 +11,22 @@
   const NOTIF = [['promemoria', 'Promemoria un\'ora prima dei miei impegni'], ['nuovi', 'Quando qualcuno mi aggiunge a un impegno'],
     ['riepilogo', 'La sera: gli impegni di domani', 'oraRiepilogo', [19, 20, 21, 22], 21],
     ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['proposte', 'Nuove proposte, quando hanno votato tutti e cosa si è deciso'], ['conflitti', 'Se ho due impegni alla stessa ora']];
+  // Icone a linee per i titoli delle schede (02/11/2026): più sobrie delle emoji, stesso tratto della barra in basso.
+  const SV = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+  const ICO = {
+    cena: SV('<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2 1.5-3 4-3 7v3h3"/>'),
+    oggi: SV('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>'),
+    domani: SV('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>'),
+    spesa: SV('<path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 8H6"/><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/>'),
+    stella: SV('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>'),
+    cal: SV('<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
+    voto: SV('<path d="M4 12.5l4.5 4.5L20 6"/>'),
+    foto: SV('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>'),
+    preso: SV('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/>')
+  };
   const SCHEDE = ['oggi', 'cal', 'note', 'viaggi', 'spesa'];
   const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', viaggi: 'Ricordi', spesa: 'Spesa' };
+  const SOTTO = { cal: 'Gli impegni di tutta la famiglia', note: 'Proposte da votare e liste dei regali', viaggi: 'Foto e video dei momenti insieme', spesa: 'Quello che serve in casa' };
   const NOMI_COLORI = { blu: 'blu', rosa: 'rosa', ambra: 'ambra', verde: 'verde', viola: 'viola', corallo: 'corallo', rosso: 'rosso', grigio: 'grigio' };
   // Preferenze di questo telefono (aspetto, scheda di apertura): restano solo qui.
   const LS = {
@@ -258,15 +272,15 @@
     const rientri = ids.filter(i => !cene[i].auto && rientro(i) && rientro(i).m > adesso).map(i => `<span style="--pc:${col(i)}">🏠 <b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b> · a casa verso le ${rientro(i).ora}</span>`);
     $('#p-oggi').innerHTML = `<div class="stack">
      <div class="storie${ri(0)}" role="list">${ids.map((i, k) => { const st = statoOra(i); return `<button class="st tap" role="listitem" data-persona="${i}" style="--pc:${col(i)};--k:${k}" aria-label="${esc(P(i).nome)}: ${esc(st.t)}"><span class="ring ${st.k}"><span>${avt(i)}</span></span><b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b><small>${esc(st.c)}</small></button>`; }).join('')}</div>
-     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🍽️</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO.cena}</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
        <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = cene[i].v; return `<button class="cv tap${cene[i].auto ? ' auto' : ''}" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}${cene[i].auto ? ', ' + esc(cene[i].auto.perche) : ''}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${i === S.me ? 'Tu' : esc(P(i).nome)}</span></button>`; }).join('')}</div>
        ${perche.length || rientri.length ? `<div class="perche">${perche.join('')}${rientri.join('')}</div>` : ''}
        <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.${perche.length ? ' Chi è impegnato all\'ora di cena risulta fuori da solo.' : ''}</div></div>
      ${propOggi(ri(1))}
-     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">☀️</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.', T)}</div>
-     <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">🌙</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.', tom)}</div>
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO.oggi}</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.', T)}</div>
+     <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">${ICO.domani}</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.', tom)}</div>
      ${ricordo(ri(3))}
-     <button class="card tap${ri(4)}" data-go="spesa"><h2><span class="ttl"><i class="ic">🛒</i>Lista della spesa</span> <small>${left ? `${left} da prendere ›` : 'tutto preso ›'}</small></h2></button>
+     <button class="card tap${ri(4)}" data-go="spesa"><h2><span class="ttl"><i class="ic">${ICO.spesa}</i>Lista della spesa</span> <small>${left ? `${left} da prendere ›` : 'tutto preso ›'}</small></h2></button>
     </div>`;
   }
 
@@ -277,7 +291,7 @@
     const ids = IDS();
     const top = prossimiImportanti(4), dom = iso(addDays(TODAY, 1));
     $('#p-cal').innerHTML = `<div class="stack">
-     ${top.length ? `<div class="card imps${ri(0)}"><h2><span class="ttl"><i class="ic">⭐</i>Da non perdere</span></h2>
+     ${top.length ? `<div class="card imps${ri(0)}"><h2><span class="ttl"><i class="ic">${ICO.stella}</i>Da non perdere</span></h2>
        ${top.map(([d, e]) => `<button class="imr tap" data-ev="${e.id}"><span class="imd"><b>${d === T ? 'Oggi' : d === dom ? 'Dom.' : +d.slice(8)}</b><small>${d === T || d === dom ? (e.h || '') : fmt(d, { month: 'short' })}</small></span><span class="imt"><b>${esc(e.t)}</b><small>${d === T || d === dom ? '' : fmt(d, { weekday: 'long' }) + (e.h ? ' · ' + esc(e.h) : '') + ' · '}${(e.who || []).length >= ids.length ? 'tutti' : (e.who || []).filter(w => S.persone[w]).map(w => esc(P(w).nome)).join(', ')}</small></span></button>`).join('')}</div>` : ''}
      <div class="card${ri(0)}">
        <div class="wnav"><button class="tap" data-wk="-1" aria-label="Settimana prima">‹</button><b>${fmt(days[0], { day: 'numeric', month: 'short' })} – ${fmt(days[6], { day: 'numeric', month: 'short' })}</b><button class="tap" data-wk="1" aria-label="Settimana dopo">›</button></div>
@@ -285,14 +299,14 @@
        ${days.map(d => { const ppl = [...new Set(delGiorno(d, show).flatMap(e => e.who || []))].filter(p => S.persone[p]); return `<button class="day tap${d === selDay ? ' sel' : ''}${d === T ? ' oggi' : ''}" data-day="${d}"><span class="wd">${fmt(d, { weekday: 'short' })}</span><span class="dn">${+d.slice(8)}</span><span class="pd">${ppl.slice(0, 4).map(p => `<i style="--pc:${col(p)}"></i>`).join('')}</span></button>`; }).join('')}</div>
        <div class="filters">${['tutti', ...ids].map(f => `<button class="fb tap${filt === f ? ' on' : ''}" data-f="${f}" style="--pc:${f === 'tutti' ? 'var(--acc)' : col(f)}"><i></i><span>${f === 'tutti' ? 'Tutti' : esc(P(f).nome)}</span></button>`).join('')}</div>
      </div>
-     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">📅</i>${selDay === T ? 'Oggi' : fmt(selDay, { weekday: 'long', day: 'numeric', month: 'long' })}</span></h2>${evList(delGiorno(selDay, show), '', selDay)}</div>
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO.cal}</i>${selDay === T ? 'Oggi' : fmt(selDay, { weekday: 'long', day: 'numeric', month: 'long' })}</span></h2>${evList(delGiorno(selDay, show), '', selDay)}</div>
     </div>`;
   }
 
   function rNote() {
     const el = $('#p-note');
     // Il selettore resta fermo (così la pillola scorre), cambia solo il contenuto sotto.
-    if (!$('#segNote')) el.innerHTML = `<div class="seg" id="segNote" style="--n:2"><i class="spill"></i><button class="tap" data-seg="proposte">Proposte 🗳️</button><button class="tap" data-seg="regali">Regali 🎁</button></div><div id="noteBody"></div>`;
+    if (!$('#segNote')) el.innerHTML = `<div class="seg" id="segNote" style="--n:2"><i class="spill"></i><button class="tap" data-seg="proposte">Proposte</button><button class="tap" data-seg="regali">Regali</button></div><div id="noteBody"></div>`;
     segSet($('#segNote'), seg === 'regali' ? 1 : 0);
     $('#noteBody').innerHTML = seg === 'regali' ? rRegali() : rProposte();
   }
@@ -321,7 +335,7 @@
     let k = 0;
     const card = (p) => propCard(p, nuova ? ++k : 0);
     const vecchie = [...S.note].sort((a, b) => (b.creato || 0) - (a.creato || 0));
-    return `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">🗳️</i>Proposte</span> <small>${aperte.length ? `${aperte.length} ${aperte.length === 1 ? 'aperta' : 'aperte'}` : ''}</small></h2>
+    return `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">${ICO.voto}</i>Proposte</span> <small>${aperte.length ? `${aperte.length} ${aperte.length === 1 ? 'aperta' : 'aperte'}` : ''}</small></h2>
     ${aperte.length ? aperte.map(card).join('') : `<div class="empty big${ri(1)}"><b>🗳️</b><span>Nessuna proposta aperta. Tocca + per chiedere cosa si mangia, dove si va, cosa si fa.</span></div>`}
     ${decise.length ? `<div class="sec">Già decise</div>${decise.map(card).join('')}` : ''}
     ${vecchie.length ? `<div class="sec">Vecchie note</div><div class="card">${vecchie.map(n => `<div class="pn vn" style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="vnx">${esc(n.x)}</span>${n.by === S.me ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div>`).join('')}</div>` : ''}</div>`;
@@ -353,7 +367,7 @@
     const da = S.proposte.filter(p => !p.chiusa && (p.creato || 0) > Date.now() - 14 * 864e5 && !haVotato(p, S.me) && (opzioniDi(p).length || p.by !== S.me)).sort((a, b) => (b.creato || 0) - (a.creato || 0));
     const dec = S.proposte.filter(p => p.chiusa && (p.decisa || 0) > ieri);
     if (!da.length && !dec.length) return '';
-    return `<button class="card tap${cls}" data-vaiprop="1"><h2><span class="ttl"><i class="ic">🗳️</i>Proposte</span> <small>${da.length ? `${da.length} da votare ›` : 'vedi ›'}</small></h2>
+    return `<button class="card tap${cls}" data-vaiprop="1"><h2><span class="ttl"><i class="ic">${ICO.voto}</i>Proposte</span> <small>${da.length ? `${da.length} da votare ›` : 'vedi ›'}</small></h2>
       ${da.slice(0, 3).map(p => `<div class="po" style="--pc:${col(p.by)}"><span class="gav">${avt(p.by)}</span><span>${(PTIPO[p.tipo] || PTIPO.altro).e} ${esc(p.q)}</span></div>`).join('')}
       ${dec.slice(0, 2).map(p => `<div class="po" style="--pc:${col(p.by)}"><span class="gav">${avt(p.by)}</span><span>✅ ${esc(p.q)} <b>${esc(p.scelta)}</b></span></div>`).join('')}</button>`;
   }
@@ -434,7 +448,7 @@
         <span class="cov">${cop ? `<img src="${esc(cop.prev || cop.url)}" alt="" loading="lazy" decoding="async">` : `<span class="noimg">${t.e}</span>`}<span class="tb">${t.e} ${esc(t.n)}</span><span class="nf">${fs.length - nv} foto${nv ? ` · ${nv} video` : ''}</span></span>
         <span class="tinfo"><b>${esc(v.t)}</b><span class="muted">${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</span></button>`;
     });
-    $('#p-viaggi').innerHTML = `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">📸</i>I nostri ricordi</span> <small>${tutti.length}</small></h2>
+    $('#p-viaggi').innerHTML = `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">${ICO.foto}</i>I nostri ricordi</span> <small>${tutti.length}</small></h2>
       <label class="auto-album tap${ri(1)}"><input type="file" id="autoIn" accept="image/*,video/*" multiple hidden><span class="aa-ic">🪄</span><span><b>Aggiungi foto e video</b><small>Vanno da soli nel ricordo del giorno giusto</small></span></label>
       ${gruppi.length > 1 ? `<div data-n="${gruppi.length + 1}" class="gruppi${ri(1)}"><button class="gr tap${filtroR === 'tutti' ? ' on' : ''}" data-filtror="tutti"><b>🗂️</b><span>Tutti</span><small>${tutti.length}</small></button>${gruppi.map(([k, e, n, c]) => `<button class="gr tap${filtroR === k ? ' on' : ''}" data-filtror="${k}" aria-label="${esc(n)}"><b>${e}</b><span>${esc(c)}</span><small>${conta(k)}</small></button>`).join('')}</div>` : ''}
       ${html || '<div class="empty big"><b>📸</b><span>Ancora nessun ricordo. Tocca + per aggiungerne uno: un viaggio, un pranzo, una sera al cinema, il Natale… Poi caricate foto e video tutti insieme.</span></div>'}</div>`;
@@ -1044,7 +1058,7 @@
   let riFile = null;
   function rSpesa() {
     if (segSpesa === 'ricette') {
-      $('#p-spesa').innerHTML = `<div class="stack"><div class="seg" style="--n:2;--k:1"><i class="spill"></i><button class="tap" data-segspesa="lista">Lista 🛒</button><button class="tap on" data-segspesa="ricette">Ricette 🍳</button></div>${rRicette()}</div>`;
+      $('#p-spesa').innerHTML = `<div class="stack"><div class="seg" style="--n:2;--k:1"><i class="spill"></i><button class="tap" data-segspesa="lista">Lista</button><button class="tap on" data-segspesa="ricette">Ricette</button></div>${rRicette()}</div>`;
       return;
     }
     const ord = (a, b) => (b.creato || 0) - (a.creato || 0);
@@ -1053,10 +1067,10 @@
     const sotto = x => x.done && x.presoDa ? `preso da ${chi(x.presoDa)}${x.preso ? ' · ' + fa(x.preso) : ''}` : `aggiunto da ${chi(x.by)}${x.creato ? ' · ' + fa(x.creato) : ''}`;
     const row = x => `<button class="item tap${x.done ? ' done' : ''}${x.id === fresh ? ' pop' : ''}" data-item="${x.id}" style="--pc:${col(x.done && x.presoDa ? x.presoDa : x.by)}"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><span class="nm">${esc(x.x)}</span><small>${sotto(x)}</small></span><span class="who">${S.persone[x.done && x.presoDa ? x.presoDa : x.by] ? avt(x.done && x.presoDa ? x.presoDa : x.by) : ''}</span></button>`;
     const keep = $('#itemTx') ? $('#itemTx').value : '';
-    $('#p-spesa').innerHTML = `<div class="stack"><div class="seg" style="--n:2;--k:0"><i class="spill"></i><button class="tap on" data-segspesa="lista">Lista 🛒</button><button class="tap" data-segspesa="ricette">Ricette 🍳</button></div>
+    $('#p-spesa').innerHTML = `<div class="stack"><div class="seg" style="--n:2;--k:0"><i class="spill"></i><button class="tap on" data-segspesa="lista">Lista</button><button class="tap" data-segspesa="ricette">Ricette</button></div>
      <form class="add${ri(0)}" id="addItem"><input id="itemTx" placeholder="Cosa serve?" autocomplete="off" aria-label="Cosa serve" enterkeyhint="done"><button class="btn tap">Aggiungi</button></form>
-     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">🛒</i>Da prendere</span> <small>${todo.length}</small></h2><div>${todo.map(row).join('') || '<div class="empty">Niente da prendere.</div>'}</div></div>
-     ${done.length ? `<div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">✅</i>Già nel carrello</span> <button class="link tap" id="clear">Togli</button></h2><div>${done.map(row).join('')}</div></div>` : ''}
+     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO.spesa}</i>Da prendere</span> <small>${todo.length}</small></h2><div>${todo.map(row).join('') || '<div class="empty">Niente da prendere.</div>'}</div></div>
+     ${done.length ? `<div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">${ICO.preso}</i>Già nel carrello</span> <button class="link tap" id="clear">Togli</button></h2><div>${done.map(row).join('')}</div></div>` : ''}
     </div>`;
     $('#itemTx').value = keep;
   }
@@ -1068,9 +1082,10 @@
     const nuovoGiorno = iso(new Date()) !== T;
     if (nuovoGiorno) { const ieri = T; TODAY = new Date(); TODAY.setHours(12, 0, 0, 0); T = iso(TODAY); ascoltaCena(); if (selDay === ieri) { selDay = T; weekStart = inizioSettimana(TODAY); } }
     document.documentElement.style.setProperty('--me', col(S.me));
-    $('#hello').innerHTML = `${saluto()}, <span>${esc(P(S.me).nome)}</span>`;
+    $('#hello').innerHTML = page === 'oggi' ? `${saluto()}, <span>${esc(P(S.me).nome)}</span>` : NOMI_SCHEDE[page];
+    $('#tbT').textContent = page === 'oggi' ? 'Oggi' : NOMI_SCHEDE[page];
     $('#meBtn').innerHTML = avt(S.me) + GEAR;
-    $('#today').textContent = TODAY.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('#today').textContent = page === 'oggi' ? TODAY.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }) : SOTTO[page];
     banner();
     const a = document.activeElement && document.activeElement.id;
     R[page](); seen.add(vista());
@@ -1102,11 +1117,22 @@
       else if (p === 'oggi' && history.state && history.state.scheda) { ignoraPop++; history.back(); }
     }
     const dir = Math.sign(SCHEDE.indexOf(p) - SCHEDE.indexOf(page));
+    posizioni[page] = scrollY;
     page = p; document.documentElement.dataset.page = p;
     document.querySelectorAll('.page').forEach(el => { el.classList.toggle('on', el.id === 'p-' + p); if (el.id === 'p-' + p) el.style.setProperty('--dx', dir * 22 + 'px'); });
     document.querySelectorAll('.tab').forEach((t, i) => { t.classList.toggle('on', t.dataset.p === p); if (t.dataset.p === p) $('#tpill').style.transform = `translateX(${i * 100}%)`; });
-    scrollTo({ top: 0 }); render();
+    $('.head').classList.remove('cambia'); void $('.head').offsetWidth; $('.head').classList.add('cambia');
+    render(); scrollTo({ top: posizioni[p] || 0 }); yPrima = scrollY; $('#fab').classList.remove('giu'); barra();
   }
+  /* Scorrendo (02/11/2026): in alto compare una barra in vetro col nome della scheda, come su iPhone;
+     il + si fa da parte mentre si scende e torna appena si risale. Un solo controllo per fotogramma. */
+  const posizioni = {}; let yPrima = 0, inAttesa = false;
+  function barra() {
+    inAttesa = false; const y = scrollY;
+    document.documentElement.classList.toggle('scorso', y > 64);
+    if (Math.abs(y - yPrima) > 6) { $('#fab').classList.toggle('giu', y > yPrima && y > 120); yPrima = y; }
+  }
+  addEventListener('scroll', () => { if (!inAttesa) { inAttesa = true; requestAnimationFrame(barra); } }, { passive: true });
   function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.k); toast.k = setTimeout(() => el.classList.remove('on'), 2200); }
   const sbaglio = (e) => { console.error(e); toast('Non sono riuscito a salvare. Riprova tra poco.'); };
 
@@ -1700,6 +1726,16 @@
   })();
 
   /* ---------- Festa: coriandoli dei colori della famiglia ---------- */
+  /* "Tic" sotto le dita (02/11/2026): su iPhone (iOS 18) il tocco di un interruttore nascosto dà una vibrazione leggera;
+     su Android basta navigator.vibrate. Funziona solo dentro il tocco dell'utente. */
+  function tic() {
+    try {
+      if (navigator.vibrate) return navigator.vibrate(8);
+      let l = $('#ticL'); if (!l) { l = document.createElement('label'); l.id = 'ticL'; l.setAttribute('aria-hidden', 'true'); l.style.cssText = 'position:fixed;left:-99px;top:0;opacity:0;pointer-events:none';
+        l.innerHTML = '<input type="checkbox" switch tabindex="-1">'; document.body.appendChild(l); }
+      l.click();
+    } catch (e) {}
+  }
   function festa(el) {
     if (pocoMoto()) return;
     const r = el ? el.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
@@ -2007,7 +2043,7 @@
     if (d.cena) {
       if (d.cena !== S.me) return openPersona(d.cena);
       const o = ['si', 'no', '?']; const v = o[(o.indexOf(S.cena[S.me] || '?') + 1) % 3]; // dal "fuori" automatico si passa a sì, poi no, poi di nuovo automatico
-      S.cena[S.me] = v; rOggi(); const n = document.querySelector(`[data-cena="${S.me}"]`); n && n.classList.add('bump');
+      tic(); S.cena[S.me] = v; rOggi(); const n = document.querySelector(`[data-cena="${S.me}"]`); n && n.classList.add('bump');
       if (v === 'si' && IDS().every(i => S.cena[i] === 'si')) { festa(n); toast('Stasera tutti a tavola! 🍝'); }
       return DATI.imposta('cena', T, { [S.me]: v }).catch(sbaglio);
     }
@@ -2108,7 +2144,7 @@
     }
     if (d.item) {
       const x = S.spesa.find(y => y.id === d.item); if (!x) return;
-      t.classList.toggle('done');
+      t.classList.toggle('done'); tic();
       if (!x.done && S.spesa.filter(y => !y.done).length === 1) { festa(t.querySelector('.box')); setTimeout(() => toast('Tutto preso! 🎉'), 200); }
       setTimeout(() => DATI.aggiorna('spesa', x.id, x.done ? { done: false, presoDa: '', preso: 0 } : { done: true, presoDa: S.me, preso: Date.now() }).catch(sbaglio), 380); return;
     }
@@ -2280,8 +2316,8 @@
     // Colore della barra in alto (orario, Dynamic Island): se il tema è scelto a mano, un colore solo, senza seguire il telefono.
     document.querySelectorAll('meta[name=theme-color]').forEach((m, i) => {
       if (!m.dataset.media) m.dataset.media = m.getAttribute('media') || '';
-      if (t === 'auto') { m.setAttribute('media', m.dataset.media); m.content = /dark/.test(m.dataset.media) ? '#111016' : '#F5F4F8'; }
-      else { m.removeAttribute('media'); m.content = t === 'scuro' ? '#111016' : '#F5F4F8'; }
+      if (t === 'auto') { m.setAttribute('media', m.dataset.media); m.content = /dark/.test(m.dataset.media) ? '#0F0F12' : '#F4F4F7'; }
+      else { m.removeAttribute('media'); m.content = t === 'scuro' ? '#0F0F12' : '#F4F4F7'; }
     });
   }
   applicaTema();
