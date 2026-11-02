@@ -335,7 +335,7 @@
     let k = 0;
     const card = (p) => propCard(p, nuova ? ++k : 0);
     const vecchie = [...S.note].sort((a, b) => (b.creato || 0) - (a.creato || 0));
-    return `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">${ICO.voto}</i>Proposte</span> <small>${aperte.length ? `${aperte.length} ${aperte.length === 1 ? 'aperta' : 'aperte'}` : ''}</small></h2>
+    return `<div class="stack">${aperte.length ? `<div class="conta${ri(0)}">${aperte.length} ${aperte.length === 1 ? 'proposta aperta' : 'proposte aperte'}</div>` : ''}
     ${aperte.length ? aperte.map(card).join('') : `<div class="empty big${ri(1)}"><b>🗳️</b><span>Nessuna proposta aperta. Tocca + per chiedere cosa si mangia, dove si va, cosa si fa.</span></div>`}
     ${decise.length ? `<div class="sec">Già decise</div>${decise.map(card).join('')}` : ''}
     ${vecchie.length ? `<div class="sec">Vecchie note</div><div class="card">${vecchie.map(n => `<div class="pn vn" style="--pc:${col(n.by)}"><span class="chip"><i></i>${esc(P(n.by).nome)}</span><span class="vnx">${esc(n.x)}</span>${n.by === S.me ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div>`).join('')}</div>` : ''}</div>`;
@@ -448,7 +448,7 @@
         <span class="cov">${cop ? `<img src="${esc(cop.prev || cop.url)}" alt="" loading="lazy" decoding="async">` : `<span class="noimg">${t.e}</span>`}<span class="tb">${t.e} ${esc(t.n)}</span><span class="nf">${fs.length - nv} foto${nv ? ` · ${nv} video` : ''}</span></span>
         <span class="tinfo"><b>${esc(v.t)}</b><span class="muted">${v.dove ? '📍 ' + esc(v.dove) + ' · ' : ''}${periodo(v)}</span>${avs(v.who)}</span></button>`;
     });
-    $('#p-viaggi').innerHTML = `<div class="stack"><h2 class="${ri(0)}"><span class="ttl"><i class="ic">${ICO.foto}</i>I nostri ricordi</span> <small>${tutti.length}</small></h2>
+    $('#p-viaggi').innerHTML = `<div class="stack"><div class="conta${ri(0)}">${tutti.length} ${tutti.length === 1 ? 'ricordo' : 'ricordi'}</div>
       <label class="auto-album tap${ri(1)}"><input type="file" id="autoIn" accept="image/*,video/*" multiple hidden><span class="aa-ic">🪄</span><span><b>Aggiungi foto e video</b><small>Vanno da soli nel ricordo del giorno giusto</small></span></label>
       ${gruppi.length > 1 ? `<div data-n="${gruppi.length + 1}" class="gruppi${ri(1)}"><button class="gr tap${filtroR === 'tutti' ? ' on' : ''}" data-filtror="tutti"><b>🗂️</b><span>Tutti</span><small>${tutti.length}</small></button>${gruppi.map(([k, e, n, c]) => `<button class="gr tap${filtroR === k ? ' on' : ''}" data-filtror="${k}" aria-label="${esc(n)}"><b>${e}</b><span>${esc(c)}</span><small>${conta(k)}</small></button>`).join('')}</div>` : ''}
       ${html || '<div class="empty big"><b>📸</b><span>Ancora nessun ricordo. Tocca + per aggiungerne uno: un viaggio, un pranzo, una sera al cinema, il Natale… Poi caricate foto e video tutti insieme.</span></div>'}</div>`;
@@ -1672,7 +1672,7 @@
      </div>
 
      <div class="sec${sr(3)}">Aspetto</div>
-     <div class="card${sr(3)}">${segHtml('tema', [['auto', 'Automatico'], ['chiaro', 'Chiaro ☀️'], ['scuro', 'Scuro 🌙']], tema)}
+     <div class="card${sr(3)}">${segHtml('tema', [['auto', 'Automatico'], ['chiaro', 'Chiaro'], ['scuro', 'Scuro']], tema)}
        <div class="empty">Automatico segue il telefono. Vale solo su questo telefono.</div></div>
 
      <div class="sec${sr(4)}">I nostri mezzi</div>
@@ -1731,9 +1731,10 @@
   function tic() {
     try {
       if (navigator.vibrate) return navigator.vibrate(8);
-      let l = $('#ticL'); if (!l) { l = document.createElement('label'); l.id = 'ticL'; l.setAttribute('aria-hidden', 'true'); l.style.cssText = 'position:fixed;left:-99px;top:0;opacity:0;pointer-events:none';
-        l.innerHTML = '<input type="checkbox" switch tabindex="-1">'; document.body.appendChild(l); }
-      l.click();
+      // Come la libreria ios-haptics: etichetta nascosta (display:none) creata, cliccata e tolta a ogni tocco.
+      const l = document.createElement('label'); l.setAttribute('aria-hidden', 'true'); l.style.display = 'none';
+      const i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', ''); l.appendChild(i);
+      document.head.appendChild(l); l.click(); l.remove();
     } catch (e) {}
   }
   function festa(el) {
