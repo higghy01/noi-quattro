@@ -1,24 +1,25 @@
 /* Noi quattro - stile. Regole come STILE.md di La mia app: colori da variabili, animazioni fluide
    (solo transform e opacity), entrata una volta sola, chiaro e scuro, iPhone e Android. Prefisso keyframes: fm- */
 :root{
-  --bg:#F5F4F8; --panel:#FFFFFF; --fg:#1C1A24; --muted:#6C687A; --line:#E4E1EB; --soft:#EFEDF4;
+  --bg:#F4F4F7; --panel:#FFFFFF; --fg:#1A1A1F; --muted:#6C6C76; --line:#E3E3E8; --soft:#EDEDF1;
   --acc:#5B4BD6; --acc-ink:#FFFFFF; --bad:#A65F00; --ok:var(--acc);
   --p-blu:#2F74D0; --p-rosa:#C93A7B; --p-ambra:#C98208; --p-verde:#2E9A5E; --p-viola:#7A5CC7; --p-corallo:#D9573F; --p-rosso:#D23B3B; --p-grigio:#6F7282;
-  --f-disp:"Bricolage Grotesque", ui-rounded, -apple-system, "SF Pro Rounded", system-ui, sans-serif;
-  --f-body:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  /* Caratteri del telefono (02/11/2026): SF su iPhone, Roboto su Samsung. Niente font scaricato: l'app si apre senza "salto" del testo. */
+  --f-disp:-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter Display", Inter, system-ui, "Segoe UI", Roboto, sans-serif;
+  --f-body:-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, "Segoe UI", Roboto, sans-serif;
   --ease:cubic-bezier(.2,.8,.2,1); --pop:cubic-bezier(.34,1.4,.5,1); --sheet-ease:cubic-bezier(.32,.72,0,1);
-  --r:20px; --me:var(--acc);
-  --shadow:0 1px 2px rgb(30 20 60 / .04),0 6px 22px rgb(30 20 60 / .07);
+  --r:18px; --me:var(--acc);
+  --shadow:0 1px 2px rgb(0 0 0 / .04),0 4px 18px rgb(0 0 0 / .045);
   color-scheme:light;
 }
 /* Scuro: automatico col telefono, oppure scelto nelle Impostazioni (data-theme) */
 @media (prefers-color-scheme: dark){:root:not([data-theme=light]){
-  --bg:#111016; --panel:#1B1A22; --fg:#F1EFF6; --muted:#A29DB2; --line:#2C2A36; --soft:#24222D;
+  --bg:#0F0F12; --panel:#1B1B20; --fg:#F2F2F5; --muted:#A0A0AA; --line:#2B2B32; --soft:#25252B;
   --acc:#8F83F0; --acc-ink:#15131D; --bad:#F2B03D; --ok:var(--acc);
   --shadow:none; --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70; --p-rosso:#F2706B; --p-grigio:#A4A7B5;
   color-scheme:dark}}
 :root[data-theme=dark]{
-  --bg:#111016; --panel:#1B1A22; --fg:#F1EFF6; --muted:#A29DB2; --line:#2C2A36; --soft:#24222D;
+  --bg:#0F0F12; --panel:#1B1B20; --fg:#F2F2F5; --muted:#A0A0AA; --line:#2B2B32; --soft:#25252B;
   --acc:#8F83F0; --acc-ink:#15131D; --bad:#F2B03D; --ok:var(--acc);
   --shadow:none; --p-blu:#6AA2EE; --p-rosa:#E8709F; --p-ambra:#F2B03D; --p-verde:#52C285; --p-viola:#A68BF0; --p-corallo:#F08A70; --p-rosso:#F2706B; --p-grigio:#A4A7B5;
   color-scheme:dark}
@@ -60,9 +61,10 @@ body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-body);margin:0;
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .wrap{max-width:520px;margin:0 auto;position:relative;z-index:1}
 /* Alone del colore della scheda dietro il saluto: cambia colore dolcemente */
-.aura{position:absolute;top:70px;left:0;right:0;max-width:520px;height:300px;margin:0 auto;border-radius:50%;background:var(--acc);filter:blur(80px);opacity:.2;pointer-events:none;transition:background-color .6s var(--ease)}
+.aura{position:absolute;top:70px;left:0;right:0;max-width:520px;height:300px;margin:0 auto;border-radius:50%;background:var(--acc);filter:blur(80px);opacity:.13;pointer-events:none;transition:background-color .6s var(--ease)}
 .ttl{display:inline-flex;align-items:center;gap:10px;min-width:0}
-.ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-style:normal;font-size:16px;background:color-mix(in srgb,var(--acc) 12%,transparent);flex:none;transition:background-color .4s}
+.ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-style:normal;font-size:16px;background:color-mix(in srgb,var(--acc) 13%,transparent);color:var(--acc);flex:none;transition:background-color .4s,color .4s}
+.ic svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 [hidden]{display:none!important}
@@ -87,7 +89,7 @@ input::-webkit-date-and-time-value{text-align:left;min-height:1.45em}
 /* Testata */
 .head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:20px 12px}
 /* Il saluto si stringe un po' sui telefoni stretti: con il tasto ✨ resta su una riga */
-.hello{font:650 clamp(24px,6.8vw,30px)/1.08 var(--f-disp);letter-spacing:-.01em;margin:0;text-wrap:balance}
+.hello{font:700 clamp(23px,6.5vw,30px)/1.08 var(--f-disp);letter-spacing:-.03em;margin:0;text-wrap:balance}
 .hello span{color:var(--me)}
 .date{color:var(--muted);font-size:13px;margin-top:4px}
 .me{width:44px;height:44px;border-radius:999px;background:var(--me);color:#fff;font:650 17px var(--f-disp);display:grid;place-items:center;flex:none;transition:background .24s,transform .12s var(--ease);position:relative;box-shadow:0 6px 16px color-mix(in srgb,var(--me) 32%,transparent)}
@@ -108,10 +110,10 @@ input::-webkit-date-and-time-value{text-align:left;min-height:1.45em}
 .pop{animation:fm-pop .42s var(--pop) both}
 @keyframes fm-pop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
 
-h2{font:650 17px/1.2 var(--f-disp);margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px}
+h2{font:600 17px/1.2 var(--f-disp);letter-spacing:-.01em;margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px}
 h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .card{background:var(--panel);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);display:grid;gap:12px;width:100%;text-align:left}
-.stack{display:grid;gap:12px}
+.stack{display:grid;gap:14px}
 .empty{color:var(--muted);font-size:13px}
 
 /* Cena */
@@ -196,14 +198,14 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 /* Barra in basso */
 .tabs{position:fixed;z-index:20;left:max(12px,calc(50% - 260px));right:max(12px,calc(50% - 260px));bottom:max(10px,calc(env(safe-area-inset-bottom,0px) - 10px));
   background:color-mix(in srgb,var(--panel) 78%,transparent);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);
-  border:1px solid color-mix(in srgb,var(--line) 80%,transparent);border-radius:28px;padding:5px;box-shadow:0 10px 30px rgb(20 10 50 / .14)}
+  border:1px solid color-mix(in srgb,var(--line) 80%,transparent);border-radius:28px;padding:5px;box-shadow:0 8px 28px rgb(0 0 0 / .12)}
 .tabs .in{display:grid;grid-template-columns:repeat(5,1fr);position:relative}
 .tab{display:grid;justify-items:center;align-content:center;gap:2px;min-height:54px;font-size:12px;color:var(--muted);position:relative;z-index:1;transition:color .24s}
 .tab svg{width:24px;height:24px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .tab.on{color:var(--acc)}
 .tab.on svg{animation:fm-bump .42s var(--pop)}
 .tpill{position:absolute;top:0;left:0;width:20%;height:100%;border-radius:23px;background:color-mix(in srgb,var(--acc) 14%,transparent);transition:transform .42s var(--pop),background-color .4s}
-.fab{position:fixed;right:max(16px,calc(env(safe-area-inset-right,0px) + 16px),calc(50% - 260px));bottom:calc(max(10px,calc(env(safe-area-inset-bottom,0px) - 10px)) + 80px);z-index:21;width:56px;height:56px;border-radius:20px;background:linear-gradient(145deg,color-mix(in srgb,var(--acc) 82%,#fff),var(--acc));color:var(--acc-ink);font-size:28px;line-height:1;display:grid;place-items:center;box-shadow:0 10px 26px color-mix(in srgb,var(--acc) 42%,transparent);transition:transform .3s var(--pop),opacity .24s,background-color .4s}
+.fab{position:fixed;right:max(16px,calc(env(safe-area-inset-right,0px) + 16px),calc(50% - 260px));bottom:calc(max(10px,calc(env(safe-area-inset-bottom,0px) - 10px)) + 80px);z-index:21;width:56px;height:56px;border-radius:18px;background:var(--acc);color:var(--acc-ink);font-size:28px;font-weight:300;line-height:1;display:grid;place-items:center;box-shadow:0 8px 22px color-mix(in srgb,var(--acc) 30%,transparent);transition:transform .34s var(--sheet-ease),opacity .24s,background-color .4s}
 
 /* Foglio dal basso */
 /* Il velo spento è anche invisibile: su iPhone (iOS 26) un elemento fisso in alto, anche trasparente, colora la barra dell'orario. */
@@ -306,6 +308,8 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .filebtn{display:grid;place-items:center;color:var(--fg);text-align:center;font-size:15px}
 .ver{text-align:center;font-size:12px;color:var(--muted);padding:12px 0}
 .fab.via{opacity:0;transform:scale(.6);pointer-events:none}
+/* Mentre si scorre in giù il + si fa da parte, risalendo torna (02/11/2026) */
+.fab.giu:not(.via){opacity:0;transform:translateY(24px) scale(.8);pointer-events:none}
 
 /* Coriandoli quando si festeggia (spesa finita, tutti a cena, regalo preso) */
 .cf{position:fixed;width:8px;height:10px;border-radius:2px;background:var(--pc);z-index:45;pointer-events:none;margin:-5px 0 0 -4px;animation:fm-cf .95s cubic-bezier(.15,.7,.3,1) both}
@@ -677,3 +681,14 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .voh{display:none}
 .sctabs .seg button{font-size:13.5px;padding-inline:2px}
 .vpesi small{display:block;margin-top:-4px;color:var(--muted);font-size:12px}
+
+/* ---------- Estetica 02/11/2026: barra in vetro in alto e titolo che cambia con la scheda ---------- */
+/* Invisibile (non solo trasparente) quando è spenta: su iPhone un elemento fisso in alto colora la barra dell'orario. */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:15;height:calc(env(safe-area-inset-top,0px) + 44px);padding-top:env(safe-area-inset-top,0px);display:grid;place-items:center;
+  background:color-mix(in srgb,var(--bg) 74%,transparent);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:.5px solid color-mix(in srgb,var(--line) 90%,transparent);opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .22s var(--ease),visibility 0s linear .22s}
+.topbar b{font:600 16px var(--f-body);letter-spacing:-.01em;transform:translateY(5px);transition:transform .3s var(--ease)}
+html.scorso .topbar{opacity:1;visibility:visible;transition:opacity .22s var(--ease),visibility 0s}
+html.scorso .topbar b{transform:none}
+.head.cambia #hello,.head.cambia #today{animation:fm-page .42s var(--ease)}

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>NDSZ</title>
-<meta name="theme-color" content="#F5F4F8" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#111016" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F4F4F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F0F12" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -14,12 +14,10 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icona-180.png">
 <link rel="icon" href="icona-512.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650&display=swap">
 <link rel="stylesheet" href="stile.css">
 <script>/* Tema scelto a mano: si applica prima di disegnare, anche alla barra in alto */
 try{var t=localStorage.getItem('noi4-tema'),r=document.documentElement;r.dataset.page='oggi';
-if(t==='chiaro'||t==='scuro'){r.dataset.theme=t==='chiaro'?'light':'dark';var c=t==='chiaro'?'#F5F4F8':'#111016';
+if(t==='chiaro'||t==='scuro'){r.dataset.theme=t==='chiaro'?'light':'dark';var c=t==='chiaro'?'#F4F4F7':'#0F0F12';
 document.querySelectorAll('meta[name=theme-color]').forEach(function(m){m.dataset.media=m.getAttribute('media')||'';m.removeAttribute('media');m.content=c})}}catch(e){}</script>
 </head>
 <body>
@@ -42,6 +40,7 @@ document.querySelectorAll('meta[name=theme-color]').forEach(function(m){m.datase
 <!-- App -->
 <div id="app" hidden>
   <div class="aura" aria-hidden="true"></div>
+  <div class="topbar" aria-hidden="true"><b id="tbT">Oggi</b></div>
   <div class="wrap">
     <header class="head">
       <div>
