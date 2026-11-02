@@ -1449,7 +1449,7 @@
        <div class="cgr${anim ? ' cgr-' + anim : ''}" data-di="${m.di}" style="--c:${ultimo}">${GG.slice(1, ultimo + 1).map(g => `<span class="cgh">${g.slice(0, 1)}</span>`).join('')}${celle.join('')}</div>
      </div>
      <div class="card aglist">
-       ${st.ag ? `<div class="agtop"><span><b>${titoloG(st.ag).split(' · ')[0]}</b>${titoloG(st.ag).split(' · ')[1] ? `<small> · ${titoloG(st.ag).split(' · ')[1]}</small>` : ''}</span><button type="button" class="tap agtutto" data-agday="${st.ag}" data-di="${m.di}">Mostra tutto</button></div>` : ''}
+       ${st.ag ? `<div class="agtop"><span><b>${titoloG(st.ag).split(' · ')[0]}</b>${titoloG(st.ag).split(' · ')[1] ? `<small>${titoloG(st.ag).split(' · ')[1]}</small>` : ''}</span><button type="button" class="tap agtutto" data-agday="${st.ag}" data-di="${m.di}">Mostra tutto</button></div>` : ''}
        ${gruppi.length ? gruppi.map(g => `${st.ag ? '' : `<div class="agg${g.d < T ? ' tardi' : ''}">${titoloG(g.d)}</div>`}<div class="cmpl">${g.l.map(c => rigaC(c, colM, true)).join('')}</div>`).join('')
        : `<div class="empty">${st.ag ? 'Niente segnato per questo giorno.' : 'Niente in arrivo.'}</div>`}
        ${m.copia ? '' : `<button type="button" class="btn tap" data-nonuovo="${m.di}" data-d="${st.ag || ''}">+ Aggiungi${st.ag ? ' per questo giorno' : ''}</button>`}
