@@ -7,18 +7,24 @@
 - proposte: una proposta nuova (a tutti tranne chi l'ha fatta), "hanno votato tutti" (a chi l'ha fatta)
   e cosa si è deciso (a tutti tranne chi ha deciso);
 - conflitti: a chi ha due impegni che si accavallano oggi, domani o dopodomani;
-- note: quando una nota nuova è messa in evidenza (le note non si scrivono più, restano le vecchie).
+- note: quando una nota nuova è messa in evidenza (le note non si scrivono più, restano le vecchie);
+- mie (sezione "Per me", 02/11/2026): i promemoria all'ora giusta (e di nuovo dopo mezz'ora se non è stato toccato
+  "Fatto"), l'appuntamento fisso la sera prima, le scadenze il mese prima e una settimana prima della fine del mese,
+  le mostre segnate una settimana prima che chiudano e le mostre nuove a chi le segue.
 Ognuno sceglie quali ricevere dall'app (persone/<id>.notifiche). Cosa è già stato mandato
 si ricorda in sistema/notifiche, così niente arriva due volte.
 """
+import calendar
 import datetime as dt
 import os
+import re
 
 from firebase_admin import messaging
 
 from sincronizza_calendari import compleanno
 from comune import ROMA, adesso, capita, database
 
+MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
 URL_APP = os.environ.get("URL_APP") or "https://higghy01.github.io/noi-quattro/"
 
 
@@ -33,6 +39,7 @@ def main():
     stato_ref = db.collection("sistema").document("notifiche")
     stato = (stato_ref.get().to_dict() or {})
     inviati = {k: v for k, v in (stato.get("inviati") or {}).items() if v >= (ora.date() - dt.timedelta(days=2)).isoformat()}
+    gia = set(inviati)  # mandati nei giri prima di questo
 
     persone = {d.id: d.to_dict() for d in db.collection("persone").stream()}
     token = {}
@@ -194,6 +201,51 @@ def main():
             conta = {k: sum(1 for p in persone if k in (voti.get(p) or [])) for k in opz}
             testa = max(sorted(opz, key=lambda k: opz[k].get("creato", 0)), key=lambda k: conta[k])
             manda(chi, "proposte", f"Hanno votato tutti: {q}", f"In testa: {opz[testa]['x']} ({conta[testa]} voti). Decidi nella Bacheca.", f"tutti|{d.id}|{chi}")
+
+    # Sezione "Per me" (raccolta "mie": ognuno vede solo le sue, qui le legge il programma con la chiave di servizio).
+    mie = [dict(d.to_dict() or {}, id=d.id) for d in db.collection("mie").stream()]
+    for x in mie:
+        p, k, t, e = x.get("per"), x.get("k"), str(x.get("t") or ""), str(x.get("e") or "")
+        if p not in persone:
+            continue
+        if k == "prom" and re.fullmatch(r"\d\d:\d\d", str(x.get("h") or "")):
+            ogni, ult = max(1, int(x.get("ogni") or 1)), str(x.get("ult") or "")
+            dovuto = oggi if ogni == 1 or not ult else (dt.date.fromisoformat(ult) + dt.timedelta(days=ogni)).isoformat()
+            if ult == oggi or dovuto > oggi:
+                continue
+            dopo = ora - dt.datetime.fromisoformat(f"{oggi}T{x['h']}").replace(tzinfo=ROMA)
+            if dt.timedelta(0) <= dopo <= dt.timedelta(minutes=90) and f"mie1|{x['id']}|{oggi}" not in gia:
+                manda(p, "mie", f"{e} {t}".strip(), "Quando hai fatto, tocca Fatto nell'app.", f"mie1|{x['id']}|{oggi}")
+            # Il secondo avviso solo se il primo è partito in un giro prima (mai due di fila).
+            elif dt.timedelta(minutes=30) <= dopo <= dt.timedelta(hours=3) and f"mie1|{x['id']}|{oggi}" in gia:
+                manda(p, "mie", f"Ancora da fare: {t}", "Tocca Fatto nell'app quando hai fatto.", f"mie2|{x['id']}|{oggi}")
+        elif k == "appu" and ora.hour == 20:
+            g = (ora.date().weekday() + 2) % 7  # domani, contato come nell'app (0 = domenica)
+            if int(x.get("g", -1)) == g:
+                manda(p, "mie", f"Domani: {t}", f"Alle {x['h']}" if x.get("h") else "Domani", f"appu|{x['id']}|{domani}")
+        elif k == "scad" and ora.hour == 10:
+            mese, anno, ogni = int(x.get("mese") or 0), int(x.get("anno") or 0), max(1, int(x.get("ogni") or 1))
+            if not 1 <= mese <= 12:
+                continue
+            capita_nel = lambda y: y >= anno and (y - anno) % ogni == 0
+            d = ora.date()
+            prossimo = (d.year + (d.month == 12), d.month % 12 + 1)  # il mese che viene
+            if d.day == 1 and prossimo[1] == mese and capita_nel(prossimo[0]):
+                manda(p, "mie", f"Il mese prossimo: {t}", f"{e} Scade a fine {MESI[mese - 1]}.".strip(), f"scad1|{x['id']}|{prossimo[0]}")
+            ultimo = calendar.monthrange(d.year, d.month)[1]
+            if d.month == mese and d.day == ultimo - 7 and capita_nel(d.year):
+                manda(p, "mie", f"Tra una settimana: {t}", f"{e} Scade a fine {MESI[mese - 1]}.".strip(), f"scad2|{x['id']}|{d.year}")
+        elif k == "mostra" and ora.hour == 10 and x.get("al") == (ora.date() + dt.timedelta(days=7)).isoformat():
+            manda(p, "mie", f"Ultima settimana: {t}", "La mostra che hai segnato chiude tra 7 giorni.", f"mos|{x['id']}")
+    # Mostre nuove (le scrive il programma "Mostre"): a chi ha la sezione con gli avvisi delle mostre.
+    seguono = {x.get("per") for x in mie if x.get("k") == "avvisi" and x.get("mostre")}
+    if seguono and 9 <= ora.hour <= 21:
+        info = db.collection("info").document("mostre").get().to_dict() or {}
+        for m in info.get("l") or []:
+            if int((info.get("nuove") or {}).get(m.get("id"), 0)) > recente:
+                quando = f"dal {dt.date.fromisoformat(m['dal']).strftime('%d/%m')}" if m.get("dal", "") > oggi else "già aperta"
+                for p in seguono & set(persone):
+                    manda(p, "mie", f"Nuova mostra: {m.get('t', '')}", f"{m.get('luogo', '')} · {quando}", f"mnew|{m.get('id')}|{p}")
 
     # Invio a tutti i telefoni iscritti di ogni persona; i telefoni non più validi si tolgono.
     mandate = 0

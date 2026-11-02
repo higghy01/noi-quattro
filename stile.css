@@ -739,3 +739,37 @@ html.scorso .topbar b{transform:none}
 .agtop>span{min-width:0}.agtop small{white-space:nowrap}
 /* Giorno scelto nell'Agenda (v61): data su una riga, "fra N giorni" sotto; prima a 360 px "nov" finiva a capo da solo */
 .agtop{align-items:center}.agtop>span{display:grid;gap:1px}.agtop b{white-space:nowrap}
+
+/* Sezione "Per me" (v62, 02/11/2026): promemoria, appuntamenti fissi, scadenze, mostre, liste */
+.mcard{display:grid;gap:6px}
+.mtardi{color:var(--p-rosso);font-weight:600}
+.mriga{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;min-height:52px;text-align:left;width:100%;padding:6px 2px;border-radius:12px}
+.mriga:not(:has(.mico)){grid-template-columns:1fr auto}
+.mico{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:var(--soft)}
+.mtx{display:grid;gap:2px;min-width:0}
+.mtx b{font-weight:600;font-size:15px;overflow-wrap:anywhere}
+.mtx small{font-size:13px;color:var(--muted)}
+.mdx{font-size:13px;color:var(--muted);white-space:nowrap}
+.mriga.forte .mdx{color:var(--me);font-weight:650}
+.mpoi{border-top:1px solid var(--line);padding-top:4px;margin-top:2px}
+.mos{display:grid;grid-template-columns:76px 1fr;gap:12px;padding:8px 0;align-items:start}
+.mos+.mos{border-top:1px solid var(--line)}
+.mos img,.mimg{width:76px;height:96px;border-radius:12px;object-fit:cover;background:var(--soft);display:grid;place-items:center;font-size:26px}
+.mst{justify-self:start;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:999px;margin-bottom:2px}
+.mst.ora{background:color-mix(in srgb,var(--p-verde) 16%,transparent);color:var(--p-verde)}
+.mst.fine{background:color-mix(in srgb,var(--p-rosso) 16%,transparent);color:var(--p-rosso)}
+.mst.arr{background:color-mix(in srgb,var(--me) 16%,transparent);color:var(--me)}
+.mbt{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.mbt a,.mbt button{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:var(--fg);text-decoration:none;transition:background .24s,border-color .24s,color .24s}
+.mvo.on{background:color-mix(in srgb,var(--p-rosso) 14%,transparent);border-color:var(--p-rosso);color:var(--p-rosso)}
+.mnota{text-align:center;padding:0 8px}
+.mcat .seg{margin-bottom:0}
+.mcat .seg button{font-size:12.5px;padding-inline:2px}
+.mlin{display:grid;grid-template-columns:1fr 44px;gap:8px}
+.mlin button{width:44px;height:44px;border-radius:14px;background:var(--me);color:#fff;font-size:24px;line-height:1}
+.mstelle{color:var(--p-ambra);font-size:13px;letter-spacing:1px;white-space:nowrap}
+.mstelle i{font-style:normal;color:var(--line)}
+.mvota{display:flex;gap:6px}
+.mvota button{width:44px;height:44px;border-radius:12px;font-size:24px;color:var(--line);background:var(--soft);transition:color .2s,transform .15s var(--ease)}
+.mvota button.on{color:var(--p-ambra)}
+.mvota button:active{transform:scale(.9)}
