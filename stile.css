@@ -601,6 +601,8 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .cmp{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:6px;transition:opacity .3s}
 .cmp .ck{width:44px;height:44px;display:grid;place-items:center;flex:none}
 .cmp .ck svg{width:26px;height:26px;padding:4px;border-radius:999px;border:2px solid var(--mc);fill:none;stroke:transparent;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;transition:background .24s,stroke .24s}
+/* Sezione guardata in copia (sola lettura): da fare = pallino del colore della materia, non un cerchio da toccare */
+.cmp:not(.fatto) span.ck svg{width:10px;height:10px;padding:0;border:0;background:var(--mc)}
 .cmp.fatto .ck svg{background:var(--mc);stroke:#fff;animation:fm-pop .4s var(--pop)}
 .cmp .cmx{display:grid;gap:2px;text-align:left;min-height:44px;align-content:center;min-width:0}
 .cmp .cmx b{font-weight:600;font-size:15px}
