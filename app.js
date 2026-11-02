@@ -364,9 +364,22 @@
       const mio = n.by === S.me, anim = n.id === fresh ? ' pop' : nuova ? ' rise' : '';
       return `<div class="foglio${anim}" style="--pc:${col(n.by)};--i:${Math.min(i, 6)}">
         <p><b>${esc(P(n.by).nome)}:</b> ${esc(n.x)}</p>
-        <div class="fby"><small>${fa(n.creato || Date.now())}</small>${mio ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div></div>`;
+        <div class="fby"><small class="fqt" data-ms="${+n.creato || Date.now()}">${quantoFa(n.creato || Date.now())}</small>${mio ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div></div>`;
     }).join('')}</div>`;
   }
+  // Quanto tempo fa (Sasha, 02/11/2026): "adesso", "5 min fa", "3 ore fa", "ieri", "4 giorni fa", "2 settimane fa", "3 mesi fa".
+  function quantoFa(ms) {
+    const m = Math.max(0, Math.floor((Date.now() - ms) / 60000)), h = Math.floor(m / 60), g = Math.floor(h / 24);
+    if (m < 1) return 'adesso';
+    if (m < 60) return `${m} min fa`;
+    if (h < 24) return `${h} ${h === 1 ? 'ora' : 'ore'} fa`;
+    if (g < 2) return 'ieri';
+    if (g < 14) return `${g} giorni fa`;
+    if (g < 60) return `${Math.floor(g / 7)} settimane fa`;
+    const me = Math.floor(g / 30); return me < 12 ? `${me} mesi fa` : (me < 24 ? 'un anno fa' : `${Math.floor(me / 12)} anni fa`);
+  }
+  // Il tempo si aggiorna da solo ogni minuto, senza ridisegnare la pagina.
+  setInterval(() => { if (page === 'note' && seg === 'note') document.querySelectorAll('.fqt').forEach(e => { const t = quantoFa(+e.dataset.ms); if (e.textContent !== t) e.textContent = t; }); }, 60000);
   function sheetNota() {
     openSheet(`<h3>Nuova nota</h3><form class="stack" id="fNo">
      <label>La nota<textarea id="notaX" rows="4" maxlength="300" required placeholder="Es. Domani sono da babbo"></textarea></label>
