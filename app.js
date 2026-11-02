@@ -1171,10 +1171,11 @@
   }
   /* Scorrendo (02/11/2026): in alto compare una barra in vetro col nome della scheda, come su iPhone;
      il + si fa da parte mentre si scende e torna appena si risale. Un solo controllo per fotogramma. */
-  const posizioni = {}; let yPrima = 0, inAttesa = false;
+  const posizioni = {}; let yPrima = 0, inAttesa = false, barraSu = false; const tb = $('.topbar');
   function barra() {
     inAttesa = false; const y = scrollY;
-    document.documentElement.classList.toggle('scorso', y > 64);
+    // Solo sulla barra, non su tutta la pagina: cambiare una classe su <html> fa ricalcolare tutto proprio mentre si scorre.
+    const su = y > 64; if (su !== barraSu) { barraSu = su; tb.classList.toggle('on', su); }
     if (Math.abs(y - yPrima) > 6) { $('#fab').classList.toggle('giu', y > yPrima && y > 120); yPrima = y; }
   }
   addEventListener('scroll', () => { if (!inAttesa) { inAttesa = true; requestAnimationFrame(barra); } }, { passive: true });
@@ -1944,8 +1945,8 @@
     sc.addEventListener('touchstart', e => { const x = e.touches[0].clientX; x0 = x < 32 ? x : null; dx = 0; t0 = Date.now(); }, { passive: true });
     sc.addEventListener('touchmove', e => {
       if (x0 == null) return; dx = Math.max(0, e.touches[0].clientX - x0);
-      if (dx > 4) { e.preventDefault(); sc.classList.add('drag'); sc.style.transform = `translateX(${dx}px)`; }
-    }, { passive: false });
+      if (dx > 4) { sc.classList.add('drag'); sc.style.transform = `translateX(${dx}px)`; }
+    }, { passive: true }); // passivo: lo scorrimento in su e in giù non aspetta mai il codice (di lato non scorre comunque, touch-action: pan-y)
     sc.addEventListener('touchend', () => {
       if (x0 == null) return; x0 = null;
       const veloce = dx / Math.max(1, Date.now() - t0) > 0.5;
@@ -2617,9 +2618,9 @@
     try { await DATI.reset(em); $('#lgErr').textContent = ''; toast('Ti ho mandato un\'email: segui il link per scegliere la password.'); }
     catch (e) { $('#lgErr').textContent = !navigator.onLine ? 'Serve internet per mandare l\'email. Riprova appena c\'è rete.' : 'Non riesco a mandare l\'email. Controlla che sia scritta giusta.'; }
   };
-  document.addEventListener('gesturestart', e => e.preventDefault());
-  // Due dita fuori dal visore delle foto: niente zoom né spostamento di lato della pagina.
-  document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('.viewer')) e.preventDefault(); }, { passive: false });
+  // Niente zoom della pagina con due dita (il visore delle foto ha il suo zoom). Prima c'era anche un ascolto "touchmove" non passivo
+  // su tutta la pagina: su iPhone faceva aspettare il codice a ogni scorrimento (meno fluido). Bastano i gesti di Safari.
+  document.addEventListener('gesturestart', e => e.preventDefault()); document.addEventListener('gesturechange', e => e.preventDefault());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
   /* ---------- Avvio ---------- */

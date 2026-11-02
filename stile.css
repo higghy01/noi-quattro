@@ -47,6 +47,9 @@ html,body{overflow-x:clip;overscroll-behavior:none}
 /* Pagina ferma di lato e senza barre di scorrimento (richiesta del 31/10/2026):
    col dito si scorre solo in su e in giù; le file che scorrono di lato (storie, filtri) restano libere. */
 html,body{width:100%;max-width:100%;overscroll-behavior-x:none;scrollbar-width:none}
+/* Scorrimento (Sasha 02/11/2026: "deve essere tutto super smooth"): su iPhone in cima e in fondo la pagina rimbalza
+   come nelle app native, invece di fermarsi di colpo. Di lato resta ferma. Su Android resta com'era. */
+@supports (-webkit-touch-callout:none){html,body{overscroll-behavior-y:auto}}
 body{touch-action:pan-y;position:relative}
 .screen,.sheet{touch-action:pan-y;scrollbar-width:none}
 .storie{touch-action:pan-x pan-y}
@@ -61,7 +64,8 @@ body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-body);margin:0;
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .wrap{max-width:520px;margin:0 auto;position:relative;z-index:1}
 /* Alone del colore della scheda dietro il saluto: cambia colore dolcemente */
-.aura{position:absolute;top:70px;left:0;right:0;max-width:520px;height:300px;margin:0 auto;border-radius:50%;background:var(--acc);filter:blur(80px);opacity:.13;pointer-events:none;transition:background-color .6s var(--ease)}
+/* Alone sfumato con una maschera invece di filter:blur(80px): stesso aspetto, ma iPhone non deve ricalcolare una sfocatura enorme sotto le barre in vetro mentre si scorre. */
+.aura{position:absolute;top:-10px;left:0;right:0;max-width:680px;height:460px;margin:0 auto;background:var(--acc);-webkit-mask-image:radial-gradient(closest-side,#000 25%,rgb(0 0 0 / .5) 55%,transparent);mask-image:radial-gradient(closest-side,#000 25%,rgb(0 0 0 / .5) 55%,transparent);opacity:.13;pointer-events:none;transition:background-color .6s var(--ease)}
 .ttl{display:inline-flex;align-items:center;gap:10px;min-width:0}
 .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-style:normal;font-size:16px;background:color-mix(in srgb,var(--acc) 13%,transparent);color:var(--acc);flex:none;transition:background-color .4s,color .4s}
 .ic svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}
@@ -691,8 +695,8 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
   border-bottom:.5px solid color-mix(in srgb,var(--line) 90%,transparent);opacity:0;visibility:hidden;pointer-events:none;
   transition:opacity .22s var(--ease),visibility 0s linear .22s}
 .topbar b{font:600 16px var(--f-body);letter-spacing:-.01em;transform:translateY(5px);transition:transform .3s var(--ease)}
-html.scorso .topbar{opacity:1;visibility:visible;transition:opacity .22s var(--ease),visibility 0s}
-html.scorso .topbar b{transform:none}
+html .topbar.on{opacity:1;visibility:visible;transition:opacity .22s var(--ease),visibility 0s}
+html .topbar.on b{transform:none}
 .head.cambia #hello,.head.cambia #today{animation:fm-page .42s var(--ease)}
 /* Al posto dei titoli doppi (Bacheca, Ricordi): solo il conteggio, piccolo (v53) */
 .conta{font-size:13px;color:var(--muted);margin:-4px 0 -2px 4px}
