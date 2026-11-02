@@ -1245,7 +1245,7 @@
       ${e.n ? `<div class="muted">${esc(e.n)}</div>` : ''}<div class="dots">${chips(e.who || [])}</div><div class="src">${fonte}</div>
       ${e.scuola && S.scuola[e.who[0]] ? `<div class="lez mini">${lezioni(S.scuola[e.who[0]], e.scuola).map(x => `<div class="lz" style="--mc:${coloriMat(S.scuola[e.who[0]])[x.m]}"><span class="lo"><b>${x.da}ª${x.a > x.da ? `–${x.a}ª` : ''}</b>${x.h ? `<small>${esc(x.h)}</small>` : ''}</span><span class="lm"><b>${esc(x.m)}</b></span></div>`).join('')}</div>` : ''}
       ${e.virtuale ? (moduli(S.me).some(m => m.di === e.who[0]) ? `<button class="btn ghost tap" data-apri-mio="1">Apri la sezione Personale</button>` : '') : e.nascosto ? '' : `<button class="star tap${e.imp ? ' on' : ''}" data-impst="${e.id}">${e.imp ? '⭐ Importante: lo vedono tutti in Impegni' : '☆ Segna come importante'}</button>`}
-      ${!e.virtuale && !e.appu && (e.fonte === 'import:' + S.me || !(e.fonte || '').startsWith('import:')) ? `<div class="vis" data-mze="${e.id}"><label>Come ci andate</label>${mezziHtml(e.mezzo || '', 'data-mzd')}</div>` : ''}
+      ${!e.virtuale && !e.appu && !(e.nascosto && !e.privato) && (e.fonte === 'import:' + S.me || !(e.fonte || '').startsWith('import:')) ? `<div class="vis" data-mze="${e.id}"><label>Come ci andate</label>${mezziHtml(e.mezzo || '', 'data-mzd')}</div>` : ''}
       ${mioCal(e) ? `<div class="vis" data-vise="${e.id}"><label>Gli altri vedono</label>${segHtml('vis', [['mostra', '👁️ Tutto'], ['nascondi', '🔒 Solo occupato']], e.privato ? 'nascondi' : 'mostra')}
         <div class="empty" id="visPerche">${regolaCal(e.t, regole()).perche} La scelta vale anche per gli altri impegni «${esc(e.t)}».</div></div>` : ''}
       ${e.appu ? `<div class="empty">${e.creatoDa === S.me ? 'È un tuo appuntamento fisso: gli altri vedono solo «Occupato». Si cambia nella tua sezione Personale.' : 'Un appuntamento fisso: il titolo lo vede solo chi l\'ha scritto.'}</div>${e.creatoDa === S.me ? '<button class="btn ghost tap" data-apri-mio="1">Apri la sezione Personale</button>' : ''}`
@@ -2423,6 +2423,11 @@
   document.addEventListener('change', (ev) => {
     const t = ev.target;
     if (t.id === 'evAll') $('#evOre').hidden = t.checked;
+    // Cambiando l'ora di inizio, la fine si sposta e la durata resta uguale (prima restava 19:00 e veniva 20:30–19:00).
+    if (t.id === 'evH' && /^\d\d:\d\d$/.test(t.value)) {
+      const f = $('#evF'), prima = t.dataset.prima || t.defaultValue, dur = /^\d\d:\d\d$/.test(f.value) && prima ? minuti(f.value) - minuti(prima) : 60;
+      f.value = hm(Math.min(minuti(t.value) + (dur > 0 ? dur : 60), 24 * 60 - 1)); t.dataset.prima = t.value;
+    }
     // Si salva dopo che l'interruttore ha finito di scorrere (il salvataggio ridisegna la pagina).
     if (t.dataset && t.dataset.pref) { const k = t.dataset.pref, v = t.checked; setTimeout(() => DATI.imposta('persone', S.me, { notifiche: Object.assign({}, P(S.me).notifiche, { [k]: v }) }).catch(sbaglio), 320); }
     if (t.id === 'icsFile' && t.files[0]) importaIcs(t.files[0]);
@@ -2471,7 +2476,7 @@
       const e = { t: $('#evT').value.trim(), d: $('#evD').value, h: all ? '' : $('#evH').value, fine: all ? '' : $('#evF').value, who, n: $('#evN').value.trim(), ripeti: $('#evR').value, mezzo: mzOn ? mzOn.dataset.mzf : '', imp: $('#evImp').checked };
       const fino = $('#evFino').value; e.fino = fino && fino > e.d && !e.ripeti ? fino : '';
       if (!all && !/^\d\d:\d\d$/.test(e.fine)) return toast('Scrivi a che ora finisce');
-      if (!all && e.fine === e.h) return toast('L\'ora di fine è uguale a quella di inizio');
+      if (!all && e.fine <= e.h) return toast(e.fine === e.h ? 'L\'ora di fine è uguale a quella di inizio' : 'L\'ora di fine è prima dell\'inizio: se finisce dopo mezzanotte, usa «Fino al giorno»');
       const conPriv = !!$('#evPriv'), priv = conPriv && $('#evPriv').checked;
       closeSheet();
       if (page === 'cal') { selDay = e.d; weekStart = inizioSettimana(new Date(e.d + 'T12:00:00')); }
