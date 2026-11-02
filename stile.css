@@ -57,7 +57,7 @@ html{touch-action:manipulation}
 body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 input,textarea,.note p{-webkit-user-select:text;user-select:text}
 body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-body);margin:0;-webkit-text-size-adjust:100%;
-  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(160px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(184px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .wrap{max-width:520px;margin:0 auto;position:relative;z-index:1}
 /* Alone del colore della scheda dietro il saluto: cambia colore dolcemente */
@@ -692,3 +692,5 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 html.scorso .topbar{opacity:1;visibility:visible;transition:opacity .22s var(--ease),visibility 0s}
 html.scorso .topbar b{transform:none}
 .head.cambia #hello,.head.cambia #today{animation:fm-page .42s var(--ease)}
+/* Al posto dei titoli doppi (Bacheca, Ricordi): solo il conteggio, piccolo (v53) */
+.conta{font-size:13px;color:var(--muted);margin:-4px 0 -2px 4px}
