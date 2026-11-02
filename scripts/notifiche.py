@@ -40,6 +40,10 @@ def main():
     ieri = (ora.date() - dt.timedelta(days=1)).isoformat()
     stato_ref = db.collection("sistema").document("notifiche")
     stato = (stato_ref.get().to_dict() or {})
+    # Lanciato a mano da GitHub mentre Firebase funziona: si ferma, per non mandare gli stessi avvisi due volte.
+    if not os.environ.get("K_SERVICE") and stato.get("da") == "firebase" and ora.timestamp() * 1000 - int(stato.get("ultimo") or 0) < 10 * 60 * 1000:
+        print("Firebase ha fatto un giro negli ultimi 10 minuti: niente da fare qui.")
+        return
     inviati = {k: v for k, v in (stato.get("inviati") or {}).items() if v >= (ora.date() - dt.timedelta(days=2)).isoformat()}
     gia = set(inviati)  # mandati nei giri prima di questo
 
@@ -47,7 +51,17 @@ def main():
     token = {}
     for d in db.collection("token").stream():
         token.setdefault(d.to_dict().get("persona"), []).append(d.id)
-    impegni = [dict(d.to_dict(), id=d.id) for d in db.collection("impegni").stream()]
+    # Solo gli impegni che servono (dal 02/11/2026 il giro è ogni 5 minuti e le letture costano): quelli che si ripetono,
+    # quelli da 60 giorni fa a dopodomani (anche i lunghi, tipo le ferie) e quelli nuovi o cambiati nell'ultimo giorno.
+    recente0 = int((ora - dt.timedelta(days=1)).timestamp() * 1000)
+    col = db.collection("impegni")
+    tutti = {}
+    for q in (col.where("ripeti", "in", ["settimanale", "mensile", "annuale"]),
+              col.where("d", ">=", (ora.date() - dt.timedelta(days=60)).isoformat()).where("d", "<=", (ora.date() + dt.timedelta(days=3)).isoformat()),
+              col.where("creato", ">", recente0), col.where("modificato", ">", recente0)):
+        for d in q.stream():
+            tutti[d.id] = dict(d.to_dict(), id=d.id)
+    impegni = list(tutti.values())
     # Titoli veri degli impegni nascosti ("Occupato"): solo per il loro proprietario.
     dettagli = {d.id: (d.to_dict() or {}).get("dettagli") or {} for d in db.collection("privati").stream()}
 
