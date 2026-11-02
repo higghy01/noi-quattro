@@ -1,7 +1,7 @@
 """Manda le notifiche di NDSZ. Gira dentro Firebase ogni 5 minuti (functions/main.py, scelta di Sasha del 02/11/2026);
 si può ancora lanciare a mano da GitHub (workflow Notifiche).
 
-- promemoria: circa un'ora prima di un impegno, a chi partecipa;
+- promemoria: un'ora prima di un impegno (o appena possibile fino a mezz'ora prima), a chi partecipa;
 - nuovi: quando qualcuno ti aggiunge a un impegno;
 - riepilogo: la sera (alle 21, o all'ora scelta nelle Impostazioni), gli impegni di domani;
 - cena: il pomeriggio (alle 17, o all'ora scelta), "A cena stasera?" a chi non ha ancora risposto;
@@ -80,7 +80,7 @@ def main():
             if (e.get("fino") or "") > e.get("d", "") and giorno != e.get("d"):
                 continue  # impegno di più giorni: il promemoria solo il primo giorno
             inizio = dt.datetime.fromisoformat(f"{giorno}T{e['h']}").replace(tzinfo=ROMA)
-            if dt.timedelta(minutes=30) <= inizio - ora <= dt.timedelta(minutes=80):  # largo: GitHub a volte salta un giro
+            if dt.timedelta(minutes=30) <= inizio - ora <= dt.timedelta(minutes=62):  # giri ogni 5 minuti: parte tra 62 e 57 minuti prima; se salta qualche giro, fino a 30
                 for p in e.get("who", []):
                     t, luogo = titolo_per(e, p)
                     manda(p, "promemoria", f"Tra poco: {t}", f"Alle {e['h']}" + (f" · {luogo}" if luogo else ""), f"prom|{e['id']}|{giorno}|{p}")
