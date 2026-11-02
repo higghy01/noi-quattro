@@ -794,3 +794,6 @@ html .topbar.on b{transform:none}
 .fby{display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:32px}
 .fby small{color:var(--muted);font-size:12px}
 .foglio .gx{margin:-6px -6px -6px 0}
+/* Tastiera aperta (v75): il foglio sta sopra la tastiera e non sotto */
+.sheet{bottom:var(--kb,0px)}
+.kbon .sheet{max-height:calc(100dvh - var(--kb,0px) - 12px);padding-bottom:12px;transition:transform .5s var(--sheet-ease),bottom .25s var(--ease)}
