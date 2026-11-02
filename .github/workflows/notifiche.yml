@@ -1,8 +1,7 @@
-# Ogni 15 minuti controlla se c'è da mandare qualche notifica (promemoria, riepilogo, cena, novità).
+# Dal 02/11/2026 gli avvisi partono da Firebase ogni 5 minuti (funzione notifiche5, workflow Funzioni).
+# Questo resta solo per lanciarli a mano da GitHub, se Firebase avesse un problema.
 name: Notifiche
 on:
-  schedule:
-    - cron: "2,17,32,47 * * * *"
   workflow_dispatch: {}
 concurrency: { group: notifiche, cancel-in-progress: false }
 jobs:
