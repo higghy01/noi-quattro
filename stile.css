@@ -737,3 +737,5 @@ html.scorso .topbar b{transform:none}
 .sgiorni .sdot{bottom:4px}
 .agtutto{white-space:nowrap}
 .agtop>span{min-width:0}.agtop small{white-space:nowrap}
+/* Giorno scelto nell'Agenda (v61): data su una riga, "fra N giorni" sotto; prima a 360 px "nov" finiva a capo da solo */
+.agtop{align-items:center}.agtop>span{display:grid;gap:1px}.agtop b{white-space:nowrap}
