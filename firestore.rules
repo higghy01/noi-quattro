@@ -48,7 +48,8 @@ service cloud.firestore {
 
     match /note/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.by == io();
+      allow create: if membro() && request.resource.data.by == io()
+        && request.resource.data.x is string && request.resource.data.x.size() <= 300;
       allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin']);
       allow delete: if membro() && resource.data.by == io();
     }
