@@ -86,13 +86,39 @@
   // I compleanni arrivati dai calendari prima della regola non si vedono più.
   function mappaImpegni() {
     const det = S.priv.dettagli || {};
-    S.impegni = (S.impRaw || []).map(e => e.nascosto && mioCal(e) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e)
+    S.impegni = (S.impRaw || []).map(e => e.nascosto && (mioCal(e) || (e.appu && e.creatoDa === S.me)) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e)
       .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')));
     // La scuola non entra nel calendario di famiglia (scelta di Sasha del 01/11/2026: la sorella non vuole impegni e scuola
     // mischiati): lezioni e note stanno nel Calendario della sua sezione Personale. Le lezioni servono solo a dire
     // "è a scuola" in Oggi e ad avvisarla se un impegno vero cade durante la scuola.
     S.scuolaEv = eventiScuola();
     S.impegni = S.impegni.concat(proveComuni());
+    allineaAppu();
+  }
+  /* Gli appuntamenti fissi della sezione "Per me" vanno anche nel calendario comune (Sasha, 02/11/2026): gli altri vedono
+     "Occupato" col lucchetto, il titolo vero sta nella parte privata di chi l'ha scritto (come per i calendari collegati).
+     Si cambiano solo dalla sezione Personale: qui l'impegno si rifà da solo uguale all'appuntamento. */
+  const appuFatti = new Set(); let impOk = false, mieOk = false;
+  function allineaAppu() {
+    if (!CASA.includes(S.me) || !impOk || !mieOk) return;
+    const miei = S.mie.filter(x => x.per === S.me && x.k === 'appu'), det = S.priv.dettagli || {}, ids = new Set();
+    for (const x of miei) {
+      const id = 'appu-' + x.id, e = (S.impRaw || []).find(y => y.id === id), h = x.h || ''; ids.add(id);
+      const fine = h ? `${String(Math.min(23, +h.slice(0, 2) + 1)).padStart(2, '0')}${h.slice(2)}` : '';
+      const ok = e && e.h === h && new Date(e.d + 'T12:00:00').getDay() === +x.g && e.nascosto && e.t === 'Occupato';
+      const k = `${id}|${h}|${x.g}|${x.t}`;
+      if (appuFatti.has(k)) continue;
+      if (ok && det[id] && det[id].t === x.t) continue;
+      appuFatti.add(k);
+      let d = TODAY; while (d.getDay() !== +x.g) d = addDays(d, 1);
+      DATI.imposta('privati', S.me, { dettagli: { [id]: { t: x.t, n: '' } } })
+        .then(() => ok ? null : DATI.imposta('impegni', id, { t: 'Occupato', n: '', nascosto: true, d: e && new Date(e.d + 'T12:00:00').getDay() === +x.g ? e.d : iso(d),
+          h, fine, fino: '', who: [S.me], ripeti: 'settimanale', mezzo: '', imp: false, fonte: 'app', creatoDa: S.me, appu: x.id, creato: e ? e.creato || Date.now() : Date.now() }))
+        .catch(er => { appuFatti.delete(k); console.error(er); });
+    }
+    for (const e of S.impRaw || []) if (e.appu && e.creatoDa === S.me && !ids.has(e.id) && !appuFatti.has('via|' + e.id)) {
+      appuFatti.add('via|' + e.id); DATI.elimina('impegni', e.id).catch(() => appuFatti.delete('via|' + e.id));
+    }
   }
   // Interrogazioni e verifiche nel calendario comune (Sasha, 02/11/2026): solo per chi è in scuola/<persona>.prove
   // (le regole del database non le danno a nessun altro). Chi le ha scritte le vede nel suo Calendario della scuola.
@@ -1213,7 +1239,8 @@
       ${!e.virtuale && (e.fonte === 'import:' + S.me || !(e.fonte || '').startsWith('import:')) ? `<div class="vis" data-mze="${e.id}"><label>Come ci andate</label>${mezziHtml(e.mezzo || '', 'data-mzd')}</div>` : ''}
       ${mioCal(e) ? `<div class="vis" data-vise="${e.id}"><label>Gli altri vedono</label>${segHtml('vis', [['mostra', '👁️ Tutto'], ['nascondi', '🔒 Solo occupato']], e.privato ? 'nascondi' : 'mostra')}
         <div class="empty" id="visPerche">${regolaCal(e.t, regole()).perche} La scelta vale anche per gli altri impegni «${esc(e.t)}».</div></div>` : ''}
-      ${modificabile(e) ? `<div class="row2"><button class="btn ghost tap" data-modifica="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">Elimina</button></div>` : `<div class="empty">${e.scuola ? 'Arriva dall\'orario della scuola: cambia quando arriva l\'orario nuovo.' : 'Si cambia dal calendario di chi l\'ha scritto.'}</div>`}`);
+      ${e.appu ? `<div class="empty">${e.creatoDa === S.me ? 'È un tuo appuntamento fisso: gli altri vedono solo «Occupato». Si cambia nella tua sezione Personale.' : 'Un appuntamento fisso: il titolo lo vede solo chi l\'ha scritto.'}</div>${e.creatoDa === S.me ? '<button class="btn ghost tap" data-apri-mio="1">Apri la sezione Personale</button>' : ''}`
+      : modificabile(e) ? `<div class="row2"><button class="btn ghost tap" data-modifica="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">Elimina</button></div>` : `<div class="empty">${e.scuola ? 'Arriva dall\'orario della scuola: cambia quando arriva l\'orario nuovo.' : 'Si cambia dal calendario di chi l\'ha scritto.'}</div>`}`);
   }
   function sheetProposta(tp) {
     const t = PTIPO[tp];
@@ -1303,6 +1330,7 @@
   function moduli(id) {
     const out = [], ok = (s) => s && (s.orario || []).length;
     if (CASA.includes(id)) out.push({ k: 'casa', di: id, copia: false });
+    if (CONTROLLA.includes(id)) for (const pid of CASA) if (pid !== id && S.persone[pid]) out.push({ k: 'casa', di: pid, copia: true });
     if (ok(S.scuola[id])) out.push({ k: 'scuola', di: id, copia: false });
     for (const [pid, s] of Object.entries(S.scuola)) if (pid !== id && ok(s) && (s.copie || []).includes(id) && S.persone[pid]) out.push({ k: 'scuola', di: pid, copia: true });
     return out;
@@ -1366,7 +1394,7 @@
   // Il pallino sul pulsante: c'è qualcosa per oggi o domani. Solo le mie note: quelle di una sezione che guardo in copia non accendono il mio pallino.
   function pallinoMio() {
     const dom = iso(addDays(TODAY, 1)), n = mieiC().filter(c => c.per === S.me && !c.fatto && (c.d === T || c.d === dom)).length
-      + (CASA.includes(S.me) ? mie('prom').filter(x => promOggi(x) && x.ult !== T).length : 0);
+      + (CASA.includes(S.me) ? S.mie.filter(x => x.per === S.me && x.k === 'prom').filter(x => promOggi(x) && x.ult !== T).length : 0);
     const b = $('#mioBtn'); if (b) { b.classList.toggle('dot', n > 0); b.setAttribute('aria-label', n ? `Personale: ${n} ${n === 1 ? 'cosa' : 'cose'} per oggi o domani` : 'Personale'); }
   }
   function rMio() {
@@ -1383,6 +1411,10 @@
      Tutto quello che c'è dentro lo scrive lei e lo vede solo lei (raccolta "mie", regola per == io): nel codice pubblico
      nessun suo dato, solo esempi generici da toccare. */
   const CASA = ['p2'];
+  // Sasha (p1) vede le sezioni personali di tutti, in sola lettura, per dire cosa va e cosa no (02/11/2026).
+  // Gli appuntamenti fissi restano solo di chi li scrive (scelta di Sasha): le regole del database non li danno a nessun altro.
+  const CONTROLLA = ['p1'], MIE_VISTE = ['prom', 'scad', 'lista', 'mostra'];
+  let mDi = null, mRO = false;
   const TABS_M = [['oggi', 'Oggi'], ['mostre', 'Mostre'], ['liste', 'Liste']];
   let mTab = LS.get('noi4-mie-tab', 'oggi'); if (!TABS_M.some(t => t[0] === mTab)) mTab = 'oggi';
   const LISTE = [['serie', '📺', 'Serie'], ['doc', '🌍', 'Docu'], ['libro', '📖', 'Libri'], ['beauty', '💄', 'Beauty']];
@@ -1393,7 +1425,7 @@
   const GGL = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   const OGNI = [['1', 'Ogni dì'], ['2', '2 giorni'], ['3', '3 giorni'], ['7', '1 sett.'], ['14', '2 sett.']];
-  const mie = (k) => S.mie.filter(x => x.per === S.me && x.k === k);
+  const mie = (k) => S.mie.filter(x => x.per === (mDi || S.me) && x.k === k);
   const gTra = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
   const traG = (n) => n === 0 ? 'oggi' : n === 1 ? 'domani' : n < 0 ? `da ${-n} ${n === -1 ? 'giorno' : 'giorni'}` : `fra ${n} giorni`;
   // Un promemoria tocca oggi se è di tutti i giorni, oppure se sono passati i suoi giorni dall'ultima volta (la pianta).
@@ -1413,14 +1445,17 @@
   }
   const mostraMia = (id) => mie('mostra').find(x => x.mid === id);
   function rCasa(m, sr, k) {
+    mDi = m.di; mRO = m.copia;
     const corpo = { oggi: mOggi, mostre: mMostre, liste: mListe }[mTab]();
-    return `<div class="sec${sr(k * 3 + 1)}">✨ Per me</div>
+    mDi = null; mRO = false;
+    return `${m.copia ? `<div class="hint mprova${sr(k * 3 + 1)}">👀 Stai guardando la sezione di ${esc(P(m.di).nome)}: vedi promemoria, scadenze, mostre e liste come li vede lei. Gli appuntamenti fissi restano solo suoi, e solo lei può cambiare le cose.</div>` : ''}
+     <div class="sec${sr(k * 3 + 1)}">✨ Per me${m.copia ? ` · ${esc(P(m.di).nome)}` : ''}</div>
      <div class="sctabs${sr(k * 3 + 2)}">${segHtml('mtab', TABS_M, mTab)}</div>
      <div class="scbody" data-tab="${mTab}">${corpo}</div>`;
   }
   const rigaProm = (x) => {
     const ok = x.ult === T, q = promQuando(x), tardi = !ok && q < T ? gTra(q, T) : 0;
-    return `<div class="cmp${ok ? ' fatto' : ''}" style="--mc:var(--me)"><button type="button" class="ck tap" data-mfatto="${x.id}" aria-label="${ok ? 'Da rifare' : 'Fatto'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><button type="button" class="cmx tap" data-mie="${x.id}"><b>${esc(x.e || '🔔')} ${esc(x.t)}</b><small>${x.h ? `alle ${esc(x.h)}` : 'oggi'}${(+x.ogni || 1) > 1 ? ` · ogni ${x.ogni} giorni` : ''}${tardi ? ` · <span class="mtardi">in ritardo di ${tardi} ${tardi === 1 ? 'giorno' : 'giorni'}</span>` : ''}</small></button></div>`;
+    return `<div class="cmp${ok ? ' fatto' : ''}" style="--mc:var(--me)">${mRO ? `<span class="ck" aria-label="${ok ? 'Fatto' : 'Da fare'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>` : `<button type="button" class="ck tap" data-mfatto="${x.id}" aria-label="${ok ? 'Da rifare' : 'Fatto'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>`}<button type="button" class="cmx tap" data-mie="${x.id}"><b>${esc(x.e || '🔔')} ${esc(x.t)}</b><small>${x.h ? `alle ${esc(x.h)}` : 'oggi'}${(+x.ogni || 1) > 1 ? ` · ogni ${x.ogni} giorni` : ''}${tardi ? ` · <span class="mtardi">in ritardo di ${tardi} ${tardi === 1 ? 'giorno' : 'giorni'}</span>` : ''}</small></button></div>`;
   };
   const rigaInfo = (id, e, t, sub, sub2, forte) => `<button type="button" class="mriga tap${forte ? ' forte' : ''}" data-mie="${id}"><span class="mico" aria-hidden="true">${esc(e)}</span><span class="mtx"><b>${esc(t)}</b><small>${sub}</small></span>${sub2 ? `<span class="mdx">${sub2}</span>` : ''}</button>`;
   function mOggi() {
@@ -1432,14 +1467,15 @@
     const vuoto = !prom.length && !appu.length && !scad.length;
     return `<div class="card mcard">
        <div class="agtop"><b>Da fare oggi</b>${oggi.length ? `<small>${fatti === oggi.length ? 'Tutto fatto ✨' : `${fatti} di ${oggi.length}`}</small>` : ''}</div>
-       ${oggi.length ? `<div class="cmpl">${oggi.map(rigaProm).join('')}</div>` : `<div class="empty">${vuoto ? 'Qui arrivano i tuoi promemoria: le medicine, la pianta, quello che non vuoi dimenticare. Ti avviso io sul telefono.' : 'Niente per oggi.'}</div>`}
+       ${oggi.length ? `<div class="cmpl">${oggi.map(rigaProm).join('')}</div>` : `<div class="empty">${vuoto && mRO ? 'Non ha ancora aggiunto promemoria.' : vuoto ? 'Qui arrivano i tuoi promemoria: le medicine, la pianta, quello che non vuoi dimenticare. Ti avviso io sul telefono.' : 'Niente per oggi.'}</div>`}
        ${poi.length ? `<div class="mpoi">${poi.map(x => rigaInfo(x.id, x.e || '🔔', x.t, `ogni ${x.ogni} giorni`, traG(gTra(T, promQuando(x))))).join('')}</div>` : ''}
      </div>
-     ${appu.length ? `<div class="card mcard"><div class="agtop"><b>Appuntamenti fissi</b><small>solo tu li vedi</small></div>
+     ${appu.length ? `<div class="card mcard"><div class="agtop"><b>Appuntamenti fissi</b><small>per gli altri «Occupato»</small></div>
        ${appu.map(({ x, d }) => rigaInfo(x.id, x.e || '📅', x.t, `ogni ${GGL[+x.g]}${x.h ? ` alle ${esc(x.h)}` : ''}`, d === T ? 'oggi' : d === iso(addDays(TODAY, 1)) ? 'domani' : fmt(d, { weekday: 'short', day: 'numeric' }).replace(/\./g, ''), d === T)).join('')}</div>` : ''}
      ${scad.length ? `<div class="card mcard"><div class="agtop"><b>Scadenze</b></div>
        ${scad.map(({ x, p }) => rigaInfo(x.id, x.e || '📌', x.t, `${MESI[p.m - 1]} ${p.y}${(+x.ogni || 1) > 1 ? `, poi ogni ${x.ogni} anni` : ', ogni anno'}`, p.mesi === 0 ? 'questo mese' : p.mesi === 1 ? 'il mese prossimo' : `fra ${p.mesi} mesi`, p.mesi <= 1)).join('')}</div>` : ''}
-     <button type="button" class="btn tap" data-mnuovo="prom">+ Aggiungi</button>`;
+     ${mRO ? '' : `<button type="button" class="btn tap" data-mnuovo="prom">+ Aggiungi</button>
+     ${CONTROLLA.filter(c => c !== S.me && S.persone[c]).map(c => `<div class="empty mnota">👀 ${esc(P(c).nome)} vede questa sezione per aiutarti, tranne gli appuntamenti fissi.</div>`).join('')}`}`;
   }
   function mMostre() {
     const info = S.mostre || {}, l = (info.l || []).filter(x => x.al >= T || !x.al);
@@ -1450,11 +1486,11 @@
       const stato = !inCorso ? `<span class="mst arr">Dal ${fmt(x.dal, { day: 'numeric', month: 'short' }).replace(/\./g, '')}</span>` : fine <= 14 ? `<span class="mst fine">Ultimi giorni</span>` : `<span class="mst ora">In corso</span>`;
       return `<div class="mos">${x.img ? `<img src="${esc(x.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="mimg" aria-hidden="true">🖼️</span>'}
         <div class="mtx">${stato}<b>${esc(x.t)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}<small>${x.dal ? fmt(x.dal, { day: 'numeric', month: 'short' }).replace(/\./g, '') : ''}${x.al ? ` – ${fmt(x.al, { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, '')}` : ''}</small>
-        </div><span class="mbt">${x.link ? `<a class="tap" href="${esc(x.link)}" target="_blank" rel="noopener">Scopri di più</a>` : ''}<button type="button" class="tap mvo${mia ? ' on' : ''}" data-mvoglio="${esc(x.id)}" aria-pressed="${mia ? 'true' : 'false'}">${mia ? '♥ Ci voglio andare' : '♡ Ci voglio andare'}</button></span></div>`;
+        </div><span class="mbt">${x.link ? `<a class="tap" href="${esc(x.link)}" target="_blank" rel="noopener">Scopri di più</a>` : ''}${mRO ? (mia ? '<span class="mvo on">♥ Ci vuole andare</span>' : '') : `<button type="button" class="tap mvo${mia ? ' on' : ''}" data-mvoglio="${esc(x.id)}" aria-pressed="${mia ? 'true' : 'false'}">${mia ? '♥ Ci voglio andare' : '♡ Ci voglio andare'}</button>`}</span></div>`;
     };
     return `${!l.length ? `<div class="card"><div class="empty">${info.agg ? 'Nessuna mostra trovata in questo momento.' : 'Le mostre arrivano al primo aggiornamento (ogni lunedì e giovedì mattina).'}</div></div>` : ''}
      ${luoghi.map(lu => `<div class="card mcard"><div class="agtop"><b>${esc(lu)}</b></div>${l.filter(x => x.luogo === lu).sort((a, b) => (a.dal || '').localeCompare(b.dal || '')).map(riga).join('')}</div>`).join('')}
-     <div class="empty mnota">${voglio ? `Ne hai segnate ${voglio}: ti avviso una settimana prima che chiudano. ` : ''}Quando apre una mostra nuova ti arriva un avviso.${info.agg ? ` Aggiornato ${fmt(new Date(info.agg).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }).replace(/\./g, '')}.` : ''}</div>`;
+     <div class="empty mnota">${mRO ? (voglio ? `Ne ha segnate ${voglio}. ` : '') : `${voglio ? `Ne hai segnate ${voglio}: ti avviso una settimana prima che chiudano. ` : ''}Quando apre una mostra nuova ti arriva un avviso.`}${info.agg ? ` Aggiornato ${fmt(new Date(info.agg).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }).replace(/\./g, '')}.` : ''}</div>`;
   }
   function mListe() {
     const tutte = mie('lista').filter(x => x.cat === lsCat), ord = (a, b) => (b.creato || 0) - (a.creato || 0);
@@ -1464,8 +1500,8 @@
     const ph = { serie: 'Una serie da vedere…', doc: 'Un documentario…', libro: 'Un libro (es. un giallo)…', beauty: 'Un prodotto, un look, un link…' }[lsCat];
     return `<div class="mcat">${segHtml('mcat', LISTE.map(([k, e, n]) => [k, n]), lsCat)}</div>
      <div class="card mcard">
-       <form class="mlin" id="fLi"><input id="liT" maxlength="80" autocomplete="off" placeholder="${ph}" aria-label="${ph}"><button class="tap" aria-label="Aggiungi">+</button></form>
-       ${tutte.length ? gruppo('ora') + gruppo('da') + gruppo('fatto') : `<div class="empty">Ancora niente qui. Scrivi un titolo e tocca +.</div>`}
+       ${mRO ? '' : `<form class="mlin" id="fLi"><input id="liT" maxlength="80" autocomplete="off" placeholder="${ph}" aria-label="${ph}"><button class="tap" aria-label="Aggiungi">+</button></form>`}
+       ${tutte.length ? gruppo('ora') + gruppo('da') + gruppo('fatto') : `<div class="empty">${mRO ? 'Ancora niente qui.' : 'Ancora niente qui. Scrivi un titolo e tocca +.'}</div>`}
      </div>`;
   }
   // Foglio per aggiungere o cambiare un promemoria, un appuntamento fisso o una scadenza (k), o una cosa di una lista.
@@ -1476,11 +1512,11 @@
   };
   function sheetMie(id, kNuovo) {
     const x = id ? S.mie.find(y => y.id === id) : null; if (id && !x) return;
-    const k = x ? x.k : kNuovo || 'prom';
+    const k = x ? x.k : kNuovo || 'prom', ro = !!x && x.per !== S.me;
     if (k === 'lista') return sheetLista(x);
     const v = x || { e: '', t: '', h: k === 'prom' ? '09:00' : '', ogni: '1', g: 3, mese: String(+T.slice(5, 7)), anno: T.slice(0, 4) };
     const giorni = [1, 2, 3, 4, 5, 6, 0];
-    openSheet(`<h3>${x ? 'Cambia' : 'Nuovo'}</h3><form class="stack" id="fMi" data-id="${x ? x.id : ''}" data-k="${k}">
+    openSheet(`<h3>${ro ? esc((x.e || '') + ' ' + x.t) : x ? 'Cambia' : 'Nuovo'}</h3><form class="stack" id="fMi" data-id="${x ? x.id : ''}" data-k="${k}"><fieldset class="stack mro"${ro ? ' disabled' : ''}>
       ${x ? '' : segHtml('mik', [['prom', 'Promemoria'], ['appu', 'Fisso'], ['scad', 'Scadenza']], k)}
       ${x ? '' : `<div class="tipi">${SUGG[k].map(([e, t, o], i) => `<button type="button" class="tp tap" data-msug="${i}"><b>${e}</b>${esc(t)}</button>`).join('')}</div>`}
       <input type="hidden" id="miE" value="${esc(v.e || '')}">
@@ -1489,24 +1525,24 @@
         <label>Quanto spesso</label>${segHtml('miogni', OGNI, String(v.ogni || '1'))}` : ''}
       ${k === 'appu' ? `<label>Che giorno</label>${segHtml('mig', giorni.map(g => [String(g), GG[g]]), String(v.g))}
         <label for="miH">A che ora</label><input id="miH" type="time" value="${esc(v.h || '')}">
-        <div class="muted">Lo vedi solo tu. La sera prima ti arriva un avviso.</div>` : ''}
+        <div class="muted">Il titolo lo vedi solo tu: nel calendario comune gli altri vedono «Occupato». La sera prima ti arriva un avviso.</div>` : ''}
       ${k === 'scad' ? `<label for="miM">Che mese</label><select id="miM">${MESI.map((n, i) => `<option value="${i + 1}"${+v.mese === i + 1 ? ' selected' : ''}>${n}</option>`).join('')}</select>
         <label for="miA">La prima volta (anno)</label><input id="miA" type="number" inputmode="numeric" min="2020" max="2100" value="${esc(String(v.anno || T.slice(0, 4)))}">
         <label>Quanto spesso</label>${segHtml('miogni', [['1', 'Ogni anno'], ['2', 'Ogni 2 anni'], ['3', 'Ogni 3 anni']], String(v.ogni || '1'))}
         <div class="muted">Ti avviso il mese prima e una settimana prima della fine del mese.</div>` : ''}
-      <button class="btn tap">${x ? 'Salva' : 'Aggiungi'}</button>
-      ${x ? `<button type="button" class="btn bad tap" data-mvia="${x.id}">Elimina</button>` : ''}</form>`);
+      </fieldset>${ro ? `<div class="src">È di ${esc(P(x.per).nome)}: solo lei può cambiarlo</div>` : `<button class="btn tap">${x ? 'Salva' : 'Aggiungi'}</button>
+      ${x ? `<button type="button" class="btn bad tap" data-mvia="${x.id}">Elimina</button>` : ''}`}</form>`);
   }
   function sheetLista(x) {
-    const st = x.stato || 'da', cerca = encodeURIComponent(x.t), link = /^https?:\/\//.test(x.x || '') ? x.x.split(/\s/)[0] : '';
+    const ro = x.per !== S.me, st = x.stato || 'da', cerca = encodeURIComponent(x.t), link = /^https?:\/\//.test(x.x || '') ? x.x.split(/\s/)[0] : '';
     const dove = x.cat === 'libro' ? `https://www.google.com/search?tbm=bks&q=${cerca}` : x.cat === 'beauty' ? `https://www.google.com/search?q=${cerca}` : `https://www.justwatch.com/it/cerca?q=${cerca}`;
-    openSheet(`<h3>${LISTA[x.cat] ? LISTA[x.cat].e : ''} ${esc(x.t)}</h3><form class="stack" id="fLd" data-id="${x.id}">
+    openSheet(`<h3>${LISTA[x.cat] ? LISTA[x.cat].e : ''} ${esc(x.t)}</h3><form class="stack" id="fLd" data-id="${x.id}"><fieldset class="stack mro"${ro ? ' disabled' : ''}>
       ${segHtml('lstato', [['da', statoN(x.cat, 'da')], ['ora', statoN(x.cat, 'ora')], ['fatto', statoN(x.cat, 'fatto')]], st)}
-      <label>Quanto ti è piaciuto</label><div class="mvota" data-v="${x.stelle || 0}">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="tap${(x.stelle || 0) >= n ? ' on' : ''}" data-lstelle="${n}" aria-label="${n} stelle">★</button>`).join('')}</div>
+      <label>${ro ? 'Quanto le è piaciuto' : 'Quanto ti è piaciuto'}</label><div class="mvota" data-v="${x.stelle || 0}">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="tap${(x.stelle || 0) >= n ? ' on' : ''}" data-lstelle="${n}" aria-label="${n} stelle">★</button>`).join('')}</div>
       <label for="ldT">Titolo</label><input id="ldT" maxlength="80" value="${esc(x.t)}">
-      <label for="ldX">Note o link</label><textarea id="ldX" maxlength="300" rows="3" placeholder="${x.cat === 'libro' ? 'es. autore, consigliato da…' : x.cat === 'beauty' ? 'es. link del prodotto, dove si compra' : 'es. su che app si vede, consigliata da…'}">${esc(x.x || '')}</textarea>
+      <label for="ldX">Note o link</label><textarea id="ldX" maxlength="300" rows="3" placeholder="${x.cat === 'libro' ? 'es. autore, consigliato da…' : x.cat === 'beauty' ? 'es. link del prodotto, dove si compra' : 'es. su che app si vede, consigliata da…'}">${esc(x.x || '')}</textarea></fieldset>
       <div class="mbt">${link ? `<a class="tap" href="${esc(link)}" target="_blank" rel="noopener">Apri il link</a>` : ''}<a class="tap" href="${dove}" target="_blank" rel="noopener">${x.cat === 'libro' ? 'Cerca il libro' : x.cat === 'beauty' ? 'Cerca' : 'Dove vederla'}</a></div>
-      <button class="btn tap">Salva</button><button type="button" class="btn bad tap" data-mvia="${x.id}">Elimina</button></form>`);
+      ${ro ? `<div class="src">È di ${esc(P(x.per).nome)}: solo lei può cambiarlo</div>` : `<button class="btn tap">Salva</button><button type="button" class="btn bad tap" data-mvia="${x.id}">Elimina</button>`}</form>`);
   }
   // La scheda Scuola ha quattro parti, come un diario di scuola: Orario, Agenda, Voti, Materie (scelta di Sasha del 01/11/2026:
   // "praticamente uguale" all'app che usa la sorella).
@@ -2265,12 +2301,13 @@
     }
     if (d.mie) return sheetMie(d.mie);
     if (d.mvoglio) {
+      if (S.mie.some(y => y.k === 'mostra' && y.per !== S.me && y.mid === d.mvoglio) && !CASA.includes(S.me)) return;
       const mia = mostraMia(d.mvoglio); if (mia) return DATI.elimina('mie', mia.id).catch(sbaglio);
       const m = ((S.mostre || {}).l || []).find(y => y.id === d.mvoglio); if (!m) return;
       toast('♥ Segnata: ti avviso una settimana prima che chiuda');
       return DATI.aggiungi('mie', { per: S.me, k: 'mostra', mid: m.id, t: String(m.t).slice(0, 80), al: m.al || '', creato: Date.now() }).catch(sbaglio);
     }
-    if (d.mvia) { closeSheet(); return DATI.elimina('mie', d.mvia).then(() => toast('Eliminato')).catch(sbaglio); }
+    if (d.mvia) { const x = S.mie.find(y => y.id === d.mvia); if (!x || x.per !== S.me) return; closeSheet(); return DATI.elimina('mie', d.mvia).then(() => toast('Eliminato')).catch(sbaglio); }
     if (d.sctab) { if (scTab === d.sctab) return; scTab = d.sctab; anelloAnim = true; LS.set('noi4-scuola-tab', scTab); segSet(t.parentElement, TABS_S.findIndex(x => x[0] === scTab)); return rMio(); }
     if (d.votimat) return sheetVotiMat(d.di, d.votimat, d.anno);
     if (d.votonuovo) return sheetVoto(d.votonuovo, d.mat || '');
@@ -2478,7 +2515,8 @@
         render(); toast(per === S.me ? 'Aggiunto alla tua lista 🎁' : 'Idea salvata: resta un segreto 🤫');
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'fMi') {
-      const k = f.dataset.k, id = f.dataset.id, tt = $('#miT').value.trim().replace(/\s+/g, ' ').slice(0, 60);
+      const k = f.dataset.k, id = f.dataset.id; if (id && !S.mie.some(y => y.id === id && y.per === S.me)) return;
+      const tt = $('#miT').value.trim().replace(/\s+/g, ' ').slice(0, 60);
       if (!tt) return toast('Scrivi cosa');
       const on = (n) => { const b = f.querySelector(`[data-${n}].on`); return b ? b.dataset[n] : null; };
       const doc = { per: S.me, k, t: tt, e: $('#miE').value || ({ prom: '🔔', appu: '📅', scad: '📌' })[k] };
@@ -2492,6 +2530,7 @@
       $('#liT').value = '';
       try { await DATI.aggiungi('mie', { per: S.me, k: 'lista', cat: lsCat, t: tt, x: '', stato: 'da', stelle: 0, creato: Date.now() }); } catch (er) { return sbaglio(er); }
     } else if (f.id === 'fLd') {
+      if (!S.mie.some(y => y.id === f.dataset.id && y.per === S.me)) return;
       const st = f.querySelector('[data-lstato].on'), v = +(f.querySelector('.mvota').dataset.v || 0), tt = $('#ldT').value.trim().replace(/\s+/g, ' ').slice(0, 80);
       if (!tt) return toast('Scrivi il titolo');
       closeSheet();
@@ -2601,12 +2640,14 @@
         DATI.ascolta('voti', l => { scDati.v[pid] = l; unisciScuola(); }, ['per', '==', pid])]
         : [DATI.ascolta('compiti', l => { scDati.c[pid] = l; unisciScuola(); }, [['per', '==', pid], ['tipo', 'in', ['interrogazione', 'verifica']]])]; }
   }
+  let mieDati = {};
+  function unisciMie() { S.mie = Object.values(mieDati).flat(); if (mieDati.io) mieOk = true; allineaAppu(); render(); }
   function fermaTutto() {
     if (!avviato) return;
     avviato = false;
     stopDati.splice(0).forEach(f => { try { f(); } catch (e) {} });
     for (const pid in stopCopie) { stopCopie[pid].forEach(f => { try { f && f(); } catch (e) {} }); delete stopCopie[pid]; }
-    scDati.c = {}; scDati.v = {};
+    scDati.c = {}; scDati.v = {}; mieDati = {}; impOk = mieOk = false; appuFatti.clear();
     scAzzera(); voAnno = null;
     if (stopCena) { stopCena(); stopCena = null; }
     if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
@@ -2629,16 +2670,18 @@
       a(DATI.ascolta('voti', l => { scDati.v.io = l; unisciScuola(); }, ['per', '==', persona]));
       // Sezione "Per me": le mie cose (solo mie, regola per == io) e le mostre, solo per chi ha la sezione.
       if (CASA.includes(persona)) {
-        a(DATI.ascolta('mie', l => { S.mie = l; render(); }, ['per', '==', persona]));
-        a(DATI.ascoltaDoc('info', 'mostre', d => { S.mostre = d || {}; render(); }));
+        a(DATI.ascolta('mie', l => { mieDati.io = l; unisciMie(); }, ['per', '==', persona]));
         // Gli avvisi delle mostre nuove partono per chi ha questo segno (lo legge il programma "Mostre").
         DATI.imposta('mie', persona + '-avvisi', { per: persona, k: 'avvisi', mostre: true }).catch(() => {});
       }
+      // Chi controlla (Sasha) legge anche le sezioni "Per me" degli altri, senza gli appuntamenti fissi (le regole lo permettono solo così).
+      if (CONTROLLA.includes(persona)) for (const pid of CASA) if (pid !== persona) a(DATI.ascolta('mie', l => { mieDati[pid] = l; unisciMie(); }, [['per', '==', pid], ['k', 'in', MIE_VISTE]]));
+      if (CASA.includes(persona) || CONTROLLA.includes(persona)) a(DATI.ascoltaDoc('info', 'mostre', d => { S.mostre = d || {}; render(); }));
       a(DATI.ascolta('ricette', l => { S.ricette = l; render(); if (ricAperta) sheetRicetta(ricAperta, true); }));
       a(DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); }));
       a(DATI.ascolta('viaggi', l => { S.viaggi = l; render(); }));
       a(DATI.ascolta('foto', l => { S.foto = l; render(); }));
-      a(DATI.ascolta('impegni', l => { S.impRaw = l; mappaImpegni(); render(); }));
+      a(DATI.ascolta('impegni', l => { S.impRaw = l; impOk = true; mappaImpegni(); render(); }));
       a(DATI.ascolta('note', l => { S.note = l; render(); }));
       a(DATI.ascolta('proposte', l => { S.proposte = l; render(); }));
       a(DATI.ascolta('spesa', l => { S.spesa = l; render(); }));

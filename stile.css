@@ -776,3 +776,6 @@ html.scorso .topbar b{transform:none}
 .mvota button{width:44px;height:44px;border-radius:12px;font-size:24px;color:var(--line);background:var(--soft);transition:color .2s,transform .15s var(--ease)}
 .mvota button.on{color:var(--p-ambra)}
 .mvota button:active{transform:scale(.9)}
+/* Sola lettura (Sasha guarda la sezione di un altro, v65): il fieldset non deve mostrare bordi. */
+.mro{border:0;margin:0;padding:0;min-width:0}
+.mro:disabled .seg button,.mro:disabled input,.mro:disabled select,.mro:disabled textarea{opacity:1;color:var(--fg);-webkit-text-fill-color:var(--fg)}
