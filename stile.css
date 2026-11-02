@@ -723,7 +723,7 @@ html.scorso .topbar b{transform:none}
 .ssett .sgiorni{min-width:0}
 .sgiorni button{position:relative}
 .sgiorni .sdot{background:var(--muted)}
-.sgiorni .sdot.pr{background:var(--p-ambra)}
+.sgiorni .sdot.sdp{background:var(--p-ambra)}
 .sgiorni button.on .sdot{background:currentColor}
 .aglist{display:grid;gap:8px}
 .agg{font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 2px 0}
