@@ -9,7 +9,7 @@
 - conflitti: a chi ha due impegni che si accavallano oggi, domani o dopodomani;
 - note: quando una nota nuova è messa in evidenza (le note non si scrivono più, restano le vecchie);
 - mie (sezione "Per me", 02/11/2026): i promemoria all'ora giusta (e di nuovo dopo mezz'ora se non è stato toccato
-  "Fatto"), l'appuntamento fisso la sera prima, le scadenze il mese prima e una settimana prima della fine del mese,
+  "Fatto"), le scadenze il mese prima e una settimana prima della fine del mese,
   le mostre segnate una settimana prima che chiudano e le mostre nuove a chi le segue.
 Ognuno sceglie quali ricevere dall'app (persone/<id>.notifiche). Cosa è già stato mandato
 si ricorda in sistema/notifiche, così niente arriva due volte.
@@ -225,10 +225,8 @@ def main():
             elif ult != ieri and (ogni == 1 or not ult or dovuto <= ieri) and f"mie1|{x['id']}|{ieri}" not in gia \
                     and dt.timedelta(0) <= ora - dt.datetime.fromisoformat(f"{ieri}T{x['h']}").replace(tzinfo=ROMA) <= dt.timedelta(minutes=90):
                 manda(p, "mie", f"{e} {t}".strip(), "Quando hai fatto, tocca Fatto nell'app.", f"mie1|{x['id']}|{ieri}")
-        elif k == "appu" and ora.hour == 20:
-            g = (ora.date().weekday() + 2) % 7  # domani, contato come nell'app (0 = domenica)
-            if int(x.get("g", -1)) == g:
-                manda(p, "mie", f"Domani: {t}", f"Alle {x['h']}" if x.get("h") else "Domani", f"appu|{x['id']}|{domani}")
+        # L'appuntamento fisso (k "appu") qui non manda niente: dalla v65 è anche un impegno del calendario comune
+        # ("Occupato" per gli altri) e ha già il promemoria prima dell'ora e il riepilogo della sera, col titolo vero solo per lei.
         elif k == "scad" and ora.hour == 10:
             mese, anno, ogni = int(x.get("mese") or 0), int(x.get("anno") or 0), max(1, int(x.get("ogni") or 1))
             if not 1 <= mese <= 12:
