@@ -1201,6 +1201,16 @@
   /* ---------- Fogli dal basso ---------- */
   let ignoraPop = 0; // i "torna indietro" fatti dall'app stessa
   const aperto = () => $('#sheet').classList.contains('on');
+  // Tastiera dell'iPhone (02/11/2026, Sasha: "la tastiera copre la nota"): Safari non sposta i fogli fissi,
+  // quindi alziamo il foglio dell'altezza della tastiera, letta dal visualViewport.
+  if (window.visualViewport) {
+    const vv = window.visualViewport, kb = () => {
+      const h = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      document.documentElement.style.setProperty('--kb', (h > 80 ? h : 0) + 'px');
+      document.documentElement.classList.toggle('kbon', h > 80);
+    };
+    vv.addEventListener('resize', kb, { passive: true }); vv.addEventListener('scroll', kb, { passive: true });
+  }
   function openSheet(html, after) {
     if (!aperto()) history.pushState({ foglio: 1 }, '');
     $('#sheetIn').innerHTML = `<div class="grab"></div>` + html; $('#veil').classList.add('on'); $('#sheet').classList.add('on'); $('#sheet').scrollTop = 0; after && after();
