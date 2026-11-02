@@ -1347,7 +1347,7 @@
   let mioNuova = false;
   // Calendario della scuola: mese, giorno scelto e animazione per ogni sezione (la propria e le copie di prova non si muovono insieme).
   const scSt = {};
-  const scStato = (di) => scSt[di] || (scSt[di] = { day: null, mese: null, anim: '' });
+  const scStato = (di) => scSt[di] || (scSt[di] = { day: null, mese: null, anim: '', ag: null, passate: false });
   const scAzzera = () => { for (const k in scSt) delete scSt[k]; };
   const mioAperto = () => $('#mio').classList.contains('on');
   // alPostoDelFoglio: aperta da un foglio, prende il suo posto nella cronologia (così "indietro" resta giusto).
@@ -1378,85 +1378,91 @@
   }
   // La scheda Scuola ha quattro parti, come un diario di scuola: Orario, Agenda, Voti, Materie (scelta di Sasha del 01/11/2026:
   // "praticamente uguale" all'app che usa la sorella).
-  const TABS_S = [['orario', 'Calendario'], ['agenda', 'Agenda'], ['voti', 'Voti'], ['materie', 'Materie']];
-  let scTab = LS.get('noi4-scuola-tab', 'orario'); if (!TABS_S.some(t => t[0] === scTab)) scTab = 'orario';
+  // Tre schede (scelta di Sasha del 02/11/2026): Oggi (lezioni della settimana), Agenda (mese + cose da fare), Voti (con le materie).
+  const TABS_S = [['oggi', 'Oggi'], ['agenda', 'Agenda'], ['voti', 'Voti']];
+  let scTab = { orario: 'oggi', materie: 'voti' }[LS.get('noi4-scuola-tab', 'oggi')] || LS.get('noi4-scuola-tab', 'oggi');
+  if (!TABS_S.some(t => t[0] === scTab)) scTab = 'oggi';
   function rScuola(m, sr, k) {
     const s = S.scuola[m.di], colM = coloriMat(s), nome = esc(P(m.di).nome);
-    const corpo = { orario: scOrario, agenda: scAgenda, voti: scVoti, materie: scMaterie }[scTab](m, s, colM);
+    const corpo = { oggi: scOggi, agenda: scAgenda, voti: scVoti }[scTab](m, s, colM);
     anelloAnim = false;
     return `${m.copia ? `<div class="hint mprova${sr(k * 3 + 1)}">👀 Stai guardando la sezione di ${nome}: vedi le sue lezioni, note e voti come li vede lei. Solo lei può cambiarli.</div>` : ''}
      <div class="sec${sr(k * 3 + 1)}">🎒 Scuola${s.classe ? ` · ${esc(s.classe)}` : ''}</div>
      <div class="sctabs${sr(k * 3 + 2)}">${segHtml('sctab', TABS_S, scTab)}</div>
      <div class="scbody" data-tab="${scTab}">${corpo}</div>`;
   }
-  // Calendario della scuola (Sasha, 01/11/2026): un mese alla volta, solo i giorni di scuola (lun-ven o lun-sab),
-  // con le interrogazioni, le verifiche e i compiti segnati. Sotto, le lezioni e le note del giorno scelto.
   const PROVA = ['verifica', 'interrogazione'];
-  function scOrario(m, s, colM) {
+  // Una lezione con le sue note sopra (interrogazione, verifica…); toccandola si segna qualcosa per quella materia.
+  const rigaLez = (m, x, nn, colM) => `<${m.copia ? 'div' : 'button type="button"'} class="lz${m.copia ? '' : ' tap'}"${m.copia ? '' : ` data-lez="${esc(x.m)}" data-di="${m.di}"`} style="--mc:${colM[x.m]}"><span class="lo"><b>${x.da}ª${x.a > x.da ? `–${x.a}ª` : ''}</b>${x.h ? `<small>${esc(x.h)}</small>` : ''}</span><span class="lm"><b>${esc(x.m)}</b>${x.prof ? `<small>${esc(x.prof)}</small>` : ''}${nn.length ? `<span class="lzn">${nn.map(c => `<span class="${c.fatto ? 'ok' : ''}">${(TIPO_C[c.tipo] || TIPO_C.altro).e} ${esc((TIPO_C[c.tipo] || TIPO_C.altro).n)}</span>`).join('')}</span>` : ''}</span>${m.copia ? '' : '<span class="lzp" aria-hidden="true">+</span>'}</${m.copia ? 'div' : 'button'}>`;
+  // Oggi: la settimana di scuola in alto (si scorre con le frecce), sotto le lezioni del giorno scelto con le loro note.
+  function scOggi(m, s, colM) {
     const st = scStato(m.di);
-    if (!st.day || !aScuola(s, st.day) && st.day < T && !st.mese) st.day = giornoScuola(s);
-    if (!st.mese) st.mese = st.day.slice(0, 7);
-    const mioDay = st.day, scMese = st.mese;
-    const ultimo = Math.min(6, Math.max(5, ...(s.orario || []).map(x => +x.g)));
+    if (!st.day) st.day = giornoScuola(s);
+    const g0 = st.day, ultimo = Math.min(6, Math.max(5, ...(s.orario || []).map(x => +x.g))), lun = inizioSettimana(new Date(g0 + 'T12:00:00'));
+    const giorni = [...Array(ultimo)].map((_, i) => iso(addDays(lun, i))), kSel = Math.max(0, giorni.indexOf(g0));
+    const note = mieiC(m.di), lz = aScuola(s, g0) ? lezioni(s, gSett(g0)) : [];
+    const delG = note.filter(c => c.d === g0), conLez = new Set(lz.map(x => x.m)), altre = delG.filter(c => !conLez.has(c.m));
+    const ore = lz.reduce((n, x) => n + x.a - x.da + 1, 0);
+    const nome = g0 === T ? 'Oggi' : g0 === iso(addDays(TODAY, 1)) ? 'Domani' : fmt(g0, { weekday: 'long', day: 'numeric', month: 'long' });
+    return `<div class="card scuola">
+       <div class="ssett"><button type="button" class="tap cfr" data-scsett="-1" data-di="${m.di}" aria-label="Settimana prima"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+         <div class="seg sgiorni" style="--n:${giorni.length};--k:${kSel}"><i class="spill"></i>${giorni.map(d => `<button type="button" class="tap${d === g0 ? ' on' : ''}${d === T ? ' oggi' : ''}${aScuola(s, d) ? '' : ' no'}" data-mioday="${d}" data-di="${m.di}"><small>${GG[gSett(d)]}</small><b>${+d.slice(8)}</b>${note.some(c => c.d === d && !c.fatto) ? `<i class="sdot${note.some(c => c.d === d && !c.fatto && PROVA.includes(c.tipo)) ? ' pr' : ''}"></i>` : ''}</button>`).join('')}</div>
+         <button type="button" class="tap cfr" data-scsett="1" data-di="${m.di}" aria-label="Settimana dopo"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
+       <div class="lgiorno"><b>${nome}</b>${lz.length ? `<small>${lz[0].h ? `${esc(lz[0].h)}–${esc(lz[lz.length - 1].fine)} · ` : ''}${ore} ${ore === 1 ? 'ora' : 'ore'}</small>` : ''}</div>
+       ${lz.length ? `<div class="lez">${lz.map(x => rigaLez(m, x, delG.filter(c => c.m === x.m), colM)).join('')}</div>` : `<div class="empty">${inPausa(s, g0) ? 'Vacanza: niente scuola 🎉' : 'Niente scuola questo giorno.'}</div>`}
+       ${altre.length ? `<div class="cmpl">${altre.map(c => rigaC(c, colM)).join('')}</div>` : ''}
+       ${lz.length && !m.copia ? `<div class="empty">Tocca una materia per segnare un'interrogazione, una verifica o i compiti.</div>` : ''}
+     </div>`;
+  }
+  // Agenda (02/11/2026): il mese in alto con i giorni delle cose da fare (bordo ambra = prova); sotto l'elenco per giorno.
+  // Toccando un giorno l'elenco mostra solo quel giorno; ritoccandolo si torna a tutto.
+  function scAgenda(m, s, colM) {
+    const st = scStato(m.di);
+    if (!st.mese) st.mese = (st.ag || T).slice(0, 7);
+    const scMese = st.mese, ultimo = Math.min(6, Math.max(5, ...(s.orario || []).map(x => +x.g)));
     const y = +scMese.slice(0, 4), mo = +scMese.slice(5, 7), primo = new Date(y, mo - 1, 1, 12);
-    const note = mieiC(m.di), daFare = (d) => note.filter(c => c.d === d && !c.fatto);
+    const note = mieiC(m.di), ord = (a, b) => a.d.localeCompare(b.d) || (a.creato || 0) - (b.creato || 0);
     const celle = []; let lun = inizioSettimana(primo);
-    if (iso(addDays(lun, ultimo - 1)).slice(0, 7) < scMese) lun = addDays(lun, 7); // la prima settimana inizia nel weekend
+    if (iso(addDays(lun, ultimo - 1)).slice(0, 7) < scMese) lun = addDays(lun, 7);
     while (iso(lun).slice(0, 7) <= scMese) {
       for (let i = 0; i < ultimo; i++) {
         const d = iso(addDays(lun, i));
         if (d.slice(0, 7) !== scMese) { celle.push('<span class="cg fuori" aria-hidden="true"></span>'); continue; }
-        const nn = daFare(d), pr = nn.filter(c => PROVA.includes(c.tipo));
+        const nn = note.filter(c => c.d === d && !c.fatto), pr = nn.some(c => PROVA.includes(c.tipo));
         const lab = `${fmt(d, { weekday: 'long', day: 'numeric', month: 'long' })}${nn.length ? `: ${nn.map(c => esc((TIPO_C[c.tipo] || TIPO_C.altro).n)).join(', ')}` : ''}`;
-        celle.push(`<button type="button" class="cg tap${d === mioDay ? ' on' : ''}${d === T ? ' oggi' : ''}${aScuola(s, d) ? '' : ' no'}${pr.length ? ' prova' : ''}" data-mioday="${d}" data-di="${m.di}" aria-label="${lab}"><b>${+d.slice(8)}</b>${nn.length ? `<span class="cgd">${nn.slice(0, 3).map(c => `<i style="--mc:${colM[c.m] || 'var(--acc)'}"></i>`).join('')}</span>` : ''}</button>`);
+        celle.push(`<button type="button" class="cg tap${d === st.ag ? ' on' : ''}${d === T ? ' oggi' : ''}${aScuola(s, d) ? '' : ' no'}${pr ? ' prova' : ''}" data-agday="${d}" data-di="${m.di}" aria-label="${lab}"><b>${+d.slice(8)}</b>${nn.length ? `<span class="cgd">${nn.slice(0, 3).map(c => `<i style="--mc:${colM[c.m] || 'var(--acc)'}"></i>`).join('')}</span>` : ''}</button>`);
       }
       lun = addDays(lun, 7);
     }
-    const nMese = note.filter(c => c.d.slice(0, 7) === scMese && !c.fatto), nProve = nMese.filter(c => PROVA.includes(c.tipo)).length;
-    const lz = aScuola(s, mioDay) ? lezioni(s, gSett(mioDay)) : [];
-    const delGiornoC = note.filter(c => c.d === mioDay), conLez = new Set(lz.map(x => x.m)), altre = delGiornoC.filter(c => !conLez.has(c.m));
     const anim = st.anim; st.anim = '';
+    const daFare = note.filter(c => !c.fatto), prove = daFare.filter(c => c.d >= T && PROVA.includes(c.tipo)).length;
+    // L'elenco: il giorno scelto, oppure tutto da oggi in poi (più quello rimasto indietro e non fatto).
+    const lista = (st.ag ? note.filter(c => c.d === st.ag) : note.filter(c => c.d >= T || !c.fatto)).sort(ord);
+    const gruppi = []; for (const c of lista) { const g = gruppi[gruppi.length - 1]; if (g && g.d === c.d) g.l.push(c); else gruppi.push({ d: c.d, l: [c] }); }
+    const fraG = (d) => { const n = Math.round((new Date(d + 'T12:00:00') - new Date(T + 'T12:00:00')) / 864e5); return n > 1 ? ` · fra ${n} giorni` : ''; };
+    const titoloG = (d) => d < T ? `${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')} · rimasto indietro` : d === T ? 'Oggi' : d === iso(addDays(TODAY, 1)) ? 'Domani' : fmt(d, { weekday: 'long', day: 'numeric', month: 'short' }).replace(/\./g, '') + fraG(d);
+    const passate = st.ag ? [] : note.filter(c => c.d < T && c.fatto).sort((a, b) => ord(b, a)).slice(0, 12);
     return `<div class="card scuola">
        <div class="cmese"><button type="button" class="tap cfr" data-scmese="-1" data-di="${m.di}" aria-label="Mese prima"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-         <div><b>${fmt(scMese + '-01', { month: 'long', year: 'numeric' })}</b><small>${nMese.length ? `${nMese.length} da fare${nProve ? ` · ${nProve} ${nProve === 1 ? 'prova' : 'prove'}` : ''}` : 'Niente segnato'}</small></div>
+         <div><b>${fmt(scMese + '-01', { month: 'long', year: 'numeric' })}</b><small>${daFare.length ? `${daFare.length} da fare${prove ? ` · ${prove} ${prove === 1 ? 'prova' : 'prove'}` : ''}` : 'Tutto fatto ✨'}</small></div>
          <button type="button" class="tap cfr" data-scmese="1" data-di="${m.di}" aria-label="Mese dopo"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
-       <div class="cgr${anim ? ' cgr-' + anim : ''}" data-di="${m.di}" style="--c:${ultimo}">${GG.slice(1, ultimo + 1).map(g => `<span class="cgh">${g.slice(0, 1)}</span>`).join('')}${celle.join('')}</div>
-       <div class="lgiorno"><b>${mioDay === T ? 'Oggi' : mioDay === iso(addDays(TODAY, 1)) ? 'Domani' : fmt(mioDay, { weekday: 'long', day: 'numeric', month: 'long' })}</b>${lz.length && lz[0].h ? `<small>${esc(lz[0].h)}–${esc(lz[lz.length - 1].fine)}</small>` : ''}</div>
-       ${lz.length ? `<div class="lez">${lz.map(x => { const nn = delGiornoC.filter(c => c.m === x.m);
-         return `<${m.copia ? 'div' : 'button type="button"'} class="lz${m.copia ? '' : ' tap'}"${m.copia ? '' : ` data-lez="${esc(x.m)}" data-di="${m.di}"`} style="--mc:${colM[x.m]}"><span class="lo"><b>${x.da}ª${x.a > x.da ? `–${x.a}ª` : ''}</b>${x.h ? `<small>${esc(x.h)}</small>` : ''}</span><span class="lm"><b>${esc(x.m)}</b>${x.prof ? `<small>${esc(x.prof)}</small>` : ''}${nn.length ? `<span class="lzn">${nn.map(c => `<span class="${c.fatto ? 'ok' : ''}">${(TIPO_C[c.tipo] || TIPO_C.altro).e} ${esc((TIPO_C[c.tipo] || TIPO_C.altro).n)}</span>`).join('')}</span>` : ''}</span>${m.copia ? '' : '<span class="lzp" aria-hidden="true">+</span>'}</${m.copia ? 'div' : 'button'}>`; }).join('')}</div>
-       ${altre.length ? `<div class="cmpl">${altre.map(c => rigaC(c, colM)).join('')}</div>` : ''}
-       ${m.copia ? '' : `<div class="empty">Tocca una materia per segnare un'interrogazione, una verifica o i compiti.</div>`}`
-       : `${altre.length ? `<div class="cmpl">${altre.map(c => rigaC(c, colM)).join('')}</div>` : ''}<div class="empty">${inPausa(s, mioDay) ? 'Vacanza: niente scuola 🎉' : 'Niente scuola questo giorno.'}</div>`}
-     </div>`;
+       <div class="cgr${anim ? ' cgr-' + anim : ''}" style="--c:${ultimo}">${GG.slice(1, ultimo + 1).map(g => `<span class="cgh">${g.slice(0, 1)}</span>`).join('')}${celle.join('')}</div>
+     </div>
+     <div class="card aglist">
+       ${st.ag ? `<div class="agtop"><span><b>${titoloG(st.ag).split(' · ')[0]}</b>${titoloG(st.ag).split(' · ')[1] ? `<small> · ${titoloG(st.ag).split(' · ')[1]}</small>` : ''}</span><button type="button" class="tap agtutto" data-agday="${st.ag}" data-di="${m.di}">Mostra tutto</button></div>` : ''}
+       ${gruppi.length ? gruppi.map(g => `${st.ag ? '' : `<div class="agg${g.d < T ? ' tardi' : ''}">${titoloG(g.d)}</div>`}<div class="cmpl">${g.l.map(c => rigaC(c, colM, true)).join('')}</div>`).join('')
+       : `<div class="empty">${st.ag ? 'Niente segnato per questo giorno.' : 'Niente in arrivo.'}</div>`}
+       ${m.copia ? '' : `<button type="button" class="btn tap" data-nonuovo="${m.di}" data-d="${st.ag || ''}">+ Aggiungi${st.ag ? ' per questo giorno' : ''}</button>`}
+     </div>
+     ${passate.length ? `<button type="button" class="tap agpass${st.passate ? ' on' : ''}" data-agpass="${m.di}">${st.passate ? 'Nascondi' : 'Mostra'} le cose già fatte (${passate.length})</button>
+       ${st.passate ? `<div class="card"><div class="cmpl passate">${passate.map(c => rigaC(c, colM)).join('')}</div></div>` : ''}` : ''}`;
   }
-  // Cambio mese: il giorno scelto diventa il prossimo giorno di scuola (se cade in quel mese, come quando si apre),
-  // altrimenti il primo giorno di scuola del mese. Mai un sabato o una domenica che nella griglia non c'è.
+  // Cambio mese dell'Agenda: il giorno scelto si toglie (si vede tutto il mese nuovo).
   function cambiaMese(dir, s, st) {
     const y = +st.mese.slice(0, 4), mo = +st.mese.slice(5, 7) - 1 + dir, n = new Date(y, mo, 1, 12);
-    st.mese = iso(n).slice(0, 7); st.anim = dir > 0 ? 'av' : 'in';
-    const g = giornoScuola(s); if (g.slice(0, 7) === st.mese) { st.day = g; return; }
-    for (let i = 0; i < 31; i++) { const d = iso(addDays(n, i)); if (d.slice(0, 7) !== st.mese) break; if (aScuola(s, d)) { st.day = d; return; } }
-    st.day = T.slice(0, 7) === st.mese ? T : st.mese + '-01';
+    st.mese = iso(n).slice(0, 7); st.anim = dir > 0 ? 'av' : 'in'; st.ag = null;
   }
-  const rigaC = (c, colM) => `<div class="cmp${c.fatto ? ' fatto' : ''}" style="--mc:${colM[c.m] || 'var(--acc)'}">${c.per === S.me ? `<button type="button" class="ck tap" data-cmpfatto="${c.id}" aria-label="${c.fatto ? 'Da rifare' : 'Fatto'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : `<span class="ck" aria-label="${c.fatto ? 'Fatto' : 'Da fare'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`}<button type="button" class="cmx tap" data-cmp="${c.id}"><b>${esc(titoloC(c))}</b><small>${quando(c.d)}${c.x ? ' · ' + esc(c.x) : ''}</small></button></div>`;
-  function scAgenda(m, s, colM) {
-    const note = mieiC(m.di), ord = (a, b) => a.d.localeCompare(b.d) || (a.creato || 0) - (b.creato || 0);
-    const arrivo = note.filter(c => c.d >= T).sort(ord);
-    const prove = arrivo.filter(c => !c.fatto && PROVA.includes(c.tipo)).length;
-    const passate = note.filter(c => c.d < T).sort((a, b) => ord(b, a)).slice(0, 8);
-    return `<div class="card">
-       <div class="agtop"><b>In arrivo</b><small>${arrivo.filter(c => !c.fatto).length ? `${arrivo.filter(c => !c.fatto).length} da fare${prove ? ` · ${prove} ${prove === 1 ? 'prova' : 'prove'}` : ''}` : 'Tutto fatto ✨'}</small></div>
-       ${arrivo.length ? `<div class="cmpl">${arrivo.map(c => rigaC(c, colM)).join('')}</div>`
-       : `<div class="empty">${m.copia ? 'Niente in arrivo.' : 'Niente in arrivo. Quando c\'è un\'interrogazione o una verifica, segnala qui: la vedi anche nel Calendario della scuola.'}</div>`}
-       ${m.copia ? '' : `<button type="button" class="btn tap" data-cmpnuovo="${m.di}">+ Segna compiti o una verifica</button>`}</div>
-     ${passate.length ? `<div class="sec">Già passate</div><div class="card"><div class="cmpl passate">${passate.map(c => rigaC(c, colM)).join('')}</div></div>` : ''}`;
-  }
-  function scMaterie(m, s, colM) {
-    const ore = {}; (s.orario || []).forEach(x => { ore[x.m] = (ore[x.m] || 0) + 1; });
-    const prof = {}; (s.orario || []).forEach(x => { if (x.prof) prof[x.m] = x.prof; });
-    const vm = votiPerMateria(m.di);
-    return `<div class="card"><div class="mat">${Object.keys(colM).map(x => `<button type="button" class="tap" data-votimat="${esc(x)}" data-di="${m.di}" data-anno="${annoOra()}" style="--mc:${colM[x]}"><i></i><span><b>${esc(x)}</b><small>${ore[x]} ${ore[x] === 1 ? 'ora' : 'ore'} a settimana${prof[x] ? ' · ' + esc(prof[x]) : ''}</small></span>${anello(vm[x] ? vm[x].media : null)}</button>`).join('')}</div></div>`;
-  }
+  const rigaC = (c, colM, senzaData) => `<div class="cmp${c.fatto ? ' fatto' : ''}" style="--mc:${colM[c.m] || 'var(--acc)'}">${c.per === S.me ? `<button type="button" class="ck tap" data-cmpfatto="${c.id}" aria-label="${c.fatto ? 'Da rifare' : 'Fatto'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : `<span class="ck" aria-label="${c.fatto ? 'Fatto' : 'Da fare'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`}<button type="button" class="cmx tap" data-cmp="${c.id}"><b>${esc(titoloC(c))}</b>${senzaData ? (c.x ? `<small>${esc(c.x)}</small>` : '') : `<small>${quando(c.d)}${c.x ? ' · ' + esc(c.x) : ''}</small>`}</button></div>`;
   /* Voti (regole di Sasha del 01/11/2026): da 1 a 10 con i decimali (6+ = 6,25, 6½, 7− = 6,75, o un numero qualsiasi),
      scritto/orale/pratico, un peso per i voti che non contano al 100%, tutte le materie, gli anni scolastici separati,
      media di ogni materia (pesata), media delle materie e media di tutti i voti, e il voto minimo per tornare al 6. */
@@ -1521,8 +1527,13 @@
     const r = votiPerMateria(di, anno)[mat], c = coloriMat(s)[mat] || 'var(--acc)';
     const prof = ((s.orario || []).find(x => x.m === mat && x.prof) || {}).prof;
     const parti = r ? TIPI_V.map(([k, n]) => [n, mediaP(r.l.filter(v => (v.tipo || 'scritto') === k)), r.l.filter(v => (v.tipo || 'scritto') === k).length]).filter(x => x[2]) : [];
-    const q = r && anno === annoOra() && perIlSei(r.l);
-    openSheet(`<h3 class="cmh" style="--mc:${c}"><i></i>${esc(mat)}</h3><div class="muted">${prof ? esc(prof) + ' · ' : ''}${anno}</div>
+    const q = r && anno === annoOra() && perIlSei(r.l), oreS = (s.orario || []).filter(x => x.m === mat).length;
+    const pross = anno === annoOra() ? prossimeLezioni(s, mat, T, 2) : [];
+    const prove = anno === annoOra() ? S.compiti.filter(x => x.di === di && diSez(x) && !x.via && !x.fatto && x.m === mat && x.d >= T).sort((a, b) => a.d.localeCompare(b.d)) : [];
+    const gg = (d) => d === T ? 'oggi' : d === iso(addDays(TODAY, 1)) ? 'domani' : fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
+    openSheet(`<h3 class="cmh" style="--mc:${c}"><i></i>${esc(mat)}</h3><div class="muted">${[prof ? esc(prof) : '', oreS ? `${oreS} ${oreS === 1 ? 'ora' : 'ore'} a settimana` : '', anno].filter(Boolean).join(' · ')}</div>
+      ${pross.length ? `<div class="vinfo">Prossima lezione: <b>${pross.map(gg).join('</b>, poi <b>')}</b></div>` : ''}
+      ${prove.length ? `<div class="cmpl">${prove.map(x => rigaC(x, { [mat]: c })).join('')}</div>` : ''}
       ${r ? `<div class="vmed">${(() => { anelloAnim = true; const h = anello(r.media, true); anelloAnim = false; return h; })()}<div><b>Media</b><small>${r.l.length} ${r.l.length === 1 ? 'voto' : 'voti'}</small></div></div>
       ${parti.length > 1 || (parti.length === 1 && parti[0][1] != null) ? `<div class="vparti">${parti.map(([n, md, k]) => `<div><small>${n}</small><span class="vch${md == null ? ' nv' : ''}" style="--vc:${md == null ? 'var(--muted)' : coloreVoto(md)}">${md == null ? '—' : fmtMedia(md)}</span></div>`).join('')}</div>` : ''}
       ${q ? `<div class="vsei-box">${fraseSei(q)}</div>` : ''}
@@ -1593,9 +1604,20 @@
       <label>Cosa c'è? Tocca per segnarlo</label>
       <div class="tipi">${TIPI_C.map(([k, e, n]) => `<button type="button" class="tp tap" data-cmtipo="${k}"><b>${e}</b>${n}</button>`).join('')}</div></form>`);
   }
-  function sheetMaterie(di) {
+  // "+ Aggiungi" dell'Agenda (02/11/2026): materia, cosa e giorno scelti liberamente. Scelta la materia, il giorno va
+  // da solo alla sua prossima lezione (se il giorno non era già scelto); si può sempre cambiare.
+  function sheetNuovo(di, d0) {
     const s = S.scuola[di]; if (!s) return; const colM = coloriMat(s);
-    openSheet(`<h3>Per quale materia?</h3><div class="tipi">${Object.keys(colM).map(x => `<button type="button" class="tp tap mt" data-lez="${esc(x)}" data-di="${di}" style="--mc:${colM[x]}"><i></i>${esc(x)}</button>`).join('')}</div>`);
+    const dom = iso(addDays(TODAY, 1));
+    openSheet(`<h3>Cosa c'è da segnare?</h3><form class="stack" id="fNo" data-di="${di}">
+      <label>Materia</label>
+      <div class="tipi">${Object.keys(colM).map(x => `<button type="button" class="tp tap mt" data-nom="${esc(x)}" style="--mc:${colM[x]}"><i></i>${esc(x)}</button>`).join('')}</div>
+      <label>Cosa</label>
+      <div class="tipi">${TIPI_C.map(([k, e, n]) => `<button type="button" class="tp tap" data-notipo="${k}"><b>${e}</b>${n}</button>`).join('')}</div>
+      <label for="noD">Per quando</label>
+      <input id="noD" type="date" value="${d0 || dom}"${d0 ? ' data-fisso="1"' : ''}>
+      <input id="noX" maxlength="120" autocomplete="off" placeholder="Dettagli, se vuoi (es. capitoli 3 e 4)">
+      <button class="btn tap">Salva</button></form>`);
   }
   function sheetC(id) {
     const c = S.compiti.find(x => x.id === id); if (!c) return;
@@ -2107,7 +2129,16 @@
       closeSheet(); return DATI.elimina('voti', d.votovia).then(() => toast('Voto eliminato')).catch(sbaglio);
     }
     if (d.lez && d.di) return sheetNuovoC(d.di, d.lez);
-    if (d.cmpnuovo) return sheetMaterie(d.cmpnuovo);
+    if (d.nonuovo) return sheetNuovo(d.nonuovo, d.d);
+    if (d.scsett && d.di) { const st = scStato(d.di); st.day = iso(addDays(new Date((st.day || T) + 'T12:00:00'), 7 * d.scsett)); return rMio(); }
+    if (d.agday && d.di) { const st = scStato(d.di); st.ag = st.ag === d.agday ? null : d.agday; return rMio(); }
+    if (d.agpass) { const st = scStato(d.agpass); st.passate = !st.passate; return rMio(); }
+    if (d.nom || d.notipo) {
+      t.parentElement.querySelectorAll('.on').forEach(b => b !== t && b.classList.remove('on')); t.classList.add('on');
+      const f = t.closest('form'), di = f && f.dataset.di, inp = $('#noD');
+      if (d.nom && inp && !inp.dataset.fisso && S.scuola[di]) { const pr = prossimeLezioni(S.scuola[di], d.nom, iso(addDays(TODAY, 1)), 1)[0]; if (pr) inp.value = pr; }
+      return;
+    }
     if (d.cmp) return sheetC(d.cmp);
     if (d.cmd) { const b = [...t.parentElement.querySelectorAll('button')]; return segSet(t.parentElement, b.indexOf(t)); }
     if (d.cmtipo) {
@@ -2287,6 +2318,14 @@
         else { fresh = rid(); await DATI.imposta('sorprese', per, { idee: { [fresh]: Object.assign({ x, n, by: S.me, creato: Date.now() }, extra) } }); }
         render(); toast(per === S.me ? 'Aggiunto alla tua lista 🎁' : 'Idea salvata: resta un segreto 🤫');
       } catch (er) { sbaglio(er); }
+    } else if (f.id === 'fNo') {
+      const mt = f.querySelector('[data-nom].on'), tp = f.querySelector('[data-notipo].on'), dd = $('#noD').value;
+      if (!mt) return toast('Scegli la materia');
+      if (!tp) return toast('Scegli cosa c\'è');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dd)) return toast('Scegli il giorno');
+      const c = { per: S.me, di: f.dataset.di, m: mt.dataset.nom, tipo: tp.dataset.notipo, d: dd, x: $('#noX').value.trim().slice(0, 120), by: S.me, creato: Date.now(), fatto: false };
+      closeSheet(); toast(`${TIPO_C[c.tipo].e} Segnato per ${quando(c.d).split(' · ')[0].toLowerCase()}`);
+      try { await DATI.aggiungi('compiti', c); } catch (er) { return sbaglio(er); }
     } else if (f.id === 'fVo') {
       const v = votoScelto(), al = $('#voAltra'), scritta = ($('#voM').value || (al && !al.classList.contains('voh') ? al.value : '')).trim().replace(/\s+/g, ' ').slice(0, 60);
       // "matematica" scritta a mano diventa la "Matematica" che c'è già (orario o voti).
