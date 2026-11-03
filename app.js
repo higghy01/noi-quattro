@@ -365,14 +365,15 @@
   }
   /* ---------- Note (02/11/2026, Sasha): foglietti per tutti e 4, tipo "Sasha: domani sono da babbo".
      Chi scrive la nota la può togliere; agli altri arriva un avviso "X ha scritto una nota", senza il testo. */
+  const NOTA_VITA = 24 * 3600e3; // Le note spariscono 24 ore dopo essere state scritte (Sasha, 03/11/2026); le cancella anche il programma degli avvisi.
   function rFoglietti() {
-    const nuova = !seen.has(vista()), lista = [...S.note].sort((a, b) => (b.creato || 0) - (a.creato || 0));
-    if (!lista.length) return `<div class="empty big${ri(0)}"><b>📝</b><span>Nessuna nota. Tocca + per scrivere qualcosa per tutti, tipo «domani sono da babbo».</span></div>`;
+    const nuova = !seen.has(vista()), lista = S.note.filter(n => (+n.creato || 0) > Date.now() - NOTA_VITA).sort((a, b) => (b.creato || 0) - (a.creato || 0));
+    if (!lista.length) return `<div class="empty big${ri(0)}"><b>📝</b><span>Nessuna nota. Tocca + per scrivere qualcosa per tutti, tipo «domani sono da babbo». Le note durano 24 ore.</span></div>`;
     return `<div class="fogli">${lista.map((n, i) => {
       const mio = n.by === S.me, anim = n.id === fresh ? ' pop' : nuova ? ' rise' : '';
       return `<div class="foglio${anim}" style="--pc:${col(n.by)};--i:${Math.min(i, 6)}">
         <p><b>${esc(P(n.by).nome)}:</b> ${esc(n.x)}</p>
-        <div class="fby"><small><span class="fqt" data-ms="${+n.creato || Date.now()}">${quantoFa(n.creato || Date.now())}</span>${n.modificato ? ' · modificata' : ''}</small>${mio ? `<span class="fac"><button class="gx tap" data-modnota="${n.id}" aria-label="Modifica la nota">✎</button><button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button></span>` : ''}</div></div>`;
+        <div class="fby"><small><span class="fqt" data-ms="${+n.creato || Date.now()}">${quantoFa(n.creato || Date.now())}</span>${n.modificato ? ' · modificata' : ''}<br><span class="fsc">${scade(n.creato)}</span></small>${mio ? `<span class="fac"><button class="gx tap" data-modnota="${n.id}" aria-label="Modifica la nota">✎</button><button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button></span>` : ''}</div></div>`;
     }).join('')}</div>`;
   }
   // Quanto tempo fa (Sasha, 02/11/2026): "adesso", "5 min fa", "3 ore fa", "ieri", "4 giorni fa", "2 settimane fa", "3 mesi fa".
@@ -386,14 +387,19 @@
     if (g < 60) return `${Math.floor(g / 7)} settimane fa`;
     const me = Math.floor(g / 30); return me < 12 ? `${me} mesi fa` : (me < 24 ? 'un anno fa' : `${Math.floor(me / 12)} anni fa`);
   }
-  // Il tempo si aggiorna da solo ogni minuto, senza ridisegnare la pagina.
-  setInterval(() => { if (page === 'note' && seg === 'note') document.querySelectorAll('.fqt').forEach(e => { const t = quantoFa(+e.dataset.ms); if (e.textContent !== t) e.textContent = t; }); }, 60000);
+  const scade = (ms) => { const h = Math.ceil(((+ms || 0) + NOTA_VITA - Date.now()) / 3600e3); return h <= 1 ? 'sparisce tra poco' : `sparisce tra ${h} ore`; };
+  // Il tempo si aggiorna da solo ogni minuto, senza ridisegnare la pagina (una nota scaduta invece ridisegna).
+  setInterval(() => {
+    if (page !== 'note' || seg !== 'note') return;
+    if ([...document.querySelectorAll('.fqt')].some(e => +e.dataset.ms <= Date.now() - NOTA_VITA)) return render();
+    document.querySelectorAll('.fqt').forEach(e => { const t = quantoFa(+e.dataset.ms), sc = e.parentElement.querySelector('.fsc'), u = scade(+e.dataset.ms); if (e.textContent !== t) e.textContent = t; if (sc && sc.textContent !== u) sc.textContent = u; });
+  }, 60000);
   // Con una nota (solo mia) il foglio serve a modificarla (Sasha, 03/11/2026): niente avviso agli altri.
   function sheetNota(n) {
     // id "fNota" (non "fNo": è già del foglio "+ Aggiungi" dell'Agenda di scuola, che con lo stesso nome non salvava più).
     openSheet(`<h3>${n ? 'Modifica la nota' : 'Nuova nota'}</h3><form class="stack" id="fNota"${n ? ` data-id="${esc(n.id)}"` : ''}>
      <label>La nota<textarea id="notaX" rows="4" maxlength="300" required placeholder="Es. Domani sono da babbo">${n ? esc(n.x) : ''}</textarea></label>
-     <p class="hint">${n ? 'La vedono tutti e 4, con scritto «modificata». Agli altri non arriva un altro avviso.' : 'La vedono tutti e 4. Agli altri arriva un avviso che hai scritto una nota, senza il testo.'}</p>
+     <p class="hint">${n ? 'La vedono tutti e 4, con scritto «modificata». Agli altri non arriva un altro avviso.' : 'La vedono tutti e 4 e sparisce da sola dopo 24 ore. Agli altri arriva un avviso che hai scritto una nota, senza il testo.'}</p>
      <button class="btn tap">${n ? 'Salva' : 'Attacca la nota'}</button></form>`, () => setTimeout(() => { const t = $('#notaX'); if (t) t.focus(); }, 380));
   }
   function segSet(el, k) { el.style.setProperty('--k', k); el.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === k)); }

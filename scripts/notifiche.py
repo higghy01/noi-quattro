@@ -8,7 +8,7 @@ si può ancora lanciare a mano da GitHub (workflow Notifiche).
 - proposte: una proposta nuova (a tutti tranne chi l'ha fatta), "hanno votato tutti" (a chi l'ha fatta)
   e cosa si è deciso (a tutti tranne chi ha deciso);
 - conflitti: a chi ha due impegni che si accavallano oggi, domani o dopodomani;
-- note: quando qualcuno scrive una nota nella Bacheca, a tutti gli altri, senza il testo;
+- note: quando qualcuno scrive una nota nella Bacheca, a tutti gli altri, senza il testo (e le note più vecchie di 24 ore si cancellano);
 - mie (sezione "Per me", 02/11/2026): i promemoria all'ora giusta (e di nuovo dopo mezz'ora se non è stato toccato
   "Fatto"), le scadenze il mese prima e una settimana prima della fine del mese,
   le mostre segnate una settimana prima che chiudano e le mostre nuove a chi le segue.
@@ -178,6 +178,12 @@ def main():
         for p in pomeriggio:
             if cena.get(p) not in ("si", "no") and not fuori_cena(p):
                 manda(p, "cena", "A cena stasera?", "Rispondi con un tocco nella scheda Oggi.", f"cena|{oggi}|{p}")
+
+    # Le note durano 24 ore (Sasha, 03/11/2026): dopo si cancellano. Sono poche, quindi si leggono tutte.
+    scadute = int((ora - dt.timedelta(hours=24)).timestamp() * 1000)
+    for d in db.collection("note").stream():
+        if int((d.to_dict() or {}).get("creato") or 0) <= scadute:
+            d.reference.delete()
 
     # Note nuove della Bacheca (02/11/2026, Sasha): a tutti tranne chi l'ha scritta, senza il testo.
     for d in db.collection("note").where("creato", ">", recente).stream():
