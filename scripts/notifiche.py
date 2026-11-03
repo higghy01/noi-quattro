@@ -44,7 +44,9 @@ def main():
     if not os.environ.get("K_SERVICE") and stato.get("da") == "firebase" and ora.timestamp() * 1000 - int(stato.get("ultimo") or 0) < 10 * 60 * 1000:
         print("Firebase ha fatto un giro negli ultimi 10 minuti: niente da fare qui.")
         return
-    inviati = {k: v for k, v in (stato.get("inviati") or {}).items() if v >= (ora.date() - dt.timedelta(days=2)).isoformat()}
+    # "ti ha aggiunto" si ricorda 14 giorni: un impegno modificato spesso tiene la lista "aggiunti" e l'avviso tornava dopo 2 giorni.
+    inviati = {k: v for k, v in (stato.get("inviati") or {}).items()
+               if v >= (ora.date() - dt.timedelta(days=14 if k.startswith("nuovo|") else 2)).isoformat()}
     gia = set(inviati)  # mandati nei giri prima di questo
 
     persone = {d.id: d.to_dict() for d in db.collection("persone").stream()}
@@ -76,7 +78,11 @@ def main():
     recente = int((ora - dt.timedelta(days=1)).timestamp() * 1000)
 
     vuole = lambda p, tipo: (persone.get(p, {}).get("notifiche") or {}).get(tipo, True)
-    ora_di = lambda p, k, solita: int((persone.get(p, {}).get("notifiche") or {}).get(k) or solita)
+    def ora_di(p, k, solita):
+        try:
+            return int((persone.get(p, {}).get("notifiche") or {}).get(k) or solita)
+        except (TypeError, ValueError):
+            return solita  # un valore strano nelle preferenze non deve fermare gli avvisi di tutti
     nome = lambda p: persone.get(p, {}).get("nome", "Qualcuno")
     da_mandare = []  # (persona, titolo, testo, chiave)
 
@@ -94,7 +100,8 @@ def main():
             if (e.get("fino") or "") > e.get("d", "") and giorno != e.get("d"):
                 continue  # impegno di più giorni: il promemoria solo il primo giorno
             inizio = dt.datetime.fromisoformat(f"{giorno}T{e['h']}").replace(tzinfo=ROMA)
-            if dt.timedelta(minutes=30) <= inizio - ora <= dt.timedelta(minutes=62):  # giri ogni 5 minuti: parte tra 62 e 57 minuti prima; se salta qualche giro, fino a 30
+            # In secondi veri: con le date dello stesso fuso Python ignora il cambio d'ora (le due notti dell'anno l'avviso saltava o arrivava 2 ore prima).
+            if 30 * 60 <= inizio.timestamp() - ora.timestamp() <= 62 * 60:  # giri ogni 5 minuti: parte tra 62 e 57 minuti prima; se salta qualche giro, fino a 30
                 for p in e.get("who", []):
                     t, luogo = titolo_per(e, p)
                     manda(p, "promemoria", f"Tra poco: {t}", f"Alle {e['h']}" + (f" · {luogo}" if luogo else ""), f"prom|{e['id']}|{giorno}|{p}")
@@ -108,10 +115,11 @@ def main():
         aggiunti = (e.get("aggiunti") or []) if e.get("modificato", 0) > recente else []
         chi = e.get("modificatoDa") or e.get("creatoDa")
         for p in e.get("who", []):
-            if nuovo and p != e.get("creatoDa"):
-                manda(p, "nuovi", f"{nome(e.get('creatoDa'))} ti ha aggiunto", f"{e['t']} · {quando}", f"nuovo|{e['id']}|{p}")
-            elif p in aggiunti and p != chi:
+            # Prima chi è stato aggiunto dopo (col nome di chi l'ha aggiunto davvero), poi i nuovi impegni.
+            if p in aggiunti and p != chi:
                 manda(p, "nuovi", f"{nome(chi)} ti ha aggiunto", f"{e['t']} · {quando}", f"nuovo|{e['id']}|{p}")
+            elif nuovo and p != e.get("creatoDa"):
+                manda(p, "nuovi", f"{nome(e.get('creatoDa'))} ti ha aggiunto", f"{e['t']} · {quando}", f"nuovo|{e['id']}|{p}")
 
     # Riepilogo serale: ognuno all'ora che ha scelto (di solito le 21).
     serale = [p for p in persone if ora.hour == ora_di(p, "oraRiepilogo", 21)]
@@ -135,7 +143,7 @@ def main():
         if not e.get("ripeti") and (e.get("fino") or "") > e.get("d", ""):
             a = minuti(e["h"]) if giorno == e["d"] else 0
             b = minuti(e["fine"]) if giorno == e["fino"] and e.get("fine") else 24 * 60
-            return a, b
+            return a, b or 24 * 60  # "fine" 00:00 nell'ultimo giorno = fino a mezzanotte (prima quel giorno risultava libero)
         a = minuti(e["h"])
         b = minuti(e["fine"]) if e.get("fine") else a + 60
         return a, (b if b > a else 24 * 60)
@@ -151,8 +159,10 @@ def main():
             if p not in who or not e.get("h") or not capita(e, oggi):
                 continue
             if e.get("fonte") == f"orario:{p}":
-                if e.get("fine") and e["fine"] > e["h"] and minuti(e["fine"]) + strada > cena0 and minuti(e["h"]) < cena1:
-                    return True
+                if e.get("fine"):
+                    b = minuti(e["fine"]) if e["fine"] > e["h"] else 24 * 60  # turno che passa la mezzanotte (es. 19-1)
+                    if b + strada > cena0 and minuti(e["h"]) < cena1:
+                        return True
                 continue
             if str(e.get("fonte", "")).startswith("orario:") or (len(who) >= len(persone) > 1):
                 continue
@@ -228,7 +238,7 @@ def main():
             dovuto = oggi if ogni == 1 or not ult else (dt.date.fromisoformat(ult) + dt.timedelta(days=ogni)).isoformat()
             if ult == oggi or dovuto > oggi:
                 continue
-            dopo = ora - dt.datetime.fromisoformat(f"{oggi}T{x['h']}").replace(tzinfo=ROMA)
+            dopo = dt.timedelta(seconds=ora.timestamp() - dt.datetime.fromisoformat(f"{oggi}T{x['h']}").replace(tzinfo=ROMA).timestamp())
             if dt.timedelta(0) <= dopo <= dt.timedelta(minutes=90) and f"mie1|{x['id']}|{oggi}" not in gia:
                 manda(p, "mie", f"{e} {t}".strip(), "Quando hai fatto, tocca Fatto nell'app.", f"mie1|{x['id']}|{oggi}")
             # Il secondo avviso solo se il primo è partito in un giro prima (mai due di fila).
@@ -237,7 +247,7 @@ def main():
             # Un promemoria di fine giornata (es. 23:50) che nessun giro ha preso prima di mezzanotte arriva subito dopo,
             # una volta sola; il secondo avviso no (dopo mezzanotte nell'app conta già il giorno nuovo).
             elif ult != ieri and (ogni == 1 or not ult or dovuto <= ieri) and f"mie1|{x['id']}|{ieri}" not in gia \
-                    and dt.timedelta(0) <= ora - dt.datetime.fromisoformat(f"{ieri}T{x['h']}").replace(tzinfo=ROMA) <= dt.timedelta(minutes=90):
+                    and 0 <= ora.timestamp() - dt.datetime.fromisoformat(f"{ieri}T{x['h']}").replace(tzinfo=ROMA).timestamp() <= 90 * 60:
                 manda(p, "mie", f"{e} {t}".strip(), "Quando hai fatto, tocca Fatto nell'app.", f"mie1|{x['id']}|{ieri}")
         # L'appuntamento fisso (k "appu") qui non manda niente: dalla v65 è anche un impegno del calendario comune
         # ("Occupato" per gli altri) e ha già il promemoria prima dell'ora e il riepilogo della sera, col titolo vero solo per lei.
@@ -269,7 +279,8 @@ def main():
     mandate = 0
     for p, titolo, testo in da_mandare:
         for t in token.get(p, []):
-            msg = messaging.Message(token=t, webpush=messaging.WebpushConfig(
+            # Urgenza alta: col risparmio energetico (Samsung) un avviso normale può arrivare tardi. Dopo 6 ore non serve più.
+            msg = messaging.Message(token=t, webpush=messaging.WebpushConfig(headers={"Urgency": "high", "TTL": "21600"},
                 notification=messaging.WebpushNotification(title=titolo, body=testo, icon=URL_APP.rstrip("/") + "/icona-180.png"),
                 fcm_options=messaging.WebpushFCMOptions(link=URL_APP)))
             try:

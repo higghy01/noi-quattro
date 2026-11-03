@@ -126,42 +126,57 @@ def regola(priv, generale):
 def impegni(cal, persona, visibile, saltati):
     oggi = adesso().date()
     ogni_anno = annuali(cal)
-    for ev in recurring_ical_events.of(cal).between(oggi, oggi + dt.timedelta(days=GIORNI)):
-        inizio = ora(ev.get("DTSTART").dt)
-        fine = ora(ev.get("DTEND").dt) if ev.get("DTEND") else None
-        tutto = not isinstance(inizio, dt.datetime)
-        # Impegni di più giorni: "fino" è l'ultimo giorno compreso (la fine nei calendari è esclusa:
-        # tutto il giorno dal 3 al 7 finisce l'8; un orario che finisce a mezzanotte appartiene al giorno prima).
-        g0 = inizio if tutto else inizio.date()
-        if fine is None:
-            g1 = g0
-        elif isinstance(fine, dt.datetime) and fine - inizio < dt.timedelta(hours=24):
-            g1 = g0  # con un orario conta come "più giorni" solo se dura almeno 24 ore (un turno 22-6 resta del suo giorno)
-        elif isinstance(fine, dt.datetime):
-            g1 = (fine - dt.timedelta(microseconds=1)).date() if fine.time() == dt.time(0) else fine.date()
-        else:
-            g1 = fine - dt.timedelta(days=1)
-        uid = f"{persona}|{ev.get('UID')}|{inizio}"
-        titolo = str(ev.get("SUMMARY", "Impegno"))[:80]
-        if compleanno(titolo, tutto and str(ev.get("UID")) in ogni_anno):
-            saltati[0] += 1
+    # Dalla mezzanotte italiana (con le sole date la finestra partiva a mezzanotte UTC: alle 00:07 sparivano gli impegni delle prime ore).
+    da = dt.datetime.combine(oggi, dt.time(0), ROMA)
+    for ev in recurring_ical_events.of(cal).between(da, da + dt.timedelta(days=GIORNI)):
+        if str(ev.get("STATUS", "")).upper() == "CANCELLED":
+            continue  # impegno annullato
+        try:
+            dati = _impegno(ev, persona, visibile, ogni_anno, saltati)
+        except Exception as e:  # un impegno scritto male non deve bloccare tutto il calendario
+            print(f"Impegno saltato ({type(e).__name__})")
             continue
-        luogo = str(ev.get("LOCATION", ""))[:200]
-        vis = visibile(titolo)
-        yield "cal-" + hashlib.sha1(uid.encode()).hexdigest()[:20], {
-            "t": titolo if vis else "Occupato",
-            "d": g0.isoformat(),
-            "fino": g1.isoformat() if g1 > g0 else "",
-            "h": "" if tutto else inizio.strftime("%H:%M"),
-            "fine": "" if tutto or not isinstance(fine, dt.datetime) or fine == inizio else fine.strftime("%H:%M"),
-            "who": [persona],
-            "n": luogo if vis else "",
-            "ripeti": "",
-            "fonte": f"calendario:{persona}",
-            "creatoDa": persona,
-            "creato": 0,  # 0 = non avvisare come "nuovo impegno"
-            "nascosto": not vis,
-        }, None if vis else {"t": titolo, "n": luogo}
+        if dati:
+            yield dati
+
+
+def _impegno(ev, persona, visibile, ogni_anno, saltati):
+    inizio = ora(ev.get("DTSTART").dt)
+    fine = ora(ev.get("DTEND").dt) if ev.get("DTEND") else None
+    tutto = not isinstance(inizio, dt.datetime)
+    # Impegni di più giorni: "fino" è l'ultimo giorno compreso (la fine nei calendari è esclusa:
+    # tutto il giorno dal 3 al 7 finisce l'8; un orario che finisce a mezzanotte appartiene al giorno prima).
+    g0 = inizio if tutto else inizio.date()
+    if fine is None:
+        g1 = g0
+    elif isinstance(fine, dt.datetime) and fine - inizio < dt.timedelta(hours=24):
+        g1 = g0  # con un orario conta come "più giorni" solo se dura almeno 24 ore (un turno 22-6 resta del suo giorno)
+    elif isinstance(fine, dt.datetime):
+        g1 = (fine - dt.timedelta(microseconds=1)).date() if fine.time() == dt.time(0) else fine.date()
+    else:
+        g1 = fine - dt.timedelta(days=1)
+    uid = f"{persona}|{ev.get('UID')}|{inizio}"
+    titolo = str(ev.get("SUMMARY", "Impegno"))[:80]
+    if compleanno(titolo, tutto and str(ev.get("UID")) in ogni_anno):
+        saltati[0] += 1
+        return None
+    luogo = str(ev.get("LOCATION", ""))[:200]
+    # Segnato "privato" nel calendario (Google, Outlook): per gli altri sempre «Occupato».
+    vis = visibile(titolo) and str(ev.get("CLASS", "")).upper() not in ("PRIVATE", "CONFIDENTIAL")
+    return "cal-" + hashlib.sha1(uid.encode()).hexdigest()[:20], {
+        "t": titolo if vis else "Occupato",
+        "d": g0.isoformat(),
+        "fino": g1.isoformat() if g1 > g0 else "",
+        "h": "" if tutto else inizio.strftime("%H:%M"),
+        "fine": "" if tutto or not isinstance(fine, dt.datetime) or fine == inizio else fine.strftime("%H:%M"),
+        "who": [persona],
+        "n": luogo if vis else "",
+        "ripeti": "",
+        "fonte": f"calendario:{persona}",
+        "creatoDa": persona,
+        "creato": 0,  # 0 = non avvisare come "nuovo impegno"
+        "nascosto": not vis,
+    }, None if vis else {"t": titolo, "n": luogo}
 
 
 def main():

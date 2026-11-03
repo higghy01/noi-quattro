@@ -796,4 +796,13 @@ html .topbar.on b{transform:none}
 .foglio .gx{margin:-6px -6px -6px 0}
 /* Tastiera aperta (v75): il foglio sta sopra la tastiera e non sotto */
 .sheet{bottom:var(--kb,0px)}
-.kbon .sheet{max-height:calc(100dvh - var(--kb,0px) - 12px);padding-bottom:12px;transition:transform .5s var(--sheet-ease),bottom .25s var(--ease)}
+.kbon .sheet{max-height:calc(100dvh - var(--kb,0px) - env(safe-area-inset-top,0px) - 8px);padding-bottom:12px;transition:transform .5s var(--sheet-ease),bottom .25s var(--ease)}
+/* v77 (03/11/2026): iPhone con la Dynamic Island.
+   Con la tastiera aperta il foglio arrivava a 12 px dal bordo: il titolo finiva sotto l'orario e l'isola (sopra: ora si ferma sotto la barra).
+   Nelle pagine intere (Impostazioni, persona, Personale, ricordo) scorrendo il testo passava sotto l'orario e l'isola:
+   la fascia in alto col colore dello sfondo resta sopra di loro mentre sono aperte (e finché scivolano via). */
+body::before{transition:z-index 0s linear .46s}
+html:has(.screen.on) body::before{z-index:26;transition:none}
+/* Accesso: il modulo al centro dello spazio visibile, senza il margine della barra in basso (che lì non c'è) e senza scorrere a vuoto. */
+body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
+.login{min-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}

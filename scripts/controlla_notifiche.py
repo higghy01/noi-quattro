@@ -8,7 +8,9 @@ quando = dt.datetime.fromtimestamp(s.get("ultimo", 0) / 1000, ROMA)
 print(f"Ultimo giro: {quando:%d/%m/%Y %H:%M:%S} (ora italiana), da: {s.get('da', 'sconosciuto')}, avvisi ricordati: {len(s.get('inviati') or {})}")
 e = database().collection("sistema").document("notifiche-errore").get().to_dict()
 if e:
-    print(f"Ultimo errore della funzione ({e.get('quando')}):\n{e.get('errore')}")
+    # Il repository è pubblico, e con lui i registri: qui solo il tipo di errore. Il testo intero resta nel database (sistema/notifiche-errore).
+    ultima = (str(e.get("errore") or "").strip().splitlines() or [""])[-1]
+    print(f"Ultimo errore della funzione ({e.get('quando')}): {ultima.split(':')[0] or 'sconosciuto'} (dettagli nel database, sistema/notifiche-errore)")
 
 # La sveglia di Google Cloud (Cloud Scheduler) che fa partire la funzione: stato e ultimo tentativo.
 import json

@@ -183,23 +183,30 @@
     d = d || T;
     const r = rientro(id, d);
     if (r && r.m > CENA[0] && minuti(r.turno.h) < CENA[1]) return { perche: `al lavoro, a casa verso le ${r.ora}` };
+    // Turno che passa la mezzanotte (es. 19-1): finisce "prima" di iniziare, ma all'ora di cena è al lavoro (come il programma degli avvisi).
+    const notte = delGiorno(d, e => e.fonte === 'orario:' + id && e.h && e.fine && e.fine <= e.h && minuti(e.h) < CENA[1])[0];
+    if (notte) return { perche: `al lavoro fino alle ${notte.fine}` };
     const tutti = IDS().length;
     const e = delGiorno(d, x => !eTurno(x) && x.h && (x.who || []).includes(id) && !((x.who || []).length >= tutti && tutti > 1))
       .find(x => { const [a, b] = intervallo(x, d); return a < CENA[1] && b > CENA[0]; });
-    return e ? { perche: `alle ${e.h} ${e.t}` } : null;
+    return e ? { perche: piuGiorni(e) && d !== e.d ? e.t : `alle ${e.h} ${e.t}` } : null; // di più giorni: "alle 18" era l'ora di ieri
   }
   // Il sì/no per la cena: quello toccato a mano, altrimenti "no" da solo se è impegnato all'ora di cena.
   const cenaDi = (id) => S.cena[id] === 'si' || S.cena[id] === 'no' ? { v: S.cena[id] } : fuoriCena(id) ? { v: 'no', auto: fuoriCena(id) } : { v: '?' };
   function statoOra(id) {
     // Le note di scuola non sono un'attività; se c'è un impegno vero durante la scuola, vince quello.
     const ora = oraAdesso(), oggi = conScuola(T, e => (e.who || []).includes(id) && !e.cmp);
-    const orora = oggi.filter(e => e.h && e.h <= ora && e.fine && e.fine > ora), ades = orora.find(e => !e.virtuale) || orora[0];
+    // Anche gli impegni di più giorni con l'orario (es. dalle 22 alle 2 di notte): in corso se adesso è dentro il loro orario di oggi.
+    // (e quelli che passano la mezzanotte, es. un turno 19-1: fino a mezzanotte sono "in corso")
+    const mOra = minuti(ora), dentro = (e) => { if (!piuGiorni(e) && !e.fine) return false; const [a, b] = intervallo(e, T); return a <= mOra && mOra < b; };
+    const orora = oggi.filter(e => e.h && dentro(e)), ades = orora.find(e => !e.virtuale) || orora[0];
+    const finoA = (e) => !inCorso(e, T) ? `fino alle ${e.fine}` : e.fino === iso(addDays(TODAY, 1)) ? `fino a domani${e.fine ? ' alle ' + e.fine : ''}` : `fino al ${fmt(e.fino, { day: 'numeric', month: 'short' })}`;
     // t = frase intera (pagina della persona), c = versione corta (sotto il cerchio in Oggi)
     const r = rientro(id);
     if (ades && r && ades.id === r.turno.id) return { t: `Al lavoro fino alle ${ades.fine}, a casa verso le ${r.ora}`, c: `Lavoro, 🏠 ${r.ora}`, k: 'occ' };
-    if (ades) return { t: `Ora: ${ades.t}, fino alle ${ades.fine}`, c: `Ora · ${ades.t}`, k: 'occ' };
+    if (ades) return { t: `Ora: ${ades.t}, ${finoA(ades)}`, c: `Ora · ${ades.t}`, k: 'occ' };
     if (r && r.turno.fine <= ora && hm(r.m) > ora && r.m < 24 * 60) return { t: `Sta tornando dal lavoro, a casa verso le ${r.ora}`, c: `🏠 ${r.ora}`, k: 'dopo' };
-    const pros = oggi.find(e => e.h && e.h > ora);
+    const pros = oggi.find(e => e.h && e.h > ora && (!piuGiorni(e) || e.d === T)); // un impegno di più giorni "comincia" solo il primo giorno
     if (pros && r && pros.id === r.turno.id) return { t: `Alle ${pros.h} al lavoro, a casa verso le ${r.ora}`, c: `${pros.h} · lavoro`, k: 'dopo' };
     if (pros) return { t: `Alle ${pros.h}: ${pros.t}`, c: `${pros.h} · ${pros.t}`, k: 'dopo' };
     const tutto = oggi.find(e => !e.h && !e.virtuale);
@@ -234,7 +241,8 @@
   const minuti = (h) => +h.slice(0, 2) * 60 + +h.slice(3, 5);
   // Impegno di più giorni con orario: il primo giorno dall'ora d'inizio, in mezzo tutto il giorno, l'ultimo fino all'ora di fine.
   const intervallo = (e, d) => {
-    if (piuGiorni(e)) return [d === e.d ? minuti(e.h) : 0, d === e.fino && e.fine ? minuti(e.fine) : 24 * 60];
+    // "fine" 00:00 nell'ultimo giorno (calendari collegati) = fino a mezzanotte: prima quel giorno risultava libero.
+    if (piuGiorni(e)) return [d === e.d ? minuti(e.h) : 0, (d === e.fino && e.fine && minuti(e.fine)) || 24 * 60];
     const a = minuti(e.h), b = e.fine ? minuti(e.fine) : a + 60; return [a, b > a ? b : 24 * 60];
   };
   function accavallati(e, d, chi) {
@@ -381,7 +389,8 @@
   // Il tempo si aggiorna da solo ogni minuto, senza ridisegnare la pagina.
   setInterval(() => { if (page === 'note' && seg === 'note') document.querySelectorAll('.fqt').forEach(e => { const t = quantoFa(+e.dataset.ms); if (e.textContent !== t) e.textContent = t; }); }, 60000);
   function sheetNota() {
-    openSheet(`<h3>Nuova nota</h3><form class="stack" id="fNo">
+    // id "fNota" (non "fNo": è già del foglio "+ Aggiungi" dell'Agenda di scuola, che con lo stesso nome non salvava più).
+    openSheet(`<h3>Nuova nota</h3><form class="stack" id="fNota">
      <label>La nota<textarea id="notaX" rows="4" maxlength="300" required placeholder="Es. Domani sono da babbo"></textarea></label>
      <p class="hint">La vedono tutti e 4. Agli altri arriva un avviso che hai scritto una nota, senza il testo.</p>
      <button class="btn tap">Attacca la nota</button></form>`, () => setTimeout(() => { const t = $('#notaX'); if (t) t.focus(); }, 380));
@@ -1404,8 +1413,9 @@
     }
     return out;
   }
+  // Per le cose già passate (es. "Mostra le cose già fatte"): "ieri" o "5 giorni fa", non "fra -5 giorni".
   const quando = (d) => { const n = Math.round((new Date(d + 'T12:00:00') - TODAY) / 864e5);
-    return n === 0 ? 'Oggi' : n === 1 ? 'Domani' : `${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')} · fra ${n} giorni`; };
+    return n === 0 ? 'Oggi' : n === 1 ? 'Domani' : n === -1 ? 'Ieri' : `${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')} · ${n > 0 ? `fra ${n} giorni` : `${-n} giorni fa`}`; };
   // Il giorno da mostrare: oggi se la scuola non è ancora finita, altrimenti il prossimo giorno di scuola.
   function giornoScuola(s) {
     const ora = oraAdesso();
@@ -1746,7 +1756,9 @@
     const prof = ((s.orario || []).find(x => x.m === mat && x.prof) || {}).prof;
     const parti = r ? TIPI_V.map(([k, n]) => [n, mediaP(r.l.filter(v => (v.tipo || 'scritto') === k)), r.l.filter(v => (v.tipo || 'scritto') === k).length]).filter(x => x[2]) : [];
     const q = r && anno === annoOra() && perIlSei(r.l), oreS = (s.orario || []).filter(x => x.m === mat).length;
-    const pross = anno === annoOra() ? prossimeLezioni(s, mat, T, 2) : [];
+    // Oggi conta solo se la lezione non è già finita (alle 16 la lezione delle 9 non è più la "prossima").
+    const oraOra = oraAdesso(), finitaOggi = (d) => d === T && lezioni(s, gSett(T)).filter(x => x.m === mat).every(x => (x.fine || '14:00') <= oraOra);
+    const pross = anno === annoOra() ? prossimeLezioni(s, mat, T, 3).filter(d => !finitaOggi(d)).slice(0, 2) : [];
     const prove = anno === annoOra() ? S.compiti.filter(x => x.di === di && diSez(x) && !x.via && !x.fatto && x.m === mat && x.d >= T).sort((a, b) => a.d.localeCompare(b.d)) : [];
     const gg = (d) => d === T ? 'oggi' : d === iso(addDays(TODAY, 1)) ? 'domani' : fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
     openSheet(`<h3 class="cmh" style="--mc:${c}"><i></i>${esc(mat)}</h3><div class="muted">${[prof ? esc(prof) : '', oreS ? `${oreS} ${oreS === 1 ? 'ora' : 'ore'} a settimana` : '', anno].filter(Boolean).join(' · ')}</div>
@@ -2044,12 +2056,15 @@
       // Stesse regole del calendario collegato: scelte a mano, parole automatiche, regola generale.
       const rg = regole();
       const push = (ev, start, end) => {
+        const cp = (k) => String((ev.component && ev.component.getFirstPropertyValue(k)) || '').toUpperCase();
+        if (cp('status') === 'CANCELLED') return; // impegno annullato
         const s = start.toJSDate(), e = end ? end.toJSDate() : null;
         if ((e && e > s ? e <= da : s < da) || s > a || out.length >= 800) return; // entrano anche quelli iniziati prima e ancora in corso
         const all = start.isDate, titolo = (ev.summary || 'Impegno').slice(0, 80), luogo = (ev.location || '').slice(0, 200);
         const rr = ev.component && ev.component.getFirstPropertyValue('rrule');
         if (compleanno(titolo, all && rr && String(rr.freq).toUpperCase() === 'YEARLY')) return; // i compleanni non entrano
-        const vis = regolaCal(titolo, rg).vis;
+        // Segnato "privato" nel calendario (Google, Outlook): per gli altri sempre «Occupato», come nel calendario collegato.
+        const vis = regolaCal(titolo, rg).vis && !['PRIVATE', 'CONFIDENTIAL'].includes(cp('class'));
         out.push({ t: vis ? titolo : 'Occupato', d: iso(s), fino: ultimoGiorno(s, e, all), h: all ? '' : hhmm(s), fine: !all && e ? hhmm(e) : '',
           who: [S.me], n: vis ? luogo : '', ripeti: '', fonte: 'import:' + S.me, creatoDa: S.me, creato: Date.now(), nascosto: !vis });
         det.push(vis ? null : { t: titolo, n: luogo }); // il titolo vero resta nella mia parte privata
@@ -2174,11 +2189,13 @@
       return DATI.aggiorna('foto', f.id, { ['cuori.' + S.me]: on }).catch(sbaglio); // solo il mio cuore: due cuori insieme non si cancellano
     }
     if (d.salva) { const f = S.foto.find(x => x.id === d.salva); return f && salvaFoto(f); }
-    if (d.cop) { const f = S.foto.find(x => x.id === d.cop); if (!f) return; await DATI.aggiorna('viaggi', f.v, { cop: f.id }).catch(sbaglio); return toast('Copertina cambiata 🖼️'); }
+    if (d.cop) { const f = S.foto.find(x => x.id === d.cop); if (!f) return; try { await DATI.aggiorna('viaggi', f.v, { cop: f.id }); } catch (er) { return sbaglio(er); } return toast('Copertina cambiata 🖼️'); }
     if (d.delfoto) {
       if (!d.sicuro) { d.sicuro = '1'; t.classList.add('warn'); return toast('Tocca ancora 🗑️ per togliere la foto'); }
       const f = S.foto.find(x => x.id === d.delfoto); if (!f) return;
-      await DATI.elimina('foto', f.id).catch(sbaglio); DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); DATI.eliminaFile(f.pathD); return toast(f.video ? 'Video tolto' : 'Foto tolta');
+      // I file si cancellano solo se la foto è davvero tolta: altrimenti resterebbe una foto rotta, senza più l'originale.
+      try { await DATI.elimina('foto', f.id); } catch (er) { return sbaglio(er); }
+      DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); DATI.eliminaFile(f.pathD); return toast(f.video ? 'Video tolto' : 'Foto tolta');
     }
     if (d.delviaggio) {
       if (!d.sicuro) { d.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare tutto'; return; }
@@ -2186,8 +2203,10 @@
       // Foglio e schermata si chiudono insieme: si tolgono tutti e due i passi del tasto indietro in un colpo solo.
       const passi = (aperto() && history.state && history.state.foglio ? 1 : 0) + (tripAperto() ? 1 : 0);
       closeSheet(true); closeTrip(true); if (passi) { ignoraPop++; history.go(-passi); }
-      for (const f of fs) { await DATI.elimina('foto', f.id).catch(() => {}); DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); DATI.eliminaFile(f.pathD); }
-      await DATI.elimina('viaggi', d.delviaggio).catch(sbaglio); return toast('Ricordo eliminato');
+      let rimaste = 0;
+      for (const f of fs) { try { await DATI.elimina('foto', f.id); } catch (er) { rimaste++; continue; } DATI.eliminaFile(f.path); DATI.eliminaFile(f.pathP); DATI.eliminaFile(f.pathD); }
+      if (rimaste) return toast('Alcune foto non si sono tolte: riprova tra poco.');
+      try { await DATI.elimina('viaggi', d.delviaggio); } catch (er) { return sbaglio(er); } return toast('Ricordo eliminato');
     }
     if (t.id === 'meBtn') return openImp();
     if (t.id === 'calLink') return sheetCal();
@@ -2217,7 +2236,7 @@
     }
     if (t.id === 'avVia') {
       const old = P(S.me).fotoPath;
-      await DATI.imposta('persone', S.me, { foto: '', fotoPath: '' }).catch(sbaglio);
+      try { await DATI.imposta('persone', S.me, { foto: '', fotoPath: '' }); } catch (er) { return sbaglio(er); }
       if (old) DATI.eliminaFile(old);
       return toast('Foto tolta');
     }
@@ -2267,7 +2286,7 @@
     }
     if (t.id === 'calVia') {
       if (!t.dataset.sicuro) { t.dataset.sicuro = 1; t.textContent = 'Tocca di nuovo per scollegare'; return; }
-      await DATI.imposta('privati', S.me, { calendario: '', aggiornato: Date.now() }).catch(sbaglio);
+      try { await DATI.imposta('privati', S.me, { calendario: '', aggiornato: Date.now() }); } catch (er) { return sbaglio(er); }
       return toast('Scollegato: i suoi impegni spariscono entro mezz\'ora');
     }
     if (t.id === 'impBack') return closeImp();
@@ -2406,7 +2425,7 @@
     if (d.modifica) return sheetEvento(S.impegni.find(x => x.id === d.modifica));
     if (d.elimina) {
       if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare'; return; }
-      closeSheet(); await DATI.elimina('impegni', d.elimina).catch(sbaglio);
+      closeSheet(); try { await DATI.elimina('impegni', d.elimina); } catch (er) { return sbaglio(er); }
       if ((S.priv.dettagli || {})[d.elimina]) DATI.aggiorna('privati', S.me, { dettagli: senzaDettagli([{ id: d.elimina }]) }).catch(() => {}); // via anche il titolo privato
       return toast('Impegno eliminato');
     }
@@ -2438,7 +2457,7 @@
     }
     if (d.decidi) {
       const p = S.proposte.find(x => x.id === d.decidi), v = p && inTesta(p); if (!v) return;
-      festa(t); await DATI.aggiorna('proposte', p.id, { chiusa: true, scelta: v.x, decisa: Date.now() }).catch(sbaglio);
+      festa(t); try { await DATI.aggiorna('proposte', p.id, { chiusa: true, scelta: v.x, decisa: Date.now() }); } catch (er) { return sbaglio(er); }
       return toast(`Deciso: ${v.x}. Lo diciamo a tutti 🔔`);
     }
     if (d.riapri) return DATI.aggiorna('proposte', d.riapri, { chiusa: false, scelta: '', decisa: 0 }).catch(sbaglio);
@@ -2516,7 +2535,8 @@
       const e = { t: $('#evT').value.trim(), d: $('#evD').value, h: all ? '' : $('#evH').value, fine: all ? '' : $('#evF').value, who, n: $('#evN').value.trim(), ripeti: $('#evR').value, mezzo: mzOn ? mzOn.dataset.mzf : '', imp: $('#evImp').checked };
       const fino = $('#evFino').value; e.fino = fino && fino > e.d && !e.ripeti ? fino : '';
       if (!all && !/^\d\d:\d\d$/.test(e.fine)) return toast('Scrivi a che ora finisce');
-      if (!all && e.fine <= e.h) return toast(e.fine === e.h ? 'L\'ora di fine è uguale a quella di inizio' : 'L\'ora di fine è prima dell\'inizio: se finisce dopo mezzanotte, usa «Fino al giorno»');
+      // Con «Fino al giorno» l'ora di fine è del giorno dopo (es. dalle 22 alle 2): va bene anche se è "prima" dell'inizio.
+      if (!all && !e.fino && e.fine <= e.h) return toast(e.fine === e.h ? 'L\'ora di fine è uguale a quella di inizio' : 'L\'ora di fine è prima dell\'inizio: se finisce dopo mezzanotte, usa «Fino al giorno»');
       const conPriv = !!$('#evPriv'), priv = conPriv && $('#evPriv').checked;
       closeSheet();
       if (page === 'cal') { selDay = e.d; weekStart = inizioSettimana(new Date(e.d + 'T12:00:00')); }
@@ -2545,7 +2565,7 @@
         }
         else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('Impegno salvato: lo vedono tutti'); }
       } catch (er) { sbaglio(er); }
-    } else if (f.id === 'fNo') {
+    } else if (f.id === 'fNota') {
       const x = $('#notaX').value.trim().replace(/\n{3,}/g, '\n\n').slice(0, 300); if (!x) return toast('Scrivi la nota');
       closeSheet(); seg = 'note'; LS.set('noi4-bacheca', seg);
       try { fresh = await DATI.aggiungi('note', { by: S.me, x, creato: Date.now() }); render(); toast('Nota attaccata: agli altri arriva un avviso 🔔'); } catch (er) { sbaglio(er); }
@@ -2730,6 +2750,9 @@
   }
   DATI.avvia((persona, errore) => {
     if (!persona) { fermaTutto(); $('#app').hidden = true; $('#login').hidden = false; $('#lgErr').textContent = errore || ''; return; }
+    // Un'altra persona senza passare dall'uscita (succede nella modalità prova): gli ascolti "solo miei" (compiti, voti,
+    // Per me, copie) erano ancora di quella di prima e si vedevano i suoi dati. Si riparte da capo.
+    if (avviato && S.me && S.me !== persona) fermaTutto();
     S.me = persona; $('#login').hidden = true; $('#app').hidden = false; ascoltaPriv();
     if (!avviato) {
       avviato = true;
