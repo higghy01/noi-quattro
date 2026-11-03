@@ -806,3 +806,4 @@ html:has(.screen.on) body::before{z-index:26;transition:none}
 /* Accesso: il modulo al centro dello spazio visibile, senza il margine della barra in basso (che lì non c'è) e senza scorrere a vuoto. */
 body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
 .login{min-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
+.fac{display:flex;margin:-6px -6px -6px 0}.fac .gx{margin:0;min-width:36px}

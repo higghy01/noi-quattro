@@ -372,7 +372,7 @@
       const mio = n.by === S.me, anim = n.id === fresh ? ' pop' : nuova ? ' rise' : '';
       return `<div class="foglio${anim}" style="--pc:${col(n.by)};--i:${Math.min(i, 6)}">
         <p><b>${esc(P(n.by).nome)}:</b> ${esc(n.x)}</p>
-        <div class="fby"><small class="fqt" data-ms="${+n.creato || Date.now()}">${quantoFa(n.creato || Date.now())}</small>${mio ? `<button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button>` : ''}</div></div>`;
+        <div class="fby"><small><span class="fqt" data-ms="${+n.creato || Date.now()}">${quantoFa(n.creato || Date.now())}</span>${n.modificato ? ' · modificata' : ''}</small>${mio ? `<span class="fac"><button class="gx tap" data-modnota="${n.id}" aria-label="Modifica la nota">✎</button><button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button></span>` : ''}</div></div>`;
     }).join('')}</div>`;
   }
   // Quanto tempo fa (Sasha, 02/11/2026): "adesso", "5 min fa", "3 ore fa", "ieri", "4 giorni fa", "2 settimane fa", "3 mesi fa".
@@ -388,12 +388,13 @@
   }
   // Il tempo si aggiorna da solo ogni minuto, senza ridisegnare la pagina.
   setInterval(() => { if (page === 'note' && seg === 'note') document.querySelectorAll('.fqt').forEach(e => { const t = quantoFa(+e.dataset.ms); if (e.textContent !== t) e.textContent = t; }); }, 60000);
-  function sheetNota() {
+  // Con una nota (solo mia) il foglio serve a modificarla (Sasha, 03/11/2026): niente avviso agli altri.
+  function sheetNota(n) {
     // id "fNota" (non "fNo": è già del foglio "+ Aggiungi" dell'Agenda di scuola, che con lo stesso nome non salvava più).
-    openSheet(`<h3>Nuova nota</h3><form class="stack" id="fNota">
-     <label>La nota<textarea id="notaX" rows="4" maxlength="300" required placeholder="Es. Domani sono da babbo"></textarea></label>
-     <p class="hint">La vedono tutti e 4. Agli altri arriva un avviso che hai scritto una nota, senza il testo.</p>
-     <button class="btn tap">Attacca la nota</button></form>`, () => setTimeout(() => { const t = $('#notaX'); if (t) t.focus(); }, 380));
+    openSheet(`<h3>${n ? 'Modifica la nota' : 'Nuova nota'}</h3><form class="stack" id="fNota"${n ? ` data-id="${esc(n.id)}"` : ''}>
+     <label>La nota<textarea id="notaX" rows="4" maxlength="300" required placeholder="Es. Domani sono da babbo">${n ? esc(n.x) : ''}</textarea></label>
+     <p class="hint">${n ? 'La vedono tutti e 4, con scritto «modificata». Agli altri non arriva un altro avviso.' : 'La vedono tutti e 4. Agli altri arriva un avviso che hai scritto una nota, senza il testo.'}</p>
+     <button class="btn tap">${n ? 'Salva' : 'Attacca la nota'}</button></form>`, () => setTimeout(() => { const t = $('#notaX'); if (t) t.focus(); }, 380));
   }
   function segSet(el, k) { el.style.setProperty('--k', k); el.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === k)); }
   /* ---------- Proposte: piccoli sondaggi aperti ----------
@@ -2465,6 +2466,7 @@
       if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.style.opacity = 1; t.style.color = 'var(--bad)'; return toast('Tocca ancora ✕ per togliere la proposta'); }
       return DATI.elimina('proposte', d.delprop).catch(sbaglio);
     }
+    if (d.modnota) { const n = S.note.find(x => x.id === d.modnota); if (n && n.by === S.me) sheetNota(n); return; }
     if (d.delnote) {
       if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.style.opacity = 1; t.style.color = 'var(--bad)'; return toast('Tocca ancora ✕ per togliere la nota'); }
       return DATI.elimina('note', d.delnote).catch(sbaglio);
@@ -2567,6 +2569,12 @@
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'fNota') {
       const x = $('#notaX').value.trim().replace(/\n{3,}/g, '\n\n').slice(0, 300); if (!x) return toast('Scrivi la nota');
+      const id = f.dataset.id, vecchia = id && S.note.find(n => n.id === id);
+      if (vecchia) {
+        closeSheet(); if (x === vecchia.x) return;
+        try { await DATI.aggiorna('note', id, { x, modificato: Date.now() }); toast('Nota modificata'); } catch (er) { sbaglio(er); }
+        return;
+      }
       closeSheet(); seg = 'note'; LS.set('noi4-bacheca', seg);
       try { fresh = await DATI.aggiungi('note', { by: S.me, x, creato: Date.now() }); render(); toast('Nota attaccata: agli altri arriva un avviso 🔔'); } catch (er) { sbaglio(er); }
     } else if (f.id === 'fPr') {

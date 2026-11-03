@@ -1,4 +1,4 @@
-# Quando esce una nuova versione (cambia sw.js su main), una notifica breve solo a chi è in AVVISA.
+# Quando esce una nuova versione (cambia sw.js su main), una notifica breve solo a chi è in AVVISA (con [tutti] nel titolo: a tutti).
 name: Avviso aggiornamento
 on:
   push:
@@ -22,5 +22,6 @@ jobs:
         env:
           FIREBASE_CHIAVE: ${{ secrets.FIREBASE_CHIAVE }}
           URL_APP: ${{ vars.URL_APP }}
-          AVVISA: p1
+          # Di solito solo Sasha; se il titolo del cambio contiene [tutti], a tutti e 4 (novità da annunciare, Sasha 03/11/2026).
+          AVVISA: ${{ contains(github.event.head_commit.message, '[tutti]') && 'p1,p2,p3,p4' || 'p1' }}
           TITOLO: ${{ github.event.head_commit.message }}
