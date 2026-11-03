@@ -50,7 +50,10 @@ service cloud.firestore {
       allow read: if membro();
       allow create: if membro() && request.resource.data.by == io()
         && request.resource.data.x is string && request.resource.data.x.size() <= 300;
-      allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin']);
+      // Chi l'ha scritta può cambiare il testo (Sasha, 03/11/2026).
+      allow update: if membro() && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin'])
+        || (resource.data.by == io() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['x', 'modificato'])
+            && request.resource.data.x is string && request.resource.data.x.size() > 0 && request.resource.data.x.size() <= 300));
       allow delete: if membro() && resource.data.by == io();
     }
 

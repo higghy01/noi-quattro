@@ -29,6 +29,7 @@ def main():
         return
     # Il titolo del cambio, senza numeri di versione e di PR: "Voti: cerchietto con la media (noi4-v57) (#59)" → "Voti: cerchietto con la media".
     titolo = re.sub(r"(\s*\((noi4-v\d+|#\d+)\))+\s*$", "", (os.environ.get("TITOLO") or "").strip().splitlines()[0] if (os.environ.get("TITOLO") or "").strip() else "")
+    titolo = titolo.replace("[tutti]", "").strip()
     titolo = titolo if len(titolo) <= 90 else titolo[:89].rstrip() + "…"
     corpo = titolo or "Riapri l'app per vedere le novità."
     mandate = 0
