@@ -143,13 +143,18 @@ def main():
         try:
             letti = streaming(ora.date())
             primo_giro = not st_prima
+            oggi = ora.date().isoformat()
             for x in letti:
-                x["dal"] = st_prima.get(x["id"], {}).get("dal") or ("" if primo_giro else ora.date().isoformat())
+                vecchio_x = st_prima.get(x["id"], {})
+                x["dal"] = vecchio_x.get("dal") or ("" if primo_giro else oggi)  # "Novità" solo per chi compare dopo il primo giro
+                x["primo"] = vecchio_x.get("primo") or oggi  # quando l'abbiamo visto la prima volta: tiene il titolo 120 giorni
             visti = {x["id"] for x in letti}
-            st = letti + [x for x in st_prima.values() if x["id"] not in visti and (x.get("dal") or "") >= limite]
+            # Chi esce dai più popolari resta 120 giorni dalla prima volta (così chi l'ha segnato 👀 lo ritrova).
+            st = letti + [x for x in st_prima.values() if x["id"] not in visti and (x.get("primo") or x.get("dal") or oggi) >= limite]
             print(f"Streaming: {len(letti)} titoli, {sum(1 for x in letti if x['dal'] == ora.date().isoformat())} nuovi.")
         except Exception as e:  # lo streaming non deve fermare il cinema
-            print(f"Streaming: non riuscito ({type(e).__name__}: {e}), tengo quello di prima")
+            stato = getattr(getattr(e, "response", None), "status_code", "")  # niente testo dell'errore: l'indirizzo contiene la chiave
+            print(f"Streaming: non riuscito ({type(e).__name__} {stato}), tengo quello di prima")
     else:
         print("Streaming: chiave TMDB non ancora inserita, salto.")
     ref.set({"agg": int(ora.timestamp() * 1000), "l": elenco, "s": st})

@@ -173,7 +173,9 @@ service cloud.firestore {
       allow read: if membro();
       allow create: if membro() && request.resource.data.by == io()
         && request.resource.data.keys().hasOnly(['t', 'tipo', 'dove', 'by', 'creato'])
-        && request.resource.data.t is string && request.resource.data.t.size() <= 90;
+        && request.resource.data.t is string && request.resource.data.t.size() <= 90
+        && request.resource.data.tipo in ['film', 'serie']
+        && request.resource.data.dove is string && request.resource.data.dove.size() <= 20;
       allow delete: if membro() && resource.data.by == io();
     }
 

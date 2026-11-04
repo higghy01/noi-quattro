@@ -760,7 +760,7 @@ html .topbar.on b{transform:none}
 .mos{display:grid;grid-template-columns:76px 1fr;gap:12px;padding:8px 0;align-items:start}
 .mos+.mos{border-top:1px solid var(--line)}
 .mos img,.mimg{width:76px;height:96px;border-radius:12px;object-fit:cover;background:var(--soft);display:grid;place-items:center;font-size:26px}
-.mst{justify-self:start;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:999px;margin-bottom:2px}
+.mst{justify-self:start;white-space:nowrap;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:999px;margin-bottom:2px}
 .mst.ora{background:color-mix(in srgb,var(--p-verde) 16%,transparent);color:var(--p-verde)}
 .mst.fine{background:color-mix(in srgb,var(--p-rosso) 16%,transparent);color:var(--p-rosso)}
 .mst.arr{background:color-mix(in srgb,var(--me) 16%,transparent);color:var(--me)}
@@ -831,4 +831,4 @@ body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
 .fst button.on{color:#F2B705}
 .flk{justify-self:start;font-size:13px;font-weight:600;color:var(--me);min-height:32px;padding:6px 0 0;margin-right:14px;display:inline-block}
 .mtx .flk+.flk{margin-left:0}
-.flm .mst{line-height:1.5;align-self:start}
+.flm .mst{line-height:1.5;align-self:start;white-space:nowrap}
