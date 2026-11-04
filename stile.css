@@ -809,3 +809,26 @@ body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
 .login{min-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
 .fac{display:flex;margin:-6px -6px -6px 0}.fac .gx{margin:0;min-width:36px}
 .fby small .fsc{opacity:.8}
+
+/* Film (04/11/2026): Bacheca > Film, Cinema e Streaming */
+.fseg{margin:2px 0 10px}
+#noteBody>.filters{margin:-2px 0 10px;overflow:hidden}
+.flm{display:grid;grid-template-columns:68px 1fr;gap:12px;padding:10px 0;align-items:start}
+.flm+.flm{border-top:1px solid var(--line)}
+.flm img,.flm .mimg{width:68px;height:98px;border-radius:10px;object-fit:cover;background:var(--soft);display:grid;place-items:center;font-size:26px;box-shadow:0 4px 14px rgb(0 0 0 / .12)}
+.flm.giu{opacity:.55}
+.flm.giu img{filter:grayscale(.6)}
+.fvo{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.fpe{display:inline-flex;align-items:center;gap:3px;font-size:12px;padding:2px 7px 2px 2px;border-radius:999px;background:color-mix(in srgb,var(--pc) 12%,transparent)}
+.fpe .av{width:20px;height:20px;font-size:11px;border-radius:999px;background:var(--pc);color:#fff;display:grid;place-items:center;overflow:hidden;font-weight:700}
+.fpe .av img{width:100%;height:100%;object-fit:cover}
+.fpe i{font-style:normal;color:var(--muted)}
+.fbt{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.fvb{min-height:34px;padding:0 10px;border-radius:999px;font-size:13px;font-weight:500;background:var(--soft);color:var(--fg);transition:background-color .22s,color .22s,transform .12s var(--ease)}
+.fvb.on{background:var(--me);color:#fff;font-weight:600;animation:fm-bump .38s var(--pop)}
+.fst{display:flex;gap:2px;margin-top:4px}
+.fst button{font-size:22px;line-height:1;min-width:34px;min-height:34px;color:color-mix(in srgb,var(--muted) 45%,transparent);transition:color .2s,transform .12s var(--ease)}
+.fst button.on{color:#F2B705}
+.flk{justify-self:start;font-size:13px;font-weight:600;color:var(--me);min-height:32px;padding:6px 0 0;margin-right:14px;display:inline-block}
+.mtx .flk+.flk{margin-left:0}
+.flm .mst{line-height:1.5;align-self:start}

@@ -27,7 +27,7 @@
   };
   const SCHEDE = ['oggi', 'cal', 'note', 'viaggi', 'spesa'];
   const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', viaggi: 'Ricordi', spesa: 'Spesa' };
-  const SOTTO = { cal: 'Gli impegni di tutta la famiglia', note: 'Proposte, note per tutti e regali', viaggi: 'Foto e video dei momenti insieme', spesa: 'Quello che serve in casa' };
+  const SOTTO = { cal: 'Gli impegni di tutta la famiglia', note: 'Proposte, note, regali e film', viaggi: 'Foto e video dei momenti insieme', spesa: 'Quello che serve in casa' };
   const NOMI_COLORI = { blu: 'blu', rosa: 'rosa', ambra: 'ambra', verde: 'verde', viola: 'viola', corallo: 'corallo', rosso: 'rosso', grigio: 'grigio' };
   // Preferenze di questo telefono (aspetto, scheda di apertura): restano solo qui.
   const LS = {
@@ -39,8 +39,8 @@
 
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
-  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, pranzo: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {} };
-  let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = ['regali', 'note'].includes(LS.get('noi4-bacheca', 'proposte')) ? LS.get('noi4-bacheca', 'proposte') : 'proposte';
+  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, pranzo: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {}, filmInfo: {}, filmVoti: [], filmExtra: [] };
+  let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = ['regali', 'note', 'film'].includes(LS.get('noi4-bacheca', 'proposte')) ? LS.get('noi4-bacheca', 'proposte') : 'proposte';
   const seen = new Set(); let fresh = null; let avviato = false;
 
   function inizioSettimana(d) { const x = new Date(d); return addDays(x, -((x.getDay() + 6) % 7)); }
@@ -376,13 +376,85 @@
   function rNote() {
     const el = $('#p-note');
     // Il selettore resta fermo (così la pillola scorre), cambia solo il contenuto sotto.
-    if (!$('#segNote')) el.innerHTML = `<div class="seg" id="segNote" style="--n:3"><i class="spill"></i><button class="tap" data-seg="proposte">Proposte</button><button class="tap" data-seg="note">Note</button><button class="tap" data-seg="regali">Regali</button></div><div id="noteBody"></div>`;
-    segSet($('#segNote'), seg === 'regali' ? 2 : seg === 'note' ? 1 : 0);
-    $('#noteBody').innerHTML = seg === 'regali' ? rRegali() : seg === 'note' ? rFoglietti() : rProposte();
+    if (!$('#segNote')) el.innerHTML = `<div class="seg" id="segNote" style="--n:4"><i class="spill"></i><button class="tap" data-seg="proposte">Proposte</button><button class="tap" data-seg="note">Note</button><button class="tap" data-seg="regali">Regali</button><button class="tap" data-seg="film">Film</button></div><div id="noteBody"></div>`;
+    segSet($('#segNote'), seg === 'film' ? 3 : seg === 'regali' ? 2 : seg === 'note' ? 1 : 0);
+    $('#noteBody').innerHTML = seg === 'film' ? rFilm() : seg === 'regali' ? rRegali() : seg === 'note' ? rFoglietti() : rProposte();
   }
   /* ---------- Note (02/11/2026, Sasha): foglietti per tutti e 4, tipo "Sasha: domani sono da babbo".
      Chi scrive la nota la può togliere; agli altri arriva un avviso "X ha scritto una nota", senza il testo. */
   const NOTA_VITA = 24 * 3600e3; // Le note spariscono 24 ore dopo essere state scritte (Sasha, 03/11/2026); le cancella anche il programma degli avvisi.
+  /* ---------- Film (Sasha, 04/11/2026): una parte Cinema (uscite in Italia, da ComingSoon) e una Streaming
+     (HBO Max, Netflix, Prime Video, da TMDB), aggiornate una volta a settimana dal programma "Film" in info/film.
+     Ognuno segna 👀 Da vedere, ✅ Già visto o 🚫 Non mi interessa (raccolta "film", ognuno scrive solo il suo) e,
+     se l'ha visto, le stelle. In più i titoli aggiunti a mano (raccolta "filmextra"). */
+  let segFilm = LS.get('noi4-film', 'cinema') === 'streaming' ? 'streaming' : 'cinema', filmServ = 'tutti';
+  const SERV = ['Netflix', 'Prime Video', 'HBO Max'], DOVE = ['Cinema', ...SERV, 'Altro'];
+  const FSTATI = [['vedere', '👀', 'Da vedere'], ['visto', '✅', 'Visto'], ['no', '🚫', 'No']];
+  const voto = (id, p) => { const v = (S.filmVoti.find(x => x.id === id) || {})[p]; return v && v.s ? v : null; };
+  const corto = (d) => fmt(d, { day: 'numeric', month: 'short' }).replace(/\./g, '');
+  function filmTutti() {
+    const info = S.filmInfo || {};
+    const extra = S.filmExtra.map(x => ({ id: x.id, t: x.t, extra: true, by: x.by, tipo: x.tipo || 'film', dove: x.dove || 'Altro', creato: x.creato || 0 }));
+    return {
+      cinema: [...(info.l || []).map(x => Object.assign({ dove: 'Cinema' }, x)), ...extra.filter(x => x.dove === 'Cinema')],
+      streaming: [...(info.s || []), ...extra.filter(x => x.dove !== 'Cinema')], agg: info.agg
+    };
+  }
+  function rigaFilm(x, i) {
+    const ids = IDS(), mio = voto(x.id, S.me), altri = ids.filter(p => p !== S.me && voto(x.id, p));
+    const meta = x.extra ? [x.tipo === 'serie' ? 'Serie' : 'Film', x.dove !== 'Cinema' ? x.dove : 'Al cinema', `aggiunto da ${x.by === S.me ? 'te' : esc(P(x.by).nome)}`]
+      : x.dove === 'Cinema' ? [x.gen, x.reg && 'di ' + x.reg] : [x.dove, x.tipo === 'serie' ? 'Serie' : 'Film', x.gen, x.anno];
+    const quando = x.dove === 'Cinema' && x.d ? (x.d > T ? `<span class="mst arr">Dal ${corto(x.d)}</span>` : x.d >= iso(addDays(TODAY, -7)) ? '<span class="mst ora">Appena uscito</span>' : '')
+      : x.dal && x.dal >= iso(addDays(TODAY, -8)) ? '<span class="mst ora">Novità</span>' : '';
+    const stelle = mio && mio.s === 'visto' ? `<span class="fst" role="group" aria-label="Il tuo voto">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="tap${(mio.v || 0) >= n ? ' on' : ''}" data-fstar="${esc(x.id)}" data-v="${n}" aria-label="${n} stelle">★</button>`).join('')}</span>` : '';
+    return `<div class="flm${mio && mio.s === 'no' ? ' giu' : ''}" style="--i:${Math.min(i, 8)}">
+      ${x.img ? `<img src="${esc(x.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="mimg" aria-hidden="true">${x.tipo === 'serie' ? '📺' : '🎬'}</span>`}
+      <div class="mtx">${quando}<b>${esc(x.t)}</b><small>${meta.filter(Boolean).map(esc).join(' · ')}</small>
+        ${altri.length ? `<span class="fvo">${altri.map(p => { const v = voto(x.id, p); return `<span class="fpe" style="--pc:${col(p)}" title="${esc(P(p).nome)}"><span class="av">${avt(p)}</span>${FSTATI.find(f => f[0] === v.s)[1]}${v.s === 'visto' && v.v ? `<i>${v.v}★</i>` : ''}</span>`; }).join('')}</span>` : ''}
+        <span class="fbt">${FSTATI.map(([k, e, n]) => `<button type="button" class="tap fvb${mio && mio.s === k ? ' on' : ''}" data-fv="${esc(x.id)}" data-s="${k}" aria-pressed="${mio && mio.s === k ? 'true' : 'false'}" aria-label="${k === 'no' ? 'Non mi interessa' : n}">${e} ${n}</button>`).join('')}</span>
+        ${stelle}${x.link ? `<a class="tap flk" href="${esc(x.link)}" target="_blank" rel="noopener">Scheda ›</a>` : ''}${x.extra && x.by === S.me ? `<button type="button" class="tap flk" data-fdel="${esc(x.id)}">Togli</button>` : ''}
+      </div></div>`;
+  }
+  function rFilm() {
+    const F = filmTutti(), tutti = F[segFilm], nuova = !seen.has(vista() + segFilm);
+    const nV = (x) => IDS().filter(p => (voto(x.id, p) || {}).s === 'vedere').length;
+    const lista = segFilm === 'streaming' && filmServ !== 'tutti' ? tutti.filter(x => x.dove === filmServ) : tutti;
+    const mioS = (x) => (voto(x.id, S.me) || {}).s;
+    const gruppi = [];
+    const insieme = lista.filter(x => nV(x) >= 2 && mioS(x) !== 'visto').sort((a, b) => nV(b) - nV(a));
+    const vedere = lista.filter(x => !insieme.includes(x) && nV(x) === 1 && mioS(x) !== 'visto');
+    const usati = new Set([...insieme, ...vedere]);
+    const resto = lista.filter(x => !usati.has(x) && mioS(x) !== 'visto');
+    const ordNo = (a, b) => (mioS(a) === 'no') - (mioS(b) === 'no');
+    gruppi.push(['🍿 Da vedere insieme', insieme], ['👀 Da vedere', vedere]);
+    if (segFilm === 'cinema') {
+      const mese = iso(addDays(TODAY, -35));
+      gruppi.push(['🎬 Al cinema ora', resto.filter(x => x.extra || (x.d <= T && x.d >= mese)).sort((a, b) => ordNo(a, b) || (b.d || '').localeCompare(a.d || ''))],
+        ['📅 In arrivo', resto.filter(x => !x.extra && x.d > T).sort((a, b) => ordNo(a, b) || a.d.localeCompare(b.d))]);
+    } else {
+      const nov = resto.filter(x => x.extra ? x.creato > Date.now() - 8 * 864e5 : x.dal && x.dal >= iso(addDays(TODAY, -8)));
+      gruppi.push(['✨ Novità della settimana', nov.sort(ordNo)], ['📺 Da scoprire', resto.filter(x => !nov.includes(x)).sort(ordNo)]);
+    }
+    gruppi.push(['✅ Già visti da te', lista.filter(x => mioS(x) === 'visto')]);
+    let k = 0;
+    const corpo = gruppi.filter(([, l]) => l.length).map(([tt, l]) => `<div class="card mcard${nuova ? ' rise' : ''}" style="--i:${Math.min(k++, 6)}"><div class="agtop"><b>${tt}</b><small>${l.length}</small></div>${l.slice(0, 40).map(rigaFilm).join('')}${l.length > 40 ? `<div class="empty">E altri ${l.length - 40}.</div>` : ''}</div>`).join('');
+    if (nuova) seen.add(vista() + segFilm);
+    const vuoto = segFilm === 'cinema' ? (F.agg ? 'Nessun film trovato in questo momento. Tocca + per aggiungerne uno.' : 'I film al cinema arrivano al primo aggiornamento, il lunedì mattina. Intanto puoi aggiungerne uno con +.')
+      : 'Le novità di HBO Max, Netflix e Prime Video arriveranno da sole il lunedì. Intanto tocca + per aggiungere un film o una serie.';
+    return `<div class="fseg">${segHtml('fsez', [['cinema', '🎬 Cinema'], ['streaming', '📺 Streaming']], segFilm)}</div>
+     ${segFilm === 'streaming' ? `<div class="filters">${['tutti', ...SERV].map(f => `<button class="fb tap${filmServ === f ? ' on' : ''}" data-fserv="${f}" style="--pc:var(--acc)"><i></i><span>${f === 'tutti' ? 'Tutti' : f}</span></button>`).join('')}</div>` : ''}
+     ${corpo || `<div class="empty big"><b>${segFilm === 'cinema' ? '🎬' : '📺'}</b><span>${vuoto}</span></div>`}
+     ${corpo ? `<div class="empty mnota">Segna 👀 quello che vuoi vedere: se lo vuole vedere anche qualcun altro sale in «Da vedere insieme».${F.agg ? ` Aggiornato ${corto(new Date(F.agg).toISOString().slice(0, 10))}, si aggiorna ogni lunedì.` : ''}</div>` : ''}`;
+  }
+  function sheetFilm() {
+    const dv = segFilm === 'cinema' ? 'Cinema' : filmServ !== 'tutti' ? filmServ : 'Netflix';
+    openSheet(`<h3>Aggiungi un film o una serie</h3><form class="stack" id="fFilm">
+     <label>Titolo<input id="fiT" maxlength="90" required autocomplete="off" placeholder="Es. Il Gattopardo"></label>
+     <div class="lbl">Cos'è</div><div class="mezzi">${[['film', '🎬 Film'], ['serie', '📺 Serie']].map(([k, n], i) => `<button type="button" class="mz tap${i ? '' : ' on'}" data-fitipo="${k}">${n}</button>`).join('')}</div>
+     <div class="lbl">Dove</div><div class="mezzi">${DOVE.map(k => `<button type="button" class="mz tap${k === dv ? ' on' : ''}" data-fidove="${k}">${k}</button>`).join('')}</div>
+     <p class="hint">Lo vedono tutti e 4 e ognuno può segnarlo. Solo tu lo puoi togliere.</p>
+     <button class="btn tap">Aggiungi</button></form>`, () => setTimeout(() => { const t = $('#fiT'); if (t) t.focus(); }, 380));
+  }
   function rFoglietti() {
     const nuova = !seen.has(vista()), lista = S.note.filter(n => (+n.creato || 0) > Date.now() - NOTA_VITA).sort((a, b) => (b.creato || 0) - (a.creato || 0));
     if (!lista.length) return `<div class="empty big${ri(0)}"><b>📝</b><span>Nessuna nota. Tocca + per scrivere qualcosa per tutti, tipo «domani sono da babbo». Le note durano 24 ore.</span></div>`;
@@ -1208,7 +1280,7 @@
     fresh = null;
     if (a === 'itemTx' && $('#itemTx')) $('#itemTx').focus();
     $('#fab').hidden = page === 'spesa' && segSpesa !== 'ricette';
-    $('#fab').setAttribute('aria-label', page === 'spesa' && segSpesa === 'ricette' ? 'Nuova ricetta' : page === 'note' ? (seg === 'regali' ? 'Aggiungi un desiderio' : seg === 'note' ? 'Nuova nota' : 'Nuova proposta') : page === 'viaggi' ? 'Nuovo ricordo' : 'Nuovo impegno');
+    $('#fab').setAttribute('aria-label', page === 'spesa' && segSpesa === 'ricette' ? 'Nuova ricetta' : page === 'note' ? (seg === 'film' ? 'Aggiungi un film o una serie' : seg === 'regali' ? 'Aggiungi un desiderio' : seg === 'note' ? 'Nuova nota' : 'Nuova proposta') : page === 'viaggi' ? 'Nuovo ricordo' : 'Nuovo impegno');
   }
   function banner() {
     const b = $('#banner');
@@ -2197,7 +2269,7 @@
     if (t.id === 'legoVia') { const f = $('#fRe'); delete f.dataset.lego; $('#legoSel').innerHTML = ''; $('#legoOn').textContent = '🧱 Cerca un set LEGO'; return; }
     if (d.go) return go(d.go);
     if (t.id === 'fab' && page === 'spesa' && segSpesa === 'ricette') return sheetNuovaRicetta();
-    if (t.id === 'fab') return page === 'note' ? (seg === 'regali' ? sheetRegalo(S.me) : seg === 'note' ? sheetNota() : sheetProposta('cena')) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
+    if (t.id === 'fab') return page === 'note' ? (seg === 'film' ? sheetFilm() : seg === 'regali' ? sheetRegalo(S.me) : seg === 'note' ? sheetNota() : sheetProposta('cena')) : page === 'viaggi' ? sheetViaggio() : sheetEvento();
     if (d.filtror) { filtroR = d.filtror; return rViaggi(); }
     if (d.tipo) { t.parentElement.querySelectorAll('.tp').forEach(b => b.classList.toggle('on', b === t)); return; }
     if (d.viaggio) { openTrip(d.viaggio); if (d.apriFoto) setTimeout(() => openViewer(d.apriFoto), 300); return; }
@@ -2324,6 +2396,22 @@
       if (seg === d.seg) return; seg = d.seg; LS.set('noi4-bacheca', seg);
       return render();
     }
+    if (d.fsez) { if (segFilm === d.fsez) return; segFilm = d.fsez; LS.set('noi4-film', segFilm); return render(); }
+    if (d.fserv) { filmServ = d.fserv; return render(); }
+    if (d.fitipo || d.fidove) { t.parentElement.querySelectorAll('.mz').forEach(b => b.classList.toggle('on', b === t)); return; }
+    if (d.fv) {
+      const prima = voto(d.fv, S.me), s = prima && prima.s === d.s ? '' : d.s; tic();
+      const v = { s, v: s === 'visto' && prima && prima.s === 'visto' ? prima.v || 0 : 0 };
+      const doc = S.filmVoti.find(x => x.id === d.fv); if (doc) doc[S.me] = v; else S.filmVoti.push({ id: d.fv, [S.me]: v });
+      render();
+      if (s === 'vedere') { const n = IDS().filter(p => (voto(d.fv, p) || {}).s === 'vedere').length; if (n >= 2) toast(n === IDS().length ? 'Lo volete vedere tutti! 🍿' : 'Lo volete vedere in ' + n + ' 🍿'); }
+      return DATI.imposta('film', d.fv, { [S.me]: v }).catch(sbaglio);
+    }
+    if (d.fstar) {
+      const prima = voto(d.fstar, S.me); if (!prima) return; const n = +d.v === prima.v ? 0 : +d.v; tic(); prima.v = n; render();
+      return DATI.imposta('film', d.fstar, { [S.me]: { s: 'visto', v: n } }).catch(sbaglio);
+    }
+    if (d.fdel) { const x = S.filmExtra.find(y => y.id === d.fdel); if (!x || x.by !== S.me) return; S.filmExtra = S.filmExtra.filter(y => y !== x); render(); toast('Tolto'); return DATI.elimina('filmextra', d.fdel).catch(sbaglio); }
     if (d.tema) { LS.set('noi4-tema', d.tema); segSet(t.parentElement, [...t.parentElement.querySelectorAll('button')].indexOf(t)); return applicaTema(); }
     if (d.apri) { LS.set('noi4-apertura', d.apri); segSet(t.parentElement, SCHEDE.indexOf(d.apri)); return toast('All\'apertura vedrai: ' + NOMI_SCHEDE[d.apri]); }
     if (d.ora) { t.parentElement.querySelectorAll('.ora').forEach(b => b.classList.toggle('on', b === t)); return DATI.imposta('persone', S.me, { notifiche: Object.assign({}, P(S.me).notifiche, { [d.ora]: +d.h }) }).catch(sbaglio); }
@@ -2594,6 +2682,11 @@
         }
         else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('Impegno salvato: lo vedono tutti'); }
       } catch (er) { sbaglio(er); }
+    } else if (f.id === 'fFilm') {
+      const tt = $('#fiT').value.trim().slice(0, 90); if (!tt) return toast('Scrivi il titolo');
+      const tipo = (f.querySelector('[data-fitipo].on') || { dataset: { fitipo: 'film' } }).dataset.fitipo, dove = (f.querySelector('[data-fidove].on') || { dataset: { fidove: 'Altro' } }).dataset.fidove;
+      closeSheet(); segFilm = dove === 'Cinema' ? 'cinema' : 'streaming'; filmServ = 'tutti'; LS.set('noi4-film', segFilm);
+      try { await DATI.aggiungi('filmextra', { t: tt, tipo, dove, by: S.me, creato: Date.now() }); render(); toast('Aggiunto: ora tutti possono segnarlo'); } catch (er) { sbaglio(er); }
     } else if (f.id === 'fNota') {
       const x = $('#notaX').value.trim().replace(/\n{3,}/g, '\n\n').slice(0, 300); if (!x) return toast('Scrivi la nota');
       const id = f.dataset.id, vecchia = id && S.note.find(n => n.id === id);
@@ -2789,7 +2882,7 @@
     for (const k in stopPasto) if (stopPasto[k]) { stopPasto[k](); stopPasto[k] = null; GP[k] = null; }
     if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
     for (const k in stopSorp) { stopSorp[k](); delete stopSorp[k]; }
-    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], scuolaEv: [], note: [], proposte: [], spesa: [], cena: {}, pranzo: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {} });
+    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], scuolaEv: [], note: [], proposte: [], spesa: [], cena: {}, pranzo: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {}, filmInfo: {}, filmVoti: [], filmExtra: [] });
     seen.clear();
   }
   DATI.avvia((persona, errore) => {
@@ -2817,6 +2910,9 @@
       // Chi controlla (Sasha) legge anche le sezioni "Per me" degli altri, senza gli appuntamenti fissi (le regole lo permettono solo così).
       if (CONTROLLA.includes(persona)) for (const pid of CASA) if (pid !== persona) a(DATI.ascolta('mie', l => { mieDati[pid] = l; unisciMie(); }, [['per', '==', pid], ['k', 'in', MIE_VISTE]]));
       if (CASA.includes(persona) || CONTROLLA.includes(persona)) a(DATI.ascoltaDoc('info', 'mostre', d => { S.mostre = d || {}; render(); }));
+      a(DATI.ascoltaDoc('info', 'film', d => { S.filmInfo = d || {}; if (page === 'note' && seg === 'film') render(); }));
+      a(DATI.ascolta('film', l => { S.filmVoti = l; if (page === 'note' && seg === 'film') render(); }));
+      a(DATI.ascolta('filmextra', l => { S.filmExtra = l; if (page === 'note' && seg === 'film') render(); }));
       a(DATI.ascolta('ricette', l => { S.ricette = l; render(); if (ricAperta) sheetRicetta(ricAperta, true); }));
       a(DATI.ascoltaDoc('famiglia', 'mezzi', d => { S.mezzi = Array.isArray(d.lista) ? d.lista.filter(m => m && m.n) : []; render(); }));
       a(DATI.ascolta('viaggi', l => { S.viaggi = l; render(); }));
