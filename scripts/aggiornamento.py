@@ -19,7 +19,11 @@ def main():
     if not m:
         raise SystemExit("Versione non trovata in sw.js")
     versione = f"v{m.group(1)}"
-    chi = [p.strip() for p in (os.environ.get("AVVISA") or "").split(",") if re.fullmatch(r"p\d{1,2}", p.strip())]
+    # Solo la prima riga del messaggio è il titolo: un [tutti] più sotto (es. nell'elenco dei cambi uniti) non conta.
+    prima_riga = ((os.environ.get("TITOLO") or "").strip().splitlines() or [""])[0]
+    tutti = "[tutti]" in prima_riga
+    lista = (os.environ.get("AVVISA_TUTTI") if tutti else None) or os.environ.get("AVVISA") or ""
+    chi = [p.strip() for p in lista.split(",") if re.fullmatch(r"p\d{1,2}", p.strip())]
     if not chi:
         raise SystemExit("Nessuno da avvisare (AVVISA)")
     db = database()
@@ -27,9 +31,10 @@ def main():
     if (stato.get().to_dict() or {}).get("versione") == versione:
         print(f"{versione} già avvisata")
         return
-    # Il titolo del cambio, senza numeri di versione e di PR: "Voti: cerchietto con la media (noi4-v57) (#59)" → "Voti: cerchietto con la media".
-    titolo = re.sub(r"(\s*\((noi4-v\d+|#\d+)\))+\s*$", "", (os.environ.get("TITOLO") or "").strip().splitlines()[0] if (os.environ.get("TITOLO") or "").strip() else "")
-    titolo = titolo.replace("[tutti]", "").strip()
+    # Il titolo del cambio, senza [tutti] e senza numeri di versione e di PR (in qualunque ordine):
+    # "Pranzo e cena (noi4-v81) [tutti] (#92)" → "Pranzo e cena".
+    titolo = re.sub(r"\s+", " ", prima_riga.replace("[tutti]", " ")).strip()
+    titolo = re.sub(r"(\s*\((noi4-v\d+|v\d+|#\d+)\))+\s*$", "", titolo).strip()
     titolo = titolo if len(titolo) <= 90 else titolo[:89].rstrip() + "…"
     corpo = titolo or "Riapri l'app per vedere le novità."
     mandate = 0

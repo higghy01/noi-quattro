@@ -187,13 +187,17 @@
   const GP = { pranzo: null, cena: null }; // il giorno che si sta ascoltando per ogni pasto
   function fuoriCena(id, d, k) {
     d = d || T; const F = PASTI[k || 'cena'].fascia;
-    const r = rientro(id, d);
-    if (r && r.m > F[0] && minuti(r.turno.h) < F[1]) return { perche: `al lavoro, a casa verso le ${r.ora}` };
+    // Tutti i turni del giorno, non solo l'ultimo: con il turno spezzato (es. 8-13:30 e 17-21) a pranzo conta quello del mattino.
+    for (const t of delGiorno(d, e => e.fonte === 'orario:' + id && e.h && e.fine && e.fine > e.h)) {
+      const m = minuti(t.fine) + strada(id);
+      if (m > F[0] && minuti(t.h) < F[1]) return { perche: `al lavoro, a casa verso le ${hm(m)}` };
+    }
     // Turno che passa la mezzanotte (es. 19-1): finisce "prima" di iniziare, ma all'ora di cena è al lavoro (come il programma degli avvisi).
     const notte = delGiorno(d, e => e.fonte === 'orario:' + id && e.h && e.fine && e.fine <= e.h && minuti(e.h) < F[1])[0];
     if (notte) return { perche: `al lavoro fino alle ${notte.fine}` };
     const tutti = IDS().length;
-    const e = delGiorno(d, x => !eTurno(x) && x.h && (x.who || []).includes(id) && !((x.who || []).length >= tutti && tutti > 1))
+    // Le verifiche di scuola (le vede solo chi è in "prove") e le lezioni non sono un'uscita: uguale su tutti i telefoni.
+    const e = delGiorno(d, x => !eTurno(x) && !x.cmp && !x.virtuale && x.h && (x.who || []).includes(id) && !((x.who || []).length >= tutti && tutti > 1))
       .find(x => { const [a, b] = intervallo(x, d); return a < F[1] && b > F[0]; });
     return e ? { perche: piuGiorni(e) && d !== e.d ? e.t : `alle ${e.h} ${e.t}` } : null; // di più giorni: "alle 18" era l'ora di ieri
   }
@@ -390,7 +394,9 @@
   let segFilm = LS.get('noi4-film', 'cinema') === 'streaming' ? 'streaming' : 'cinema', filmServ = 'tutti';
   const SERV = ['Netflix', 'Prime Video', 'HBO Max'], DOVE = ['Cinema', ...SERV, 'Altro'];
   const FSTATI = [['vedere', '👀', 'Da vedere'], ['visto', '✅', 'Visto'], ['no', '🚫', 'No']];
-  const voto = (id, p) => { const v = (S.filmVoti.find(x => x.id === id) || {})[p]; return v && v.s ? v : null; };
+  // Solo segni conosciuti e stelle da 1 a 5 (un valore strano nel database non rompe la pagina e non diventa codice).
+  const voto = (id, p) => { const v = (S.filmVoti.find(x => x.id === id) || {})[p]; return v && FSTATI.some(f => f[0] === v.s) ? v : null; };
+  const stelleDi = (v) => { const n = Math.round(Number(v && v.v)); return n >= 1 && n <= 5 ? n : 0; };
   const corto = (d) => fmt(d, { day: 'numeric', month: 'short' }).replace(/\./g, '');
   function filmTutti() {
     const info = S.filmInfo || {};
@@ -406,11 +412,11 @@
       : x.dove === 'Cinema' ? [x.gen, x.reg && 'di ' + x.reg] : [x.dove, x.tipo === 'serie' ? 'Serie' : 'Film', x.gen, x.anno];
     const quando = x.dove === 'Cinema' && x.d ? (x.d > T ? `<span class="mst arr">Dal ${corto(x.d)}</span>` : x.d >= iso(addDays(TODAY, -7)) ? '<span class="mst ora">Appena uscito</span>' : '')
       : x.dal && x.dal >= iso(addDays(TODAY, -8)) ? '<span class="mst ora">Novità</span>' : '';
-    const stelle = mio && mio.s === 'visto' ? `<span class="fst" role="group" aria-label="Il tuo voto">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="tap${(mio.v || 0) >= n ? ' on' : ''}" data-fstar="${esc(x.id)}" data-v="${n}" aria-label="${n} stelle">★</button>`).join('')}</span>` : '';
+    const stelle = mio && mio.s === 'visto' ? `<span class="fst" role="group" aria-label="Il tuo voto">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="tap${stelleDi(mio) >= n ? ' on' : ''}" data-fstar="${esc(x.id)}" data-v="${n}" aria-label="${n} stelle">★</button>`).join('')}</span>` : '';
     return `<div class="flm${mio && mio.s === 'no' ? ' giu' : ''}" style="--i:${Math.min(i, 8)}">
       ${x.img ? `<img src="${esc(x.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="mimg" aria-hidden="true">${x.tipo === 'serie' ? '📺' : '🎬'}</span>`}
       <div class="mtx">${quando}<b>${esc(x.t)}</b><small>${meta.filter(Boolean).map(esc).join(' · ')}</small>
-        ${altri.length ? `<span class="fvo">${altri.map(p => { const v = voto(x.id, p); return `<span class="fpe" style="--pc:${col(p)}" title="${esc(P(p).nome)}"><span class="av">${avt(p)}</span>${FSTATI.find(f => f[0] === v.s)[1]}${v.s === 'visto' && v.v ? `<i>${v.v}★</i>` : ''}</span>`; }).join('')}</span>` : ''}
+        ${altri.length ? `<span class="fvo">${altri.map(p => { const v = voto(x.id, p); return `<span class="fpe" style="--pc:${col(p)}" title="${esc(P(p).nome)}"><span class="av">${avt(p)}</span>${FSTATI.find(f => f[0] === v.s)[1]}${v.s === 'visto' && stelleDi(v) ? `<i>${stelleDi(v)}★</i>` : ''}</span>`; }).join('')}</span>` : ''}
         <span class="fbt">${FSTATI.map(([k, e, n]) => `<button type="button" class="tap fvb${mio && mio.s === k ? ' on' : ''}" data-fv="${esc(x.id)}" data-s="${k}" aria-pressed="${mio && mio.s === k ? 'true' : 'false'}" aria-label="${k === 'no' ? 'Non mi interessa' : n}">${e} ${n}</button>`).join('')}</span>
         ${stelle}${x.link ? `<a class="tap flk" href="${esc(x.link)}" target="_blank" rel="noopener">Scheda ›</a>` : ''}${x.extra && x.by === S.me ? `<button type="button" class="tap flk" data-fdel="${esc(x.id)}">Togli</button>` : ''}
       </div></div>`;
@@ -2401,14 +2407,14 @@
     if (d.fitipo || d.fidove) { t.parentElement.querySelectorAll('.mz').forEach(b => b.classList.toggle('on', b === t)); return; }
     if (d.fv) {
       const prima = voto(d.fv, S.me), s = prima && prima.s === d.s ? '' : d.s; tic();
-      const v = { s, v: s === 'visto' && prima && prima.s === 'visto' ? prima.v || 0 : 0 };
+      const v = { s, v: s === 'visto' && prima && prima.s === 'visto' ? stelleDi(prima) : 0 };
       const doc = S.filmVoti.find(x => x.id === d.fv); if (doc) doc[S.me] = v; else S.filmVoti.push({ id: d.fv, [S.me]: v });
       render();
       if (s === 'vedere') { const n = IDS().filter(p => (voto(d.fv, p) || {}).s === 'vedere').length; if (n >= 2) toast(n === IDS().length ? 'Lo volete vedere tutti! 🍿' : 'Lo volete vedere in ' + n + ' 🍿'); }
       return DATI.imposta('film', d.fv, { [S.me]: v }).catch(sbaglio);
     }
     if (d.fstar) {
-      const prima = voto(d.fstar, S.me); if (!prima) return; const n = +d.v === prima.v ? 0 : +d.v; tic(); prima.v = n; render();
+      const prima = voto(d.fstar, S.me); if (!prima) return; const n = +d.v === stelleDi(prima) ? 0 : stelleDi({ v: d.v }); tic(); prima.v = n; render();
       return DATI.imposta('film', d.fstar, { [S.me]: { s: 'visto', v: n } }).catch(sbaglio);
     }
     if (d.fdel) { const x = S.filmExtra.find(y => y.id === d.fdel); if (!x || x.by !== S.me) return; S.filmExtra = S.filmExtra.filter(y => y !== x); render(); toast('Tolto'); return DATI.elimina('filmextra', d.fdel).catch(sbaglio); }
@@ -2689,14 +2695,16 @@
       try { await DATI.aggiungi('filmextra', { t: tt, tipo, dove, by: S.me, creato: Date.now() }); render(); toast('Aggiunto: ora tutti possono segnarlo'); } catch (er) { sbaglio(er); }
     } else if (f.id === 'fNota') {
       const x = $('#notaX').value.trim().replace(/\n{3,}/g, '\n\n').slice(0, 300); if (!x) return toast('Scrivi la nota');
-      const id = f.dataset.id, vecchia = id && S.note.find(n => n.id === id);
+      const id = f.dataset.id, vecchia = id && S.note.find(n => n.id === id && (+n.creato || 0) > Date.now() - NOTA_VITA);
       if (vecchia) {
         closeSheet(); if (x === vecchia.x) return;
         try { await DATI.aggiorna('note', id, { x, modificato: Date.now() }); toast('Nota modificata'); } catch (er) { sbaglio(er); }
         return;
       }
+      // La nota è scaduta (24 ore) mentre il foglio era aperto: il testo non si perde, si riattacca come nota nuova e lo si dice.
+      const scaduta = !!id;
       closeSheet(); seg = 'note'; LS.set('noi4-bacheca', seg);
-      try { fresh = await DATI.aggiungi('note', { by: S.me, x, creato: Date.now() }); render(); toast('Nota attaccata: agli altri arriva un avviso 🔔'); } catch (er) { sbaglio(er); }
+      try { fresh = await DATI.aggiungi('note', { by: S.me, x, creato: Date.now() }); render(); toast(scaduta ? 'La nota era scaduta: l\'ho riattaccata per altre 24 ore 🔔' : 'Nota attaccata: agli altri arriva un avviso 🔔'); } catch (er) { sbaglio(er); }
     } else if (f.id === 'fPr') {
       const q = $('#prQ').value.trim().slice(0, 80); if (!q) return toast('Scrivi la domanda');
       const tp = (f.querySelector('.tp.on') || { dataset: {} }).dataset.ptipo || 'altro', opzioni = {}, visti = new Set(), ora = Date.now();

@@ -163,10 +163,16 @@ service cloud.firestore {
     }
 
     // Film (04/11/2026): il segno di ognuno su un film (da vedere, visto, non mi interessa, stelle). Ognuno scrive solo il suo.
+    // Il segno è { s: '' | 'vedere' | 'visto' | 'no', v: stelle da 0 a 5 } (04/11/2026: niente valori strani).
+    function segnoFilm(x) {
+      return x is map && x.keys().hasAll(['s', 'v']) && x.keys().hasOnly(['s', 'v'])
+        && x.s in ['', 'vedere', 'visto', 'no'] && x.v is number && x.v >= 0 && x.v <= 5;
+    }
     match /film/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.keys().hasOnly([io()]);
-      allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([io()]);
+      allow create: if membro() && request.resource.data.keys().hasOnly([io()]) && segnoFilm(request.resource.data[io()]);
+      allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([io()])
+        && segnoFilm(request.resource.data[io()]);
     }
     // Film e serie aggiunti a mano: tutti li vedono, solo chi li ha aggiunti li toglie.
     match /filmextra/{id} {

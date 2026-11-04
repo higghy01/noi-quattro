@@ -58,15 +58,17 @@ def leggi(pagina):
 
 
 def prendi():
-    film = {}
+    """I film di tutte le settimane e se le pagine si sono lette tutte (serve per togliere i film rinviati)."""
+    film, tutte = {}, True
     for r in SETTIMANE:
         try:
             for x in leggi(scarica(f"{BASE}/cinema/calendariouscite/?r={r}")):
                 film[x["id"]] = x
         except requests.RequestException as e:
+            tutte = False
             print(f"settimana {r}: non riuscita ({type(e).__name__})")
         time.sleep(1)
-    return list(film.values())
+    return list(film.values()), tutte
 
 
 TMDB = "https://api.themoviedb.org/3"
@@ -117,7 +119,7 @@ def streaming(oggi):
 
 def main():
     if "--prova" in sys.argv:  # solo stampa, senza database
-        for x in sorted(prendi(), key=lambda x: x["d"]):
+        for x in sorted(prendi()[0], key=lambda x: x["d"]):
             print(x["d"], x["t"], "·", x["gen"], "·", x["reg"], "·", "foto" if x["img"] else "senza foto")
         return
     if not os.environ.get("FIREBASE_CHIAVE"):
@@ -130,9 +132,19 @@ def main():
     prima = {x["id"]: x for x in vecchio.get("l") or []}
     ora = adesso()
     limite = (ora.date() - dt.timedelta(days=TIENI)).isoformat()
-    nuovi = prendi()
+    nuovi, tutte = prendi()
     if len(nuovi) < 5:
         print(f"Trovati solo {len(nuovi)} film: il sito forse è cambiato, tengo anche quelli di prima.")
+    elif tutte:
+        # Un film di prima con la data dentro le settimane appena lette, ma che non c'è più, è stato rinviato o tolto:
+        # se restasse con la data vecchia comparirebbe come "Appena uscito" senza esserlo. Se torna, torna con i suoi voti.
+        letti = {x["id"] for x in nuovi}
+        dal, al = min(x["d"] for x in nuovi), max(x["d"] for x in nuovi)
+        via = [i for i, x in prima.items() if i not in letti and dal <= x.get("d", "") <= al]
+        for i in via:
+            del prima[i]
+        if via:
+            print(f"Cinema: {len(via)} film rinviati o tolti dal calendario.")
     prima.update({x["id"]: x for x in nuovi})
     elenco = sorted((x for x in prima.values() if x.get("d", "") >= limite), key=lambda x: x["d"])
     print(f"Cinema: {len(nuovi)} film letti, {len(elenco)} nell'elenco.")
@@ -146,7 +158,8 @@ def main():
             oggi = ora.date().isoformat()
             for x in letti:
                 vecchio_x = st_prima.get(x["id"], {})
-                x["dal"] = vecchio_x.get("dal") or ("" if primo_giro else oggi)  # "Novità" solo per chi compare dopo il primo giro
+                # "Novità" solo per chi compare dopo il primo giro; chi c'era già tiene la sua data, anche vuota (primo giro).
+                x["dal"] = vecchio_x.get("dal", "") if x["id"] in st_prima else ("" if primo_giro else oggi)
                 x["primo"] = vecchio_x.get("primo") or oggi  # quando l'abbiamo visto la prima volta: tiene il titolo 120 giorni
             visti = {x["id"] for x in letti}
             # Chi esce dai più popolari resta 120 giorni dalla prima volta (così chi l'ha segnato 👀 lo ritrova).
@@ -158,6 +171,9 @@ def main():
     else:
         print("Streaming: chiave TMDB non ancora inserita, salto.")
     ref.set({"agg": int(ora.timestamp() * 1000), "l": elenco, "s": st})
+    if not nuovi:
+        # Il sito non ha dato nessun film: l'elenco di prima resta, ma il programma risulta fallito così GitHub avvisa.
+        raise SystemExit("Cinema: nessun film letto da ComingSoon (sito cambiato o non raggiungibile).")
 
 
 if __name__ == "__main__":

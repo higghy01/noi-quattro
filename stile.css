@@ -760,10 +760,11 @@ html .topbar.on b{transform:none}
 .mos{display:grid;grid-template-columns:76px 1fr;gap:12px;padding:8px 0;align-items:start}
 .mos+.mos{border-top:1px solid var(--line)}
 .mos img,.mimg{width:76px;height:96px;border-radius:12px;object-fit:cover;background:var(--soft);display:grid;place-items:center;font-size:26px}
-.mst{justify-self:start;white-space:nowrap;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:999px;margin-bottom:2px}
-.mst.ora{background:color-mix(in srgb,var(--p-verde) 16%,transparent);color:var(--p-verde)}
-.mst.fine{background:color-mix(in srgb,var(--p-rosso) 16%,transparent);color:var(--p-rosso)}
-.mst.arr{background:color-mix(in srgb,var(--me) 16%,transparent);color:var(--me)}
+.mst{justify-self:start;white-space:nowrap;min-height:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:999px;margin-bottom:2px}
+/* Bollini: mai i colori delle persone (verde, rosso, blu, grigio) né il mio; min-height 0 perché .ora (le ore delle Impostazioni) li allungava */
+.mst.ora{background:color-mix(in srgb,var(--p-viola) 16%,transparent);color:var(--p-viola)}
+.mst.fine{background:color-mix(in srgb,var(--p-rosa) 16%,transparent);color:var(--p-rosa)}
+.mst.arr{background:var(--soft);color:var(--muted)}
 .mbt{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .mbt a,.mbt button{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:var(--fg);text-decoration:none;transition:background .24s,border-color .24s,color .24s}
 .mvo.on{background:color-mix(in srgb,var(--me) 14%,transparent);border-color:var(--me);color:var(--me)}
