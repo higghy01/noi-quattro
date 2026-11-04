@@ -150,7 +150,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Una risposta per persona: ognuno scrive solo la sua.
+    // Una risposta per persona: ognuno scrive solo la sua (pranzo e cena, 04/11/2026).
+    match /pranzo/{giorno} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.keys().hasOnly([io()]);
+      allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([io()]);
+    }
     match /cena/{giorno} {
       allow read: if membro();
       allow create: if membro() && request.resource.data.keys().hasOnly([io()]);

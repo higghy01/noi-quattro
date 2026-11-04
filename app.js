@@ -15,6 +15,7 @@
   const SV = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
   const ICO = {
     cena: SV('<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2 1.5-3 4-3 7v3h3"/>'),
+    pranzo: SV('<path d="M3 12h18a9 8 0 0 1-18 0zM8 8.5c0-1.5 1.5-1.5 1.5-3S8 4 8 3M12.5 8.5c0-1.5 1.5-1.5 1.5-3s-1.5-1.5-1.5-2.5"/>'),
     oggi: SV('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>'),
     domani: SV('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>'),
     spesa: SV('<path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 8H6"/><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/>'),
@@ -38,7 +39,7 @@
 
   let TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
   let T = iso(TODAY);
-  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {} };
+  const S = { me: null, persone: {}, impegni: [], note: [], proposte: [], spesa: [], cena: {}, pranzo: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {} };
   let page = 'oggi', selDay = T, weekStart = inizioSettimana(TODAY), filt = 'tutti', seg = ['regali', 'note'].includes(LS.get('noi4-bacheca', 'proposte')) ? LS.get('noi4-bacheca', 'proposte') : 'proposte';
   const seen = new Set(); let fresh = null; let avviato = false;
 
@@ -179,20 +180,30 @@
   }
   // Perché uno non è a cena stasera (o null): un turno che finisce tardi, o un impegno all'ora di cena.
   // Non contano gli impegni con tutta la famiglia (es. "Cena tutti insieme") né quelli di tutto il giorno.
-  function fuoriCena(id, d) {
-    d = d || T;
+  /* Pranzo e cena (Sasha, 04/11/2026): verso le 15:30 la domanda del pranzo passa a domani, alle 21 quella della cena.
+     Il pranzo funziona come la cena: chi è al lavoro o impegnato tra le 13 e le 14 risulta fuori da solo. */
+  const PASTI = { pranzo: { fascia: [13 * 60, 14 * 60], cambia: 15 * 60 + 30 }, cena: { fascia: CENA, cambia: 21 * 60 } };
+  const giornoPasto = (k) => minuti(oraAdesso()) >= PASTI[k].cambia ? iso(addDays(TODAY, 1)) : T;
+  const GP = { pranzo: null, cena: null }; // il giorno che si sta ascoltando per ogni pasto
+  function fuoriCena(id, d, k) {
+    d = d || T; const F = PASTI[k || 'cena'].fascia;
     const r = rientro(id, d);
-    if (r && r.m > CENA[0] && minuti(r.turno.h) < CENA[1]) return { perche: `al lavoro, a casa verso le ${r.ora}` };
+    if (r && r.m > F[0] && minuti(r.turno.h) < F[1]) return { perche: `al lavoro, a casa verso le ${r.ora}` };
     // Turno che passa la mezzanotte (es. 19-1): finisce "prima" di iniziare, ma all'ora di cena è al lavoro (come il programma degli avvisi).
-    const notte = delGiorno(d, e => e.fonte === 'orario:' + id && e.h && e.fine && e.fine <= e.h && minuti(e.h) < CENA[1])[0];
+    const notte = delGiorno(d, e => e.fonte === 'orario:' + id && e.h && e.fine && e.fine <= e.h && minuti(e.h) < F[1])[0];
     if (notte) return { perche: `al lavoro fino alle ${notte.fine}` };
     const tutti = IDS().length;
     const e = delGiorno(d, x => !eTurno(x) && x.h && (x.who || []).includes(id) && !((x.who || []).length >= tutti && tutti > 1))
-      .find(x => { const [a, b] = intervallo(x, d); return a < CENA[1] && b > CENA[0]; });
+      .find(x => { const [a, b] = intervallo(x, d); return a < F[1] && b > F[0]; });
     return e ? { perche: piuGiorni(e) && d !== e.d ? e.t : `alle ${e.h} ${e.t}` } : null; // di più giorni: "alle 18" era l'ora di ieri
   }
   // Il sì/no per la cena: quello toccato a mano, altrimenti "no" da solo se è impegnato all'ora di cena.
-  const cenaDi = (id) => S.cena[id] === 'si' || S.cena[id] === 'no' ? { v: S.cena[id] } : fuoriCena(id) ? { v: 'no', auto: fuoriCena(id) } : { v: '?' };
+  function pastoDi(k, id) {
+    const x = (S[k] || {})[id]; if (x === 'si' || x === 'no') return { v: x };
+    const f = fuoriCena(id, GP[k] || giornoPasto(k), k); return f ? { v: 'no', auto: f } : { v: '?' };
+  }
+  const cenaDi = (id) => pastoDi('cena', id);
+  const titoloPasto = (k, d) => k === 'pranzo' ? (d === T ? 'A pranzo oggi?' : 'A pranzo domani?') : (d === T ? 'A cena stasera?' : 'A cena domani sera?');
   function statoOra(id) {
     // Le note di scuola non sono un'attività; se c'è un impegno vero durante la scuola, vince quello.
     const ora = oraAdesso(), oggi = conScuola(T, e => (e.who || []).includes(id) && !e.cmp);
@@ -211,7 +222,7 @@
     if (pros) return { t: `Alle ${pros.h}: ${pros.t}`, c: `${pros.h} · ${pros.t}`, k: 'dopo' };
     const tutto = oggi.find(e => !e.h && !e.virtuale);
     if (tutto) return { t: `Oggi: ${tutto.t}`, c: tutto.t, k: 'dopo' };
-    const cv = cenaDi(id).v, cena = cv === 'si' ? 'A cena 🍝' : cv === 'no' ? 'Fuori a cena' : null;
+    const cv = GP.cena === T ? cenaDi(id).v : '?', cena = cv === 'si' ? 'A cena 🍝' : cv === 'no' ? 'Fuori a cena' : null;
     return oggi.length ? { t: 'Impegni di oggi finiti', c: cena || 'Finito per oggi', k: 'lib' } : { t: 'Oggi niente in programma', c: cena || 'Giornata libera', k: 'lib' };
   }
 
@@ -318,17 +329,23 @@
     const tom = iso(addDays(TODAY, 1));
     const left = S.spesa.filter(x => !x.done).length;
     const ids = IDS();
-    const yes = ids.filter(i => S.cena[i] === 'si').length;
-    const cene = Object.fromEntries(ids.map(i => [i, cenaDi(i)]));
-    const perche = ids.filter(i => cene[i].auto).map(i => `<span style="--pc:${col(i)}">🌙 <b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b> · ${esc(cene[i].auto.perche)}</span>`);
     const adesso = minuti(oraAdesso());
-    const rientri = ids.filter(i => !cene[i].auto && rientro(i) && rientro(i).m > adesso).map(i => `<span style="--pc:${col(i)}">🏠 <b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b> · a casa verso le ${rientro(i).ora}</span>`);
+    const nm = (i) => i === S.me ? 'Tu' : esc(P(i).nome);
+    // Una scheda per pasto, nell'ordine in cui arrivano (prima quello più vicino).
+    const pasto = (k) => {
+      const d = GP[k] || giornoPasto(k), doc = S[k] || {}, yes = ids.filter(i => doc[i] === 'si').length;
+      const v = Object.fromEntries(ids.map(i => [i, pastoDi(k, i)])), em = k === 'pranzo' ? '☀️' : '🌙';
+      const perche = ids.filter(i => v[i].auto).map(i => `<span style="--pc:${col(i)}">${em} <b>${nm(i)}</b> · ${esc(v[i].auto.perche)}</span>`);
+      const rientri = k === 'cena' && d === T ? ids.filter(i => !v[i].auto && rientro(i) && rientro(i).m > adesso).map(i => `<span style="--pc:${col(i)}">🏠 <b>${nm(i)}</b> · a casa verso le ${rientro(i).ora}</span>`) : [];
+      return [d + (k === 'pranzo' ? 'a' : 'b'), `<div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO[k]}</i>${titoloPasto(k, d)}</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
+       <div class="cena${k === 'pranzo' ? ' pasto-pr' : ''}" style="--n:${ids.length}">${ids.map(i => { const x = v[i].v; return `<button class="cv tap${v[i].auto ? ' auto' : ''}" data-cena="${i}" data-k="${k}" data-v="${x}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${x}${v[i].auto ? ', ' + esc(v[i].auto.perche) : ''}"><span class="av" data-b="${x === 'si' ? '✓' : x === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${nm(i)}</span></button>`; }).join('')}</div>
+       ${perche.length || rientri.length ? `<div class="perche">${perche.join('')}${rientri.join('')}</div>` : ''}
+       <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.${perche.length ? ` Chi è impegnato all'ora di ${k} risulta fuori da solo.` : ''}</div></div>`];
+    };
+    const pasti = [pasto('pranzo'), pasto('cena')].sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]).join('');
     $('#p-oggi').innerHTML = `<div class="stack">
      <div class="storie${ri(0)}" role="list">${ids.map((i, k) => { const st = statoOra(i); return `<button class="st tap" role="listitem" data-persona="${i}" style="--pc:${col(i)};--k:${k}" aria-label="${esc(P(i).nome)}: ${esc(st.t)}"><span class="ring ${st.k}"><span>${avt(i)}</span></span><b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b><small>${esc(st.c)}</small></button>`; }).join('')}</div>
-     <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO.cena}</i>A cena stasera?</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
-       <div class="cena" style="--n:${ids.length}">${ids.map(i => { const v = cene[i].v; return `<button class="cv tap${cene[i].auto ? ' auto' : ''}" data-cena="${i}" data-v="${v}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${v}${cene[i].auto ? ', ' + esc(cene[i].auto.perche) : ''}"><span class="av" data-b="${v === 'si' ? '✓' : v === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${i === S.me ? 'Tu' : esc(P(i).nome)}</span></button>`; }).join('')}</div>
-       ${perche.length || rientri.length ? `<div class="perche">${perche.join('')}${rientri.join('')}</div>` : ''}
-       <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.${perche.length ? ' Chi è impegnato all\'ora di cena risulta fuori da solo.' : ''}</div></div>
+     ${pasti}
      ${propOggi(ri(1))}
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO.oggi}</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.', T)}</div>
      <div class="card${ri(2)}"><h2><span class="ttl"><i class="ic">${ICO.domani}</i>Domani</span> <small>${fmt(tom, { weekday: 'long' })}</small></h2>${evList(delGiorno(tom), 'Domani niente in programma.', tom)}</div>
@@ -584,11 +601,13 @@
     const giorni = [...Array(14)].map((_, i) => iso(addDays(TODAY, i))), dom = giorni[1];
     const per = giorni.map(d => [d, delGiorno(d, suoi).filter(e => d !== T || !e.h || inCorso(e, d) || (e.fine || e.h) >= ora)]).filter(([, l]) => l.length);
     const sett = giorni.slice(0, 7).reduce((n, d) => n + delGiorno(d, e => suoi(e) && !e.virtuale).length, 0); // la scuola e le note di scuola non contano
-    const c = S.cena[id];
+    const c = S.cena[id], cOggi = GP.cena === T, sera = cOggi ? 'Stasera' : 'Domani sera';
+    const pr = pastoDi('pranzo', id), prQ = GP.pranzo === T ? 'oggi' : 'domani';
     const pezzi = [statoOra(id).t,
       sett === 0 ? 'Settimana tranquilla' : sett >= 6 ? `Settimana piena: ${sett} impegni` : `${sett} ${sett === 1 ? 'impegno' : 'impegni'} in 7 giorni`,
-      c === 'si' ? 'Stasera a cena 🍝' : c === 'no' ? 'Stasera non a cena' : fuoriCena(id) ? `Stasera non a cena · ${fuoriCena(id).perche}`
-        : rientro(id) ? `A casa verso le ${rientro(id).ora}, in tempo per cena` : 'Per la cena non ha ancora risposto'];
+      pr.v === 'si' ? `A pranzo ${prQ} ☀️` : pr.v === 'no' ? `Non a pranzo ${prQ}${pr.auto ? ' · ' + pr.auto.perche : ''}` : `Per il pranzo di ${prQ} non ha ancora risposto`,
+      c === 'si' ? `${sera} a cena 🍝` : c === 'no' ? `${sera} non a cena` : cenaDi(id).auto ? `${sera} non a cena · ${cenaDi(id).auto.perche}`
+        : cOggi && rientro(id) ? `A casa verso le ${rientro(id).ora}, in tempo per cena` : `Per la cena ${cOggi ? 'di stasera' : 'di domani'} non ha ancora risposto`];
     const prop = S.proposte.filter(p => p.by === id).sort((a, b) => (b.creato || 0) - (a.creato || 0)).slice(0, 3);
     const desideri = S.regali.filter(r => r.per === id).sort((a, b) => (b.creato || 0) - (a.creato || 0));
     const ricordi = S.viaggi.filter(v => suoi(v)).sort((a, b) => (b.da || '').localeCompare(a.da || ''));
@@ -1170,7 +1189,8 @@
   function render() {
     if (!S.me || !S.persone[S.me]) return;
     const nuovoGiorno = iso(new Date()) !== T;
-    if (nuovoGiorno) { const ieri = T; TODAY = new Date(); TODAY.setHours(12, 0, 0, 0); T = iso(TODAY); ascoltaCena(); if (selDay === ieri) { selDay = T; weekStart = inizioSettimana(TODAY); } }
+    if (nuovoGiorno) { const ieri = T; TODAY = new Date(); TODAY.setHours(12, 0, 0, 0); T = iso(TODAY); if (selDay === ieri) { selDay = T; weekStart = inizioSettimana(TODAY); } }
+    ascoltaCena();
     document.documentElement.style.setProperty('--me', col(S.me));
     $('#hello').innerHTML = page === 'oggi' ? `${saluto()}, <span>${esc(P(S.me).nome)}</span>` : NOMI_SCHEDE[page];
     $('#tbT').textContent = page === 'oggi' ? 'Oggi' : NOMI_SCHEDE[page];
@@ -2339,10 +2359,11 @@
     if (d.pk) return t.classList.toggle('on');
     if (d.cena) {
       if (d.cena !== S.me) return openPersona(d.cena);
-      const o = ['si', 'no', '?']; const v = o[(o.indexOf(S.cena[S.me] || '?') + 1) % 3]; // dal "fuori" automatico si passa a sì, poi no, poi di nuovo automatico
-      tic(); S.cena[S.me] = v; rOggi(); const n = document.querySelector(`[data-cena="${S.me}"]`); n && n.classList.add('bump');
-      if (v === 'si' && IDS().every(i => S.cena[i] === 'si')) { festa(n); toast('Stasera tutti a tavola! 🍝'); }
-      return DATI.imposta('cena', T, { [S.me]: v }).catch(sbaglio);
+      const k = d.k === 'pranzo' ? 'pranzo' : 'cena', g = GP[k] || giornoPasto(k), doc = S[k] = S[k] || {};
+      const o = ['si', 'no', '?']; const v = o[(o.indexOf(doc[S.me] || '?') + 1) % 3]; // dal "fuori" automatico si passa a sì, poi no, poi di nuovo automatico
+      tic(); doc[S.me] = v; rOggi(); const n = document.querySelector(`[data-cena="${S.me}"][data-k="${k}"]`); n && n.classList.add('bump');
+      if (v === 'si' && IDS().every(i => doc[i] === 'si')) { festa(n); toast(`${titoloPasto(k, g).replace(/^A (pranzo|cena) /, '').replace('?', '').replace(/^./, c => c.toUpperCase())} tutti a tavola! 🍝`); }
+      return DATI.imposta(k, g, { [S.me]: v }).catch(sbaglio);
     }
     if (d.ev) { const e = S.impegni.find(x => x.id === d.ev); return e && (e.cmp ? sheetC(e.cmp) : sheetDettaglio(e)); }
     // Sezione Personale
@@ -2701,7 +2722,7 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
   /* ---------- Avvio ---------- */
-  let stopCena = null; const stopSorp = {};
+  const stopPasto = { pranzo: null, cena: null }; const stopSorp = {};
   // Le sorprese si ascoltano per tutti tranne me (le mie sono chiuse, anche per le regole del database).
   function ascoltaSorprese() {
     const vuoi = Object.keys(S.persone).filter(i => i !== S.me);
@@ -2725,7 +2746,16 @@
     if (stopPriv) stopPriv(); privDi = S.me; S.priv = {}; mappaImpegni();
     stopPriv = DATI.ascoltaDoc('privati', S.me, d => { S.priv = d; mappaImpegni(); render(); }) || null;
   }
-  function ascoltaCena() { if (stopCena) stopCena(); stopCena = DATI.ascoltaDoc('cena', T, c => { S.cena = c; render(); }); }
+  // Pranzo e cena: si ascolta il giorno giusto (oggi, o domani dopo l'ora del cambio); si ricollega solo quando il giorno cambia.
+  function ascoltaCena() {
+    for (const k of ['pranzo', 'cena']) {
+      const g = giornoPasto(k); if (GP[k] === g) continue; // (la prima risposta arriva subito e ridisegna: niente doppio collegamento)
+      if (stopPasto[k]) stopPasto[k](); GP[k] = g; S[k] = {};
+      stopPasto[k] = DATI.ascoltaDoc(k, g, c => { if (GP[k] === g) { S[k] = c; render(); } }) || null;
+    }
+  }
+  // Alle 15:30 e alle 21 la scheda Oggi cambia da sola, anche con l'app aperta.
+  setInterval(() => { if (S.me && (giornoPasto('pranzo') !== GP.pranzo || giornoPasto('cena') !== GP.cena)) render(); }, 30000);
   // All'uscita si staccano tutti i collegamenti ai dati (con l'accesso chiuso si fermerebbero da soli e non ripartirebbero):
   // al prossimo accesso, anche di un'altra persona sullo stesso telefono, ripartono da capo.
   const stopDati = [];
@@ -2756,10 +2786,10 @@
     for (const pid in stopCopie) { stopCopie[pid].forEach(f => { try { f && f(); } catch (e) {} }); delete stopCopie[pid]; }
     scDati.c = {}; scDati.v = {}; mieDati = {}; impOk = mieOk = false; appuFatti.clear();
     scAzzera(); voAnno = null;
-    if (stopCena) { stopCena(); stopCena = null; }
+    for (const k in stopPasto) if (stopPasto[k]) { stopPasto[k](); stopPasto[k] = null; GP[k] = null; }
     if (stopPriv) { stopPriv(); stopPriv = null; } privDi = null;
     for (const k in stopSorp) { stopSorp[k](); delete stopSorp[k]; }
-    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], scuolaEv: [], note: [], proposte: [], spesa: [], cena: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {} });
+    Object.assign(S, { me: null, persone: {}, impegni: [], impRaw: [], scuolaEv: [], note: [], proposte: [], spesa: [], cena: {}, pranzo: {}, regali: [], sorprese: {}, viaggi: [], foto: [], priv: {}, mezzi: [], ricette: [], scuola: {}, compiti: [], voti: [], mie: [], mostre: {} });
     seen.clear();
   }
   DATI.avvia((persona, errore) => {

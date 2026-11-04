@@ -52,6 +52,7 @@
       [['Latte', 'p2', false], ['Pane', 'p4', false], ['Mozzarella per la pizza', 'p1', false], ['Mele', 'p3', true], ['Detersivo piatti', 'p2', false]]
         .forEach(([x, by, done], i) => o.spesa[uid()] = { x, by, done, creato: now - i * 1000 });
       o.cena[iso(0)] = { p1: 'si', p2: 'si', p4: 'no' };
+      o.pranzo = { [iso(0)]: { p2: 'si' } };
       regaliEsempio(o); calEsempio(o);
       o.me = 'p1';
       return o;

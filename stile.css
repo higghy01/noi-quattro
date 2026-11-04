@@ -131,6 +131,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .cv.bump .av{animation:fm-bump .38s var(--pop)}
 /* Cena automatica: il ✕ messo da solo (turno o impegno all'ora di cena) è tratteggiato, quello toccato a mano pieno */
 .cv.auto .av::after{content:'🌙';font-size:11px;background:color-mix(in srgb,#F2C230 28%,var(--panel));box-shadow:0 0 0 2px var(--panel)}
+.cena.pasto-pr .cv.auto .av::after{content:'☀️'}
 /* Fuori in automatico: il cerchio sbiadisce meno, così la luna si vede anche nel tema chiaro */
 .cv.auto[data-v="no"] .av{opacity:.7;filter:grayscale(.5)}
 .perche{display:grid;gap:4px;margin:2px 0 6px;font-size:13px;color:var(--muted);min-width:0}
