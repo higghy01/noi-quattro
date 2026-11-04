@@ -53,6 +53,15 @@
         .forEach(([x, by, done], i) => o.spesa[uid()] = { x, by, done, creato: now - i * 1000 });
       o.cena[iso(0)] = { p1: 'si', p2: 'si', p4: 'no' };
       o.pranzo = { [iso(0)]: { p2: 'si' } };
+      // Film di esempio (le locandine vere arrivano dal programma "Film").
+      o.info = Object.assign(o.info || {}, { film: { agg: now, l: [
+        { id: 'cs-1', t: 'Il grande viaggio', gen: 'Avventura, Commedia', reg: 'Anna Rossi', d: iso(-3), img: '' },
+        { id: 'cs-2', t: 'Notte sul lago', gen: 'Thriller', reg: 'Marco Bianchi', d: iso(-12), img: '' },
+        { id: 'cs-3', t: 'Le stelle di dicembre', gen: 'Animazione, Family', reg: 'Luca Verdi', d: iso(9), img: '' }],
+        s: [{ id: 'tm-m1', t: 'Doppio gioco', tipo: 'film', dove: 'Netflix', gen: 'Thriller', anno: '2026', dal: iso(-2), img: '' },
+          { id: 'tm-t2', t: 'La casa sulla collina', tipo: 'serie', dove: 'HBO Max', gen: 'Dramma', anno: '2026', dal: '', img: '' },
+          { id: 'tm-t3', t: 'Cucine del mondo', tipo: 'serie', dove: 'Prime Video', gen: 'Documentario', anno: '2025', dal: '', img: '' }] } });
+      o.film = { 'cs-1': { p2: { s: 'vedere', v: 0 }, p3: { s: 'vedere', v: 0 } }, 'cs-2': { p4: { s: 'visto', v: 4 } }, 'tm-t2': { p2: { s: 'vedere', v: 0 } } };
       regaliEsempio(o); calEsempio(o);
       o.me = 'p1';
       return o;
@@ -140,10 +149,10 @@
         [uid()]: m({ k: 'lista', cat: 'serie', t: 'Serie finita', x: '', stato: 'fatto', stelle: 4 }),
         [uid()]: m({ k: 'lista', cat: 'libro', t: 'Un giallo', x: 'Autore da cercare', stato: 'da', stelle: 0 }) };
     }
-    if (!db.info) db.info = { mostre: { agg: Date.now() - 864e5, l: [
+    if (!(db.info || {}).mostre) db.info = Object.assign(db.info || {}, { mostre: { agg: Date.now() - 864e5, l: [
       { id: 'ps-1', luogo: 'Palazzo Strozzi', t: 'Mostra in corso', sub: 'Sottotitolo della mostra', dal: iso(-40), al: iso(80), img: '', link: 'https://www.palazzostrozzi.org/' },
       { id: 'ps-2', luogo: 'Palazzo Strozzi', t: 'Mostra in arrivo', sub: '', dal: iso(8), al: iso(90), img: '', link: 'https://www.palazzostrozzi.org/mostre-future/' },
-      { id: 'ci-1', luogo: 'Cattedrale dell\'Immagine', t: 'Mostra immersiva', sub: '', dal: iso(-170), al: iso(10), img: '', link: 'https://www.cattedraledellimmagine.it/' }] } };
+      { id: 'ci-1', luogo: 'Cattedrale dell\'Immagine', t: 'Mostra immersiva', sub: '', dal: iso(-170), al: iso(10), img: '', link: 'https://www.cattedraledellimmagine.it/' }] } });
     // Come il "merge" di Firebase: le mappe dentro si uniscono invece di sostituirsi.
     const unisci = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && o[k] && typeof o[k] === 'object' ? unisci(o[k], b[k]) : b[k]; return o; };
     const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} subs.forEach(s => s()); };

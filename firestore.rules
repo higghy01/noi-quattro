@@ -162,6 +162,21 @@ service cloud.firestore {
       allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([io()]);
     }
 
+    // Film (04/11/2026): il segno di ognuno su un film (da vedere, visto, non mi interessa, stelle). Ognuno scrive solo il suo.
+    match /film/{id} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.keys().hasOnly([io()]);
+      allow update: if membro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([io()]);
+    }
+    // Film e serie aggiunti a mano: tutti li vedono, solo chi li ha aggiunti li toglie.
+    match /filmextra/{id} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.by == io()
+        && request.resource.data.keys().hasOnly(['t', 'tipo', 'dove', 'by', 'creato'])
+        && request.resource.data.t is string && request.resource.data.t.size() <= 90;
+      allow delete: if membro() && resource.data.by == io();
+    }
+
     // Liste dei regali: ognuno scrive solo la sua lista, tutti la leggono.
     match /regali/{id} {
       allow read: if membro();
