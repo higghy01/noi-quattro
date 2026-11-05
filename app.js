@@ -1484,9 +1484,11 @@
   const pause = (s) => (s.pause || []).map(p => String(p).split('|')).filter(p => p.length === 2);
   const inPausa = (s, d) => pause(s).some(p => d >= p[0] && d <= p[1]);
   const aScuola = (s, d) => d >= (s.dal || '') && (!s.al || d <= s.al) && !inPausa(s, d) && lezioni(s, gSett(d)).length > 0;
-  // Ogni materia il suo colore, sempre lo stesso (in ordine di come appare nell'orario).
+  // Ogni materia il suo colore, sempre lo stesso (in ordine di come appare nell'orario), poi le materie senza ore
+  // nell'orario (campo "materie", es. Storia ed Educazione civica: Sasha 05/11/2026), per voti e note.
   function coloriMat(s) {
-    const m = [...new Set([...(s.orario || [])].sort((a, b) => a.g - b.g || a.o - b.o).map(x => x.m))];
+    const m = [...new Set([...(s.orario || [])].sort((a, b) => a.g - b.g || a.o - b.o).map(x => x.m)
+      .concat((Array.isArray(s.materie) ? s.materie : []).filter(x => typeof x === 'string' && x)))];
     // Mai il rosso (è il colore di Sasha): le tinte girano tra l'arancio (28) e il magenta (335), partendo dal blu.
     return Object.fromEntries(m.map((x, i) => [x, `hsl(${28 + Math.round(182 + i * 307 / Math.max(1, m.length)) % 307} 62% 56%)`]));
   }
