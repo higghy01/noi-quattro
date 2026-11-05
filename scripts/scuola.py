@@ -6,6 +6,7 @@ Si avvia a mano (workflow "Orario scolastico") con l'ingresso "orario", un JSON:
    "lezioni": [{"g": 1, "o": 1, "m": "Matematica", "prof": "Rossi M."}]}
 "oreG": {"1": [...]} = orari diversi per un giorno (facoltativo).
 g = giorno della settimana (1 lunedì ... 6 sabato), o = numero dell'ora, ore = inizio-fine di ogni ora (facoltative).
+"materie": ["Storia", "Educazione civica"] = materie senza ore nell'orario, per voti e note (facoltativo, 05/11/2026).
 "copie": chi vede la sezione così com'è (sola lettura). "prove": chi vede le sue interrogazioni e verifiche nel calendario comune. {"persona": "p3", "togli": true} toglie tutto.
 Sostituisce tutto il documento scuola/<persona>. L'ingresso si legge dal file dell'evento, così non finisce nel registro.
 """
@@ -103,11 +104,21 @@ def main():
     prove = [str(c) for c in dati.get("prove") or [] if PERSONA.match(str(c)) and str(c) != persona]
     if not lezioni:
         raise SystemExit("Nessuna lezione")
+    mm = dati.get("materie") or []
+    if not isinstance(mm, list) or len(mm) > 20:
+        raise SystemExit("Materie non valide")
+    nell_orario = {x["m"].lower() for x in lezioni}
+    materie = []
+    for m in mm:
+        m = m.strip()[:60] if isinstance(m, str) else ""
+        if m and m.lower() not in nell_orario and m.lower() not in {x.lower() for x in materie}:
+            materie.append(m)
     doc.set({"orario": lezioni, "ore": ore, "oreG": ore_g, "classe": str(dati.get("classe", ""))[:20], "dal": dal,
              # Firestore non accetta liste dentro liste: ogni vacanza è "da|a".
-             "al": al, "pause": [f"{a}|{b}" for a, b in pause], "copie": copie, "prove": prove})
+             "al": al, "pause": [f"{a}|{b}" for a, b in pause], "copie": copie, "prove": prove,
+             "materie": materie})
     giorni = len({x["g"] for x in lezioni})
-    print(f"Orario scolastico: {len(lezioni)} ore in {giorni} giorni, {len(ore)} orari ({len(ore_g)} giorni con orari loro), {len(pause)} vacanze, {len(copie)} copie, {len(prove)} vedono le prove")
+    print(f"Orario scolastico: {len(lezioni)} ore in {giorni} giorni, {len(ore)} orari ({len(ore_g)} giorni con orari loro), {len(pause)} vacanze, {len(materie)} materie in più, {len(copie)} copie, {len(prove)} vedono le prove")
 
 
 if __name__ == "__main__":

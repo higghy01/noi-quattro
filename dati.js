@@ -122,7 +122,7 @@
       const g = [['Matematica', 'Italiano', 'Italiano', 'Storia', 'Inglese', 'Arte'], ['Inglese', 'Matematica', 'Scienze', 'Scienze', 'Italiano', ''],
         ['Educazione fisica', 'Educazione fisica', 'Inglese', 'Italiano', 'Storia', 'Geografia'], ['Matematica', 'Arte', 'Scienze', 'Inglese', 'Italiano', ''], ['Geografia', 'Storia', 'Matematica', 'Matematica', 'Italiano', 'Italiano']];
       const orario = []; g.forEach((l, i) => l.forEach((m, o) => m && orario.push({ g: i + 1, o: o + 1, m })));
-      db.scuola = { p3: { classe: '3A', orario, ore, dal: iso(-30), al: iso(220), pause: [], copie: ['p1'], prove: ['p1', 'p2'] } };
+      db.scuola = { p3: { classe: '3A', orario, ore, dal: iso(-30), al: iso(220), pause: [], copie: ['p1'], prove: ['p1', 'p2'], materie: ['Educazione civica'] } };
       db.compiti = { [uid()]: { per: 'p1', di: 'p3', m: 'Matematica', tipo: 'verifica', d: iso(3), x: 'Equazioni', by: 'p1', creato: Date.now(), fatto: false },
         [uid()]: { per: 'p3', di: 'p3', m: 'Inglese', tipo: 'interrogazione', d: iso(2), x: '', by: 'p3', creato: Date.now(), fatto: false },
         [uid()]: { per: 'p1', di: 'p3', m: 'Inglese', tipo: 'interrogazione', d: iso(8), x: '', by: 'p1', creato: Date.now(), fatto: false },
