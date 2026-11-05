@@ -1,4 +1,4 @@
-# Libri nuovi degli autori preferiti (sezione "Per me"): ogni mattina verso le 6:30 (ora italiana; il cron è in UTC).
+# Libri nuovi degli autori preferiti (sezione "Per me"): ogni mattina alle 6:25 d'inverno, 7:25 d'estate (ora italiana; il cron è in UTC).
 # Ogni autore si guarda una volta a settimana; uno appena aggiunto la mattina dopo.
 name: Libri
 on:
