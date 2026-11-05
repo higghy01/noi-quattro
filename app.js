@@ -1578,9 +1578,9 @@
   const CASA = ['p2'];
   // Sasha (p1) vede le sezioni personali di tutti, in sola lettura, per dire cosa va e cosa no (02/11/2026).
   // Gli appuntamenti fissi restano solo di chi li scrive (scelta di Sasha): le regole del database non li danno a nessun altro.
-  const CONTROLLA = ['p1'], MIE_VISTE = ['prom', 'scad', 'lista', 'mostra'];
+  const CONTROLLA = ['p1'], MIE_VISTE = ['prom', 'scad', 'lista', 'mostra', 'autore'];
   let mDi = null, mRO = false;
-  const TABS_M = [['oggi', 'Oggi'], ['mostre', 'Mostre'], ['liste', 'Liste']];
+  const TABS_M = [['oggi', 'Oggi'], ['mostre', 'Mostre'], ['libri', 'Libri'], ['liste', 'Liste']];
   let mTab = LS.get('noi4-mie-tab', 'oggi'); if (!TABS_M.some(t => t[0] === mTab)) mTab = 'oggi';
   const LISTE = [['serie', '📺', 'Serie'], ['doc', '🌍', 'Docu'], ['libro', '📖', 'Libri'], ['beauty', '💄', 'Beauty']];
   const LISTA = Object.fromEntries(LISTE.map(([k, e, n]) => [k, { e, n }]));
@@ -1611,9 +1611,9 @@
   const mostraMia = (id) => mie('mostra').find(x => x.mid === id);
   function rCasa(m, sr, k) {
     mDi = m.di; mRO = m.copia;
-    const corpo = { oggi: mOggi, mostre: mMostre, liste: mListe }[mTab]();
+    const corpo = { oggi: mOggi, mostre: mMostre, libri: mLibri, liste: mListe }[mTab]();
     mDi = null; mRO = false;
-    return `${m.copia ? `<div class="hint mprova${sr(k * 3 + 1)}">👀 Stai guardando la sezione di ${esc(P(m.di).nome)}: vedi promemoria, scadenze, mostre e liste come li vede lei. Gli appuntamenti fissi restano solo suoi, e solo lei può cambiare le cose.</div>` : ''}
+    return `${m.copia ? `<div class="hint mprova${sr(k * 3 + 1)}">👀 Stai guardando la sezione di ${esc(P(m.di).nome)}: vedi promemoria, scadenze, mostre, libri e liste come li vede lei. Gli appuntamenti fissi restano solo suoi, e solo lei può cambiare le cose.</div>` : ''}
      <div class="sec${sr(k * 3 + 1)}">✨ Per me${m.copia ? ` · ${esc(P(m.di).nome)}` : ''}</div>
      <div class="sctabs${sr(k * 3 + 2)}">${segHtml('mtab', TABS_M, mTab)}</div>
      <div class="scbody" data-tab="${mTab}"${m.copia ? ` style="--me:${col(m.di)}"` : ''}>${corpo}</div>`;
@@ -1657,6 +1657,41 @@
      ${luoghi.map(lu => `<div class="card mcard"><div class="agtop"><b>${esc(lu)}</b></div>${l.filter(x => x.luogo === lu).sort((a, b) => (a.dal || '').localeCompare(b.dal || '')).map(riga).join('')}</div>`).join('')}
      <div class="empty mnota">${mRO ? (voglio ? `Ne ha segnate ${voglio}. ` : '') : `${voglio ? `Ne hai segnate ${voglio}: ti avviso una settimana prima che chiudano. ` : ''}Quando apre una mostra nuova ti arriva un avviso.`}${info.agg ? ` Aggiornato ${fmt(new Date(info.agg).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }).replace(/\./g, '')}.` : ''}</div>`;
   }
+
+  /* Libri (Sasha, 04/11/2026): i libri nuovi degli autori che sceglie lei, con il link ad Amazon. Gli autori li scrive lei
+     (raccolta "mie", k = 'autore'); i libri li trova ogni settimana il programma "Libri" (scripts/libri.py) e li scrive
+     nello stesso documento. "+ Da leggere" mette il libro nella sua lista Libri. */
+  const EAN = /^97\d{11}$/;
+  const libroInLista = (ean) => mie('lista').find(x => x.cat === 'libro' && x.ean === ean);
+  function mLibri() {
+    const au = mie('autore').sort((a, b) => String(a.t || '').localeCompare(String(b.t || ''), 'it')), anno = +T.slice(0, 4);
+    const libro = (a) => (x) => {
+      if (!x || !EAN.test(String(x.ean))) return '';
+      const nuovo = (a.nuovi || {})[x.ean], mio = libroInLista(x.ean), am = `https://www.amazon.it/s?k=${x.ean}&i=stripbooks`;
+      const st = nuovo ? '<span class="mst ora">Nuovo</span>' : +x.anno >= anno ? '<span class="mst arr">Uscito quest\'anno</span>' : '';
+      return `<div class="mos"><img src="https://www.ibs.it/images/${x.ean}_0_0_300_0_75.jpg" alt="" loading="lazy" referrerpolicy="no-referrer">
+        <div class="mtx">${st}<b>${esc(x.t)}</b><small>${esc(x.ed || '')}${+x.anno ? `${x.ed ? ' · ' : ''}${+x.anno}` : ''}</small></div>
+        <span class="mbt"><a class="tap" href="${am}" target="_blank" rel="noopener">Su Amazon</a>${mRO ? (mio ? '<span class="mvo on">📖 In lista</span>' : '') : `<button type="button" class="tap mvo${mio ? ' on' : ''}" data-mlibro="${esc(a.id)}" data-ean="${x.ean}">${mio ? '📖 In lista' : '+ Da leggere'}</button>`}</span></div>`;
+    };
+    const card = (a) => {
+      const l = (Array.isArray(a.libri) ? a.libri : []).filter(x => x && EAN.test(String(x.ean))), cercato = a.chi === a.t && a.agg;
+      const recenti = l.some(x => +x.anno >= anno - 1);
+      const msg = !cercato ? 'Cerco i suoi libri domattina.' : a.trovato === false ? 'Non lo trovo: controlla che nome e cognome siano scritti giusti.' : !recenti ? 'Nessun libro nuovo negli ultimi due anni. Gli ultimi usciti:' : '';
+      return `<div class="card mcard"><button type="button" class="agtop maut tap" data-mie="${esc(a.id)}"><b>✍️ ${esc(a.t)}</b><small>${cercato && l.length ? (recenti ? `${l.filter(x => +x.anno >= anno - 1).length} recenti` : '') : ''}</small></button>
+        ${msg ? `<div class="empty">${msg}</div>` : ''}${cercato ? l.map(libro(a)).join('') : ''}</div>`;
+    };
+    const ultimo = Math.max(0, ...au.map(a => +a.agg || 0));
+    return `${mRO ? '' : `<div class="card mcard"><form class="mlin" id="fAu"><input id="auT" maxlength="60" autocomplete="off" placeholder="Nome e cognome di un autore" aria-label="Nome e cognome di un autore"><button class="tap" aria-label="Aggiungi">+</button></form></div>`}
+     ${au.length ? au.map(card).join('') : `<div class="card"><div class="empty">${mRO ? 'Non ha ancora scelto nessun autore.' : 'Scrivi gli autori che ti piacciono: ogni settimana guardo se è uscito un loro libro nuovo, con il link per comprarlo su Amazon.'}</div></div>`}
+     ${au.length ? `<div class="empty mnota">Controllo i libri nuovi una volta a settimana.${ultimo ? ` Ultimo controllo ${fmt(new Date(ultimo).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }).replace(/\./g, '')}.` : ''}</div>` : ''}`;
+  }
+  function sheetAutore(x) {
+    const ro = x.per !== S.me;
+    openSheet(`<h3>✍️ ${esc(x.t)}</h3><form class="stack" id="fAd" data-id="${esc(x.id)}"><fieldset class="stack mro"${ro ? ' disabled' : ''}>
+      <label for="adT">Nome e cognome</label><input id="adT" maxlength="60" autocomplete="off" value="${esc(x.t)}"></fieldset>
+      <div class="mbt"><a class="tap" href="https://www.amazon.it/s?k=${encodeURIComponent(x.t)}&i=stripbooks" target="_blank" rel="noopener">Tutti i suoi libri su Amazon</a></div>
+      ${ro ? `<div class="src">È di ${esc(P(x.per).nome)}: solo lei può cambiarlo</div>` : `<button class="btn tap">Salva</button><button type="button" class="btn bad tap" data-mvia="${esc(x.id)}">Togli l'autore</button>`}</form>`);
+  }
   function mListe() {
     const tutte = mie('lista').filter(x => x.cat === lsCat), ord = (a, b) => (b.creato || 0) - (a.creato || 0);
     const g = (s) => tutte.filter(x => (x.stato || 'da') === s).sort(ord);
@@ -1679,6 +1714,7 @@
     const x = id ? S.mie.find(y => y.id === id) : null; if (id && !x) return;
     const k = x ? x.k : kNuovo || 'prom', ro = !!x && x.per !== S.me;
     if (k === 'lista') return sheetLista(x);
+    if (k === 'autore') return sheetAutore(x);
     const v = x || { e: '', t: '', h: k === 'prom' ? '09:00' : '', ogni: '1', g: 3, mese: String(+T.slice(5, 7)), anno: T.slice(0, 4) };
     const giorni = [1, 2, 3, 4, 5, 6, 0];
     openSheet(`<h3>${ro ? esc((x.e || '') + ' ' + x.t) : x ? 'Cambia' : 'Nuovo'}</h3><form class="stack" id="fMi" data-id="${x ? x.id : ''}" data-k="${k}"><fieldset class="stack mro"${ro ? ' disabled' : ''}>
@@ -1700,13 +1736,13 @@
   }
   function sheetLista(x) {
     const ro = x.per !== S.me, st = x.stato || 'da', cerca = encodeURIComponent(x.t), link = /^https?:\/\//.test(x.x || '') ? x.x.split(/\s/)[0] : '';
-    const dove = x.cat === 'libro' ? `https://www.google.com/search?tbm=bks&q=${cerca}` : x.cat === 'beauty' ? `https://www.google.com/search?q=${cerca}` : `https://www.justwatch.com/it/cerca?q=${cerca}`;
+    const dove = x.cat === 'libro' && /^97\d{11}$/.test(x.ean || '') ? `https://www.amazon.it/s?k=${x.ean}&i=stripbooks` : x.cat === 'libro' ? `https://www.google.com/search?tbm=bks&q=${cerca}` : x.cat === 'beauty' ? `https://www.google.com/search?q=${cerca}` : `https://www.justwatch.com/it/cerca?q=${cerca}`;
     openSheet(`<h3>${LISTA[x.cat] ? LISTA[x.cat].e : ''} ${esc(x.t)}</h3><form class="stack" id="fLd" data-id="${x.id}"><fieldset class="stack mro"${ro ? ' disabled' : ''}>
       ${segHtml('lstato', [['da', statoN(x.cat, 'da')], ['ora', statoN(x.cat, 'ora')], ['fatto', statoN(x.cat, 'fatto')]], st)}
       <label>${ro ? 'Quanto le è piaciuto' : 'Quanto ti è piaciuto'}</label><div class="mvota" data-v="${x.stelle || 0}">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="tap${(x.stelle || 0) >= n ? ' on' : ''}" data-lstelle="${n}" aria-label="${n} stelle">★</button>`).join('')}</div>
       <label for="ldT">Titolo</label><input id="ldT" maxlength="80" value="${esc(x.t)}">
       <label for="ldX">Note o link</label><textarea id="ldX" maxlength="300" rows="3" placeholder="${x.cat === 'libro' ? 'es. autore, consigliato da…' : x.cat === 'beauty' ? 'es. link del prodotto, dove si compra' : 'es. su che app si vede, consigliata da…'}">${esc(x.x || '')}</textarea></fieldset>
-      <div class="mbt">${link ? `<a class="tap" href="${esc(link)}" target="_blank" rel="noopener">Apri il link</a>` : ''}<a class="tap" href="${dove}" target="_blank" rel="noopener">${x.cat === 'libro' ? 'Cerca il libro' : x.cat === 'beauty' ? 'Cerca' : 'Dove vederla'}</a></div>
+      <div class="mbt">${link ? `<a class="tap" href="${esc(link)}" target="_blank" rel="noopener">Apri il link</a>` : ''}<a class="tap" href="${dove}" target="_blank" rel="noopener">${x.cat === 'libro' && /^97\d{11}$/.test(x.ean || '') ? 'Su Amazon' : x.cat === 'libro' ? 'Cerca il libro' : x.cat === 'beauty' ? 'Cerca' : 'Dove vederla'}</a></div>
       ${ro ? `<div class="src">È di ${esc(P(x.per).nome)}: solo lei può cambiarlo</div>` : `<button class="btn tap">Salva</button><button type="button" class="btn bad tap" data-mvia="${x.id}">Elimina</button>`}</form>`);
   }
   // La scheda Scuola ha quattro parti, come un diario di scuola: Orario, Agenda, Voti, Materie (scelta di Sasha del 01/11/2026:
@@ -2491,6 +2527,13 @@
       return DATI.aggiorna('mie', x.id, fatto ? { ult: x.prima || '' } : { ult: T, prima: x.ult || '' }).catch(sbaglio);
     }
     if (d.mie) return sheetMie(d.mie);
+    if (d.mlibro) {
+      const a = S.mie.find(y => y.id === d.mlibro && y.per === S.me && y.k === 'autore'); if (!a) return;
+      const x = (a.libri || []).find(y => y && y.ean === d.ean); if (!x || !EAN.test(String(x.ean))) return;
+      const gia = libroInLista(x.ean); if (gia) return sheetMie(gia.id);
+      toast('📖 Nella tua lista Libri');
+      return DATI.aggiungi('mie', { per: S.me, k: 'lista', cat: 'libro', t: String(x.t).slice(0, 80), x: String(a.t).slice(0, 300), ean: x.ean, stato: 'da', stelle: 0, creato: Date.now() }).catch(sbaglio);
+    }
     if (d.mvoglio) {
       if (S.mie.some(y => y.k === 'mostra' && y.per !== S.me && y.mid === d.mvoglio) && !CASA.includes(S.me)) return;
       const mia = mostraMia(d.mvoglio); if (mia) return DATI.elimina('mie', mia.id).catch(sbaglio);
@@ -2758,6 +2801,16 @@
       const tt = $('#liT').value.trim().replace(/\s+/g, ' ').slice(0, 80); if (!tt) return;
       $('#liT').value = '';
       try { await DATI.aggiungi('mie', { per: S.me, k: 'lista', cat: lsCat, t: tt, x: '', stato: 'da', stelle: 0, creato: Date.now() }); } catch (er) { return sbaglio(er); }
+    } else if (f.id === 'fAu') {
+      const tt = $('#auT').value.trim().replace(/\s+/g, ' ').slice(0, 60); if (!tt) return;
+      if (mie('autore').some(y => String(y.t).toLowerCase() === tt.toLowerCase())) return toast('C\'è già');
+      $('#auT').value = '';
+      try { await DATI.aggiungi('mie', { per: S.me, k: 'autore', t: tt, creato: Date.now() }); toast('✍️ Aggiunto: domattina cerco i suoi libri'); } catch (er) { return sbaglio(er); }
+    } else if (f.id === 'fAd') {
+      if (!S.mie.some(y => y.id === f.dataset.id && y.per === S.me)) return;
+      const tt = $('#adT').value.trim().replace(/\s+/g, ' ').slice(0, 60); if (!tt) return toast('Scrivi il nome');
+      closeSheet();
+      try { await DATI.aggiorna('mie', f.dataset.id, { t: tt }); } catch (er) { return sbaglio(er); }
     } else if (f.id === 'fLd') {
       if (!S.mie.some(y => y.id === f.dataset.id && y.per === S.me)) return;
       const st = f.querySelector('[data-lstato].on'), v = +(f.querySelector('.mvota').dataset.v || 0), tt = $('#ldT').value.trim().replace(/\s+/g, ' ').slice(0, 80);
