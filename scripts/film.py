@@ -163,7 +163,10 @@ def main():
                 x["primo"] = vecchio_x.get("primo") or oggi  # quando l'abbiamo visto la prima volta: tiene il titolo 120 giorni
             visti = {x["id"] for x in letti}
             # Chi esce dai più popolari resta 120 giorni dalla prima volta (così chi l'ha segnato 👀 lo ritrova).
-            st = letti + [x for x in st_prima.values() if x["id"] not in visti and (x.get("primo") or x.get("dal") or oggi) >= limite]
+            tenuti = [x for x in st_prima.values() if x["id"] not in visti]
+            for x in tenuti:  # anche chi non ha ancora "primo" (titoli di prima della v83) prende una data, così prima o poi esce
+                x["primo"] = x.get("primo") or x.get("dal") or oggi
+            st = letti + [x for x in tenuti if x["primo"] >= limite]
             print(f"Streaming: {len(letti)} titoli, {sum(1 for x in letti if x['dal'] == ora.date().isoformat())} nuovi.")
         except Exception as e:  # lo streaming non deve fermare il cinema
             stato = getattr(getattr(e, "response", None), "status_code", "")  # niente testo dell'errore: l'indirizzo contiene la chiave

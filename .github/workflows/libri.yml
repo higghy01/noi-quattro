@@ -1,0 +1,20 @@
+# Libri nuovi degli autori preferiti (sezione "Per me"): ogni mattina verso le 6:30 (ora italiana; il cron è in UTC).
+# Ogni autore si guarda una volta a settimana; uno appena aggiunto la mattina dopo.
+name: Libri
+on:
+  schedule:
+    - cron: "25 5 * * *"
+  workflow_dispatch: {}
+concurrency: { group: libri, cancel-in-progress: false }
+jobs:
+  aggiorna:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: scripts/requisiti.txt }
+      - run: pip install -r scripts/requisiti.txt
+      - run: python scripts/libri.py
+        env:
+          FIREBASE_CHIAVE: ${{ secrets.FIREBASE_CHIAVE }}

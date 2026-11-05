@@ -147,7 +147,11 @@
         [uid()]: m({ k: 'lista', cat: 'serie', t: 'Una serie crime', x: 'Consigliata da un\'amica', stato: 'ora', stelle: 0 }),
         [uid()]: m({ k: 'lista', cat: 'serie', t: 'Un\'altra serie', x: '', stato: 'da', stelle: 0 }),
         [uid()]: m({ k: 'lista', cat: 'serie', t: 'Serie finita', x: '', stato: 'fatto', stelle: 4 }),
-        [uid()]: m({ k: 'lista', cat: 'libro', t: 'Un giallo', x: 'Autore da cercare', stato: 'da', stelle: 0 }) };
+        [uid()]: m({ k: 'lista', cat: 'libro', t: 'Un giallo', x: 'Autore da cercare', stato: 'da', stelle: 0 }),
+        [uid()]: m({ k: 'autore', t: 'Un autore di gialli', chi: 'Un autore di gialli', agg: Date.now() - 864e5, trovato: true, nuovi: { '9780000000002': Date.now() },
+          libri: [{ t: 'Il giallo nuovo', ean: '9780000000002', anno: new Date().getFullYear(), ed: 'Un editore', link: '' },
+            { t: 'Il giallo dell\'anno scorso', ean: '9780000000019', anno: new Date().getFullYear() - 1, ed: 'Un editore', link: '' }] }),
+        [uid()]: m({ k: 'autore', t: 'Un\'autrice appena aggiunta' }) };
     }
     if (!(db.info || {}).mostre) db.info = Object.assign(db.info || {}, { mostre: { agg: Date.now() - 864e5, l: [
       { id: 'ps-1', luogo: 'Palazzo Strozzi', t: 'Mostra in corso', sub: 'Sottotitolo della mostra', dal: iso(-40), al: iso(80), img: '', link: 'https://www.palazzostrozzi.org/' },

@@ -833,3 +833,7 @@ body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
 .flk{justify-self:start;font-size:13px;font-weight:600;color:var(--me);min-height:32px;padding:6px 0 0;margin-right:14px;display:inline-block}
 .mtx .flk+.flk{margin-left:0}
 .flm .mst{line-height:1.5;align-self:start;white-space:nowrap}
+/* Libri (05/11/2026): il nome dell'autore in cima alla scheda si tocca per cambiarlo o toglierlo. */
+.maut{width:100%;text-align:left;background:none;border:0;padding:0 0 4px;color:inherit;font:inherit}
+.maut b::after{content:' ›';color:var(--muted);font-weight:400}
+.mcard .mos .mtx b{overflow-wrap:anywhere}

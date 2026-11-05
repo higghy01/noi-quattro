@@ -130,16 +130,17 @@ service cloud.firestore {
       allow delete: if membro() && resource.data.per == io();
     }
 
-    // Sezione "Per me" (02/11/2026): promemoria, appuntamenti fissi, scadenze, mostre segnate e liste.
+    // Sezione "Per me" (02/11/2026): promemoria, appuntamenti fissi, scadenze, mostre segnate, liste e autori dei libri (05/11).
+    // I libri degli autori li scrive il programma Libri con la chiave di servizio.
     // Le legge e le scrive solo chi le ha scritte (anche gli appuntamenti: nessun altro li vede). Il programma
     // delle notifiche le legge con la chiave di servizio per mandare gli avvisi.
     match /mie/{id} {
       function ok() { return request.resource.data.per == io()
-        && request.resource.data.k in ['prom', 'appu', 'scad', 'lista', 'mostra', 'avvisi']
+        && request.resource.data.k in ['prom', 'appu', 'scad', 'lista', 'mostra', 'avvisi', 'autore']
         && request.resource.data.get('t', '') is string && request.resource.data.get('t', '').size() <= 80
         && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 300; }
       // Sasha (p1) le legge anche degli altri, per controllare che la sezione funzioni (02/11/2026), ma mai gli appuntamenti fissi.
-      allow read: if membro() && (resource.data.per == io() || (io() == 'p1' && resource.data.k in ['prom', 'scad', 'lista', 'mostra']));
+      allow read: if membro() && (resource.data.per == io() || (io() == 'p1' && resource.data.k in ['prom', 'scad', 'lista', 'mostra', 'autore']));
       allow create: if membro() && ok();
       allow update: if membro() && resource.data.per == io() && ok();
       allow delete: if membro() && resource.data.per == io();
