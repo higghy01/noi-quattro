@@ -8,7 +8,7 @@
   const COLORI = { blu: 'var(--p-blu)', rosa: 'var(--p-rosa)', ambra: 'var(--p-ambra)', verde: 'var(--p-verde)', viola: 'var(--p-viola)', corallo: 'var(--p-corallo)', rosso: 'var(--p-rosso)', grigio: 'var(--p-grigio)' };
   const RIPETI = { '': 'Mai', settimanale: 'Ogni settimana', mensile: 'Ogni mese', annuale: 'Ogni anno' };
   // [chiave, testo, orario scelto (facoltativo), ore possibili, ora solita]
-  const NOTIF = [['promemoria', 'Promemoria un\'ora prima dei miei impegni'], ['nuovi', 'Quando qualcuno mi aggiunge a un impegno'],
+  const NOTIF = [['promemoria', 'Promemoria un\'ora prima dei miei impegni'], ['nuovi', 'Quando qualcuno mi aggiunge a un impegno'], ['babbo', 'Quando qualcuno va da babbo o torna a casa'],
     ['riepilogo', 'La sera: gli impegni di domani', 'oraRiepilogo', [19, 20, 21, 22], 21],
     ['cena', 'Il pomeriggio: "A cena stasera?" se non ho risposto', 'oraCena', [15, 16, 17, 18, 19], 17], ['proposte', 'Nuove proposte, quando hanno votato tutti e cosa si è deciso'], ['note', 'Quando qualcuno scrive una nota (senza il testo)'], ['conflitti', 'Se ho due impegni alla stessa ora']];
   // Icone a linee per i titoli delle schede (02/11/2026): più sobrie delle emoji, stesso tratto della barra in basso.
@@ -23,7 +23,8 @@
     cal: SV('<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
     voto: SV('<path d="M4 12.5l4.5 4.5L20 6"/>'),
     foto: SV('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>'),
-    preso: SV('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/>')
+    preso: SV('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/>'),
+    casa: SV('<path d="M3.5 11.5L12 4.5l8.5 7"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5v-5h4v5"/>')
   };
   const SCHEDE = ['oggi', 'cal', 'note', 'viaggi', 'spesa'];
   const NOMI_SCHEDE = { oggi: 'Oggi', cal: 'Impegni', note: 'Bacheca', viaggi: 'Ricordi', spesa: 'Spesa' };
@@ -185,8 +186,38 @@
   const PASTI = { pranzo: { fascia: [13 * 60, 14 * 60], cambia: 15 * 60 + 30 }, cena: { fascia: CENA, cambia: 21 * 60 } };
   const giornoPasto = (k) => minuti(oraAdesso()) >= PASTI[k].cambia ? iso(addDays(TODAY, 1)) : T;
   const GP = { pranzo: null, cena: null }; // il giorno che si sta ascoltando per ogni pasto
+  /* Da babbo (Sasha, 07/11/2026): chi va a dormire dal babbo segna quando parte e quando torna, così chi resta sa chi
+     è a casa. È un impegno con babbo: true (nel calendario comune lo vedono tutti): in Oggi ha la sua scheda e il cerchio
+     tratteggiato con la casetta, a pranzo e a cena risulta fuori da solo, non dà avvisi di accavallamento né promemoria.
+     Solo per le persone in DA_BABBO (nel codice pubblico niente nomi: sono gli id del database). */
+  const DA_BABBO = ['p1', 'p3'];
+  const GIORNI_BB = 7; // in Oggi si vede anche chi parte nei prossimi 7 giorni
+  const gDiff = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
+  // Inizio e fine in minuti contati dalla mezzanotte di oggi (domani alle 8 = 1440 + 480): si confrontano anche giorni diversi.
+  const mDa = (d, h) => gDiff(T, d) * 1440 + minuti(h || '00:00');
+  const bbFineG = (e) => e.fino || e.d;
+  const bbInizio = (e) => mDa(e.d, e.h), bbFine = (e) => mDa(bbFineG(e), e.fine || '23:59');
+  const babboOra = (id) => { const m = minuti(oraAdesso()); return S.impegni.find(e => e.babbo && (e.who || []).includes(id) && bbInizio(e) <= m && m < bbFine(e)) || null; };
+  // In corso o in partenza nei prossimi giorni: una riga per persona, prima chi è già lì, poi chi parte prima.
+  function babboProssimi() {
+    const m = minuti(oraAdesso()), out = [];
+    for (const e of S.impegni) if (e.babbo && bbFine(e) > m && bbInizio(e) < GIORNI_BB * 1440)
+      for (const id of e.who || []) if (S.persone[id]) out.push({ id, e, ora: bbInizio(e) <= m });
+    return out.sort((a, b) => (b.ora - a.ora) || (bbInizio(a.e) - bbInizio(b.e)) || ((P(a.id).ordine || 0) - (P(b.id).ordine || 0)));
+  }
+  // "oggi alle 15:00", "domani alle 20:00", "domenica alle 20:00"; più in là di una settimana col giorno e il mese.
+  function quandoBb(d, h) {
+    const n = gDiff(T, d);
+    const g = n === 0 ? 'oggi' : n === 1 ? 'domani' : n === -1 ? 'ieri' : n > 1 && n < 7 ? fmt(d, { weekday: 'long' }) : fmt(d, { weekday: 'long', day: 'numeric', month: 'short' }).replace(/\./g, '');
+    return g + (h ? ` alle ${h}` : '');
+  }
+  const tornaBb = (e) => quandoBb(bbFineG(e), e.fine);
+  const puoBabbo = () => DA_BABBO.some(i => S.persone[i]);
   function fuoriCena(id, d, k) {
     d = d || T; const F = PASTI[k || 'cena'].fascia;
+    // Da babbo vince su tutto, anche sul turno: dopo il lavoro non torna a casa.
+    const o = gDiff(T, d) * 1440, bb = S.impegni.find(x => x.babbo && (x.who || []).includes(id) && bbInizio(x) < o + F[1] && bbFine(x) > o + F[0]);
+    if (bb) return { perche: `da babbo, torna ${tornaBb(bb)}`, babbo: true };
     // Tutti i turni del giorno, non solo l'ultimo: con il turno spezzato (es. 8-13:30 e 17-21) a pranzo conta quello del mattino.
     for (const t of delGiorno(d, e => e.fonte === 'orario:' + id && e.h && e.fine && e.fine > e.h)) {
       const m = minuti(t.fine) + strada(id);
@@ -203,8 +234,10 @@
   }
   // Il sì/no per la cena: quello toccato a mano, altrimenti "no" da solo se è impegnato all'ora di cena.
   function pastoDi(k, id) {
-    const x = (S[k] || {})[id]; if (x === 'si' || x === 'no') return { v: x };
-    const f = fuoriCena(id, GP[k] || giornoPasto(k), k); return f ? { v: 'no', auto: f } : { v: '?' };
+    const x = (S[k] || {})[id], f = fuoriCena(id, GP[k] || giornoPasto(k), k);
+    if (f && f.babbo) return { v: 'no', auto: f }; // da babbo vince anche su un "sì" toccato prima
+    if (x === 'si' || x === 'no') return { v: x };
+    return f ? { v: 'no', auto: f } : { v: '?' };
   }
   const cenaDi = (id) => pastoDi('cena', id);
   const titoloPasto = (k, d) => k === 'pranzo' ? (d === T ? 'A pranzo oggi?' : 'A pranzo domani?') : (d === T ? 'A cena stasera?' : 'A cena domani sera?');
@@ -214,15 +247,21 @@
     // Anche gli impegni di più giorni con l'orario (es. dalle 22 alle 2 di notte): in corso se adesso è dentro il loro orario di oggi.
     // (e quelli che passano la mezzanotte, es. un turno 19-1: fino a mezzanotte sono "in corso")
     const mOra = minuti(ora), dentro = (e) => { if (!piuGiorni(e) && !e.fine) return false; const [a, b] = intervallo(e, T); return a <= mOra && mOra < b; };
-    const orora = oggi.filter(e => e.h && dentro(e)), ades = orora.find(e => !e.virtuale) || orora[0];
+    // Il "da babbo" non è un'attività: fa da sfondo (cerchio tratteggiato), ma il lavoro o un impegno in corso vincono.
+    const orora = oggi.filter(e => e.h && !e.babbo && dentro(e)), ades = orora.find(e => !e.virtuale) || orora[0];
     const finoA = (e) => !inCorso(e, T) ? `fino alle ${e.fine}` : e.fino === iso(addDays(TODAY, 1)) ? `fino a domani${e.fine ? ' alle ' + e.fine : ''}` : `fino al ${fmt(e.fino, { day: 'numeric', month: 'short' })}`;
     // t = frase intera (pagina della persona), c = versione corta (sotto il cerchio in Oggi)
-    const r = rientro(id);
-    if (ades && r && ades.id === r.turno.id) return { t: `Al lavoro fino alle ${ades.fine}, a casa verso le ${r.ora}`, c: `Lavoro, 🏠 ${r.ora}`, k: 'occ' };
-    if (ades) return { t: `Ora: ${ades.t}, ${finoA(ades)}`, c: `Ora · ${ades.t}`, k: 'occ' };
+    const r = rientro(id), bb = babboOra(id);
+    // Se quando finisce il turno è da babbo, non "torna a casa": va da babbo.
+    const bbR = r && S.impegni.find(e => e.babbo && (e.who || []).includes(id) && bbInizio(e) <= r.m && r.m < bbFine(e));
+    const kb = (k) => bb ? 'via' : k;
+    if (ades && r && ades.id === r.turno.id) return bbR ? { t: `Al lavoro fino alle ${ades.fine}, poi da babbo`, c: 'Lavoro · poi 🏡', k: kb('occ') } : { t: `Al lavoro fino alle ${ades.fine}, a casa verso le ${r.ora}`, c: `Lavoro, 🏠 ${r.ora}`, k: 'occ' };
+    if (ades) return { t: `Ora: ${ades.t}, ${finoA(ades)}`, c: `Ora · ${ades.t}`, k: kb('occ') };
+    if (bb) return { t: `Da babbo, torna ${tornaBb(bb)}`, c: '🏡 Da babbo', k: 'via' };
     if (r && r.turno.fine <= ora && hm(r.m) > ora && r.m < 24 * 60) return { t: `Sta tornando dal lavoro, a casa verso le ${r.ora}`, c: `🏠 ${r.ora}`, k: 'dopo' };
     const pros = oggi.find(e => e.h && e.h > ora && (!piuGiorni(e) || e.d === T)); // un impegno di più giorni "comincia" solo il primo giorno
-    if (pros && r && pros.id === r.turno.id) return { t: `Alle ${pros.h} al lavoro, a casa verso le ${r.ora}`, c: `${pros.h} · lavoro`, k: 'dopo' };
+    if (pros && r && pros.id === r.turno.id) return bbR ? { t: `Alle ${pros.h} al lavoro, poi da babbo`, c: `${pros.h} · lavoro`, k: 'dopo' } : { t: `Alle ${pros.h} al lavoro, a casa verso le ${r.ora}`, c: `${pros.h} · lavoro`, k: 'dopo' };
+    if (pros && pros.babbo) return { t: `Alle ${pros.h} va da babbo, torna ${tornaBb(pros)}`, c: `${pros.h} · da babbo`, k: 'dopo' };
     if (pros) return { t: `Alle ${pros.h}: ${pros.t}`, c: `${pros.h} · ${pros.t}`, k: 'dopo' };
     const tutto = oggi.find(e => !e.h && !e.virtuale);
     if (tutto) return { t: `Oggi: ${tutto.t}`, c: tutto.t, k: 'dopo' };
@@ -262,9 +301,9 @@
   };
   function accavallati(e, d, chi) {
     // La scuola e le note di scuola non danno avvisi loro; un impegno vero durante la scuola invece sì.
-    if (!e.h || e.virtuale) return [];
+    if (!e.h || e.virtuale || e.babbo) return []; // il "da babbo" non si accavalla con niente
     const [a1, b1] = intervallo(e, d);
-    return conScuola(d, x => x.id !== e.id && x.h && !x.cmp && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
+    return conScuola(d, x => x.id !== e.id && x.h && !x.cmp && !x.babbo && (x.who || []).includes(chi) && x.t !== e.t).filter(x => { const [a2, b2] = intervallo(x, d); return a1 < b2 && a2 < b1; });
   }
   // Impegni importanti: con tutta la famiglia, segnati con la stella, o con parole da grande occasione.
   const PAROLE_IMP = ['matrimonio', 'laurea', 'battesimo', 'comunione', 'cresima', 'funerale', 'viaggio', 'partenza', 'volo', 'trasloco', 'esame', 'concerto', 'vacanza', 'ferie', 'natale', 'capodanno', 'pasqua'];
@@ -287,11 +326,16 @@
     if (who.length >= ids.length && ids.length > 1) return `<span class="chip" style="--pc:var(--acc)"><i></i>Tutti</span>`;
     return who.filter(w => S.persone[w]).map(w => `<span class="chip" style="--pc:${col(w)}"><i></i>${esc(P(w).nome)}</span>`).join('');
   }
+  // La colonna dell'ora. Da babbo di più giorni: il primo giorno l'ora in cui parte, l'ultimo quella in cui torna.
+  function oraEv(e, giorno) {
+    if (e.babbo && giorno && piuGiorni(e)) return giorno === e.d ? `${esc(e.h)}<small>parte</small>` : giorno === e.fino ? `${esc(e.fine)}<small>torna</small>` : '<small>tutto il<br>giorno</small>';
+    return `${e.h ? esc(e.h) : '<small>tutto il<br>giorno</small>'}${e.h && e.fine ? `<small>${esc(e.fine)}</small>` : ''}`;
+  }
   function evList(list, vuoto, giorno) {
     if (!list.length) return `<div class="empty">${vuoto || 'Nessun impegno. Tocca + per aggiungerne uno.'}</div>`;
     return list.map(e => `<button class="ev tap${e.id === fresh ? ' pop' : ''}" data-ev="${e.id}">
-      <div class="h">${e.h ? esc(e.h) : '<small>tutto il<br>giorno</small>'}${e.h && e.fine ? `<small>${esc(e.fine)}</small>` : ''}</div>
-      <div><div class="t">${e.imp ? '⭐ ' : ''}${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${piuGiorni(e) ? `<div class="n">🗓️ ${durataGiorni(e)}</div>` : ''}${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${eTurno(e) && e.h && e.fine && e.fine > e.h ? `<div class="n">🏠 A casa verso le ${hm(Math.min(minuti(e.fine) + strada((e.who || [])[0]), 24 * 60 - 1))}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}${giorno && (e.who || []).includes(S.me) ? accavallati(e, giorno, S.me).slice(0, 1).map(x => `<div class="acc">⚠️ Alla stessa ora hai «${esc(x.t)}»</div>`).join('') : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
+      <div class="h">${oraEv(e, giorno)}</div>
+      <div><div class="t">${e.imp ? '⭐ ' : ''}${e.babbo ? '🏡 ' : ''}${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${e.babbo ? `<div class="n">Parte ${quandoBb(e.d, e.h)} · torna ${tornaBb(e)}</div>` : piuGiorni(e) ? `<div class="n">🗓️ ${durataGiorni(e)}</div>` : ''}${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${eTurno(e) && e.h && e.fine && e.fine > e.h ? `<div class="n">🏠 A casa verso le ${hm(Math.min(minuti(e.fine) + strada((e.who || [])[0]), 24 * 60 - 1))}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}${giorno && (e.who || []).includes(S.me) ? accavallati(e, giorno, S.me).slice(0, 1).map(x => `<div class="acc">⚠️ Alla stessa ora hai «${esc(x.t)}»</div>`).join('') : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
   }
 
   /* ---------- Fluidità ----------
@@ -329,6 +373,15 @@
   });
 
   /* ---------- Pagine ---------- */
+  // Scheda "Da babbo" in Oggi: chi è lì adesso e chi parte nei prossimi giorni. Senza nessuno, non c'è.
+  function cardBabbo(r) {
+    const l = babboProssimi(); if (!l.length) return '';
+    return `<div class="card bbc${r}"><h2><span class="ttl"><i class="ic">${ICO.casa}</i>Da babbo</span> <small>${l.some(x => x.ora) ? 'chi non è a casa' : 'nei prossimi giorni'}</small></h2>
+      <div class="bbl">${l.map(({ id, e, ora }) => `<button class="bbr tap" data-ev="${e.id}" style="--pc:${col(id)}" aria-label="${esc(P(id).nome)}: ${ora ? 'da babbo, torna ' + esc(tornaBb(e)) : 'va da babbo ' + esc(quandoBb(e.d, e.h))}"><span class="bav">${avt(id)}</span>
+        <span class="bbt"><b>${id === S.me ? 'Tu' : esc(P(id).nome)}</b><small>${ora ? `Torna ${tornaBb(e)}` : `Va ${quandoBb(e.d, e.h)} · torna ${tornaBb(e)}`}</small>${e.n ? `<small>${esc(e.n)}</small>` : ''}</span>
+        ${ora ? '<span class="bbp">Ora lì</span>' : ''}</button>`).join('')}</div>
+      <button class="link tap" data-babbo="nuovo">+ Segna chi va da babbo</button></div>`;
+  }
   function rOggi() {
     const tom = iso(addDays(TODAY, 1));
     const left = S.spesa.filter(x => !x.done).length;
@@ -337,8 +390,8 @@
     const nm = (i) => i === S.me ? 'Tu' : esc(P(i).nome);
     // Una scheda per pasto, nell'ordine in cui arrivano (prima quello più vicino).
     const pasto = (k) => {
-      const d = GP[k] || giornoPasto(k), doc = S[k] || {}, yes = ids.filter(i => doc[i] === 'si').length;
-      const v = Object.fromEntries(ids.map(i => [i, pastoDi(k, i)])), em = k === 'pranzo' ? '☀️' : '🌙';
+      const d = GP[k] || giornoPasto(k);
+      const v = Object.fromEntries(ids.map(i => [i, pastoDi(k, i)])), em = k === 'pranzo' ? '☀️' : '🌙', yes = ids.filter(i => v[i].v === 'si').length;
       const perche = ids.filter(i => v[i].auto).map(i => `<span style="--pc:${col(i)}">${em} <b>${nm(i)}</b> · ${esc(v[i].auto.perche)}</span>`);
       const rientri = k === 'cena' && d === T ? ids.filter(i => !v[i].auto && rientro(i) && rientro(i).m > adesso).map(i => `<span style="--pc:${col(i)}">🏠 <b>${nm(i)}</b> · a casa verso le ${rientro(i).ora}</span>`) : [];
       return [d + (k === 'pranzo' ? 'a' : 'b'), `<div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO[k]}</i>${titoloPasto(k, d)}</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
@@ -349,6 +402,7 @@
     const pasti = [pasto('pranzo'), pasto('cena')].sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]).join('');
     $('#p-oggi').innerHTML = `<div class="stack">
      <div class="storie${ri(0)}" role="list">${ids.map((i, k) => { const st = statoOra(i); return `<button class="st tap" role="listitem" data-persona="${i}" style="--pc:${col(i)};--k:${k}" aria-label="${esc(P(i).nome)}: ${esc(st.t)}"><span class="ring ${st.k}"><span>${avt(i)}</span></span><b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b><small>${esc(st.c)}</small></button>`; }).join('')}</div>
+     ${cardBabbo(ri(1))}
      ${pasti}
      ${propOggi(ri(1))}
      <div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO.oggi}</i>Oggi</span> <small>${fmt(T, { weekday: 'long', day: 'numeric', month: 'short' })}</small></h2>${evList(delGiorno(T), 'Giornata libera ☀️ Tocca + per aggiungere un impegno.', T)}</div>
@@ -679,7 +733,7 @@
     const giorni = [...Array(14)].map((_, i) => iso(addDays(TODAY, i))), dom = giorni[1];
     const per = giorni.map(d => [d, delGiorno(d, suoi).filter(e => d !== T || !e.h || inCorso(e, d) || (e.fine || e.h) >= ora)]).filter(([, l]) => l.length);
     const sett = giorni.slice(0, 7).reduce((n, d) => n + delGiorno(d, e => suoi(e) && !e.virtuale).length, 0); // la scuola e le note di scuola non contano
-    const c = S.cena[id], cOggi = GP.cena === T, sera = cOggi ? 'Stasera' : 'Domani sera';
+    const cd = cenaDi(id), c = cd.auto && cd.auto.babbo ? '' : S.cena[id], cOggi = GP.cena === T, sera = cOggi ? 'Stasera' : 'Domani sera';
     const pr = pastoDi('pranzo', id), prQ = GP.pranzo === T ? 'oggi' : 'domani';
     const pezzi = [statoOra(id).t,
       sett === 0 ? 'Settimana tranquilla' : sett >= 6 ? `Settimana piena: ${sett} impegni` : `${sett} ${sett === 1 ? 'impegno' : 'impegni'} in 7 giorni`,
@@ -1373,13 +1427,13 @@
       y0 = null;
     });
   })();
-  const pickHtml = (sel) => `<div class="pick">${IDS().map(i => `<button type="button" class="pk tap${sel.includes(i) ? ' on' : ''}" data-pk="${i}" style="--pc:${col(i)}"><i>${avt(i)}</i>${esc(P(i).nome)}</button>`).join('')}</div>`;
+  const pickHtml = (sel, lista) => `<div class="pick">${(lista || IDS()).map(i => `<button type="button" class="pk tap${sel.includes(i) ? ' on' : ''}" data-pk="${i}" style="--pc:${col(i)}"><i>${avt(i)}</i>${esc(P(i).nome)}</button>`).join('')}</div>`;
 
   function sheetEvento(e) {
     e = e || { t: '', d: page === 'cal' ? selDay : T, h: '18:00', fine: '19:00', who: [S.me], n: '', ripeti: '' };
     // Privato (Sasha, 02/11/2026): chi l'ha scritto vede il titolo, gli altri «Occupato». Solo per gli impegni scritti nell'app.
     const puoPriv = !e.id || (e.fonte === 'app' && e.creatoDa === S.me && !e.appu);
-    openSheet(`<h3>${e.id ? 'Modifica impegno' : 'Nuovo impegno'}</h3><form class="stack" id="fEv" data-id="${e.id || ''}">
+    openSheet(`<h3>${e.id ? 'Modifica impegno' : 'Nuovo impegno'}</h3>${!e.id && puoBabbo() ? `<button type="button" class="bbq tap" data-babbo="nuovo"><i class="ic">${ICO.casa}</i><span><b>Vai da babbo?</b><small>Segna quando parti e quando torni</small></span><span class="bbx">›</span></button>` : ''}<form class="stack" id="fEv" data-id="${e.id || ''}">
      <label>Cosa<input id="evT" required maxlength="80" value="${esc(e.t)}" placeholder="Es. visita, partita, compleanno"></label>
      <div class="row2"><label>Giorno<input id="evD" type="date" value="${esc(e.d)}" required></label><label>Si ripete<select id="evR">${Object.entries(RIPETI).map(([k, v]) => `<option value="${k}"${(e.ripeti || '') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label></div>
      <label>Fino al giorno (facoltativo, per più giorni)<input id="evFino" type="date" value="${esc(e.fino || '')}"></label>
@@ -1391,6 +1445,33 @@
      ${puoPriv ? `<label class="sw">🔒 Privato: gli altri vedono solo «Occupato»<input type="checkbox" id="evPriv"${e.nascosto ? ' checked' : ''}></label>` : ''}
      <label class="sw">⭐ Importante (va in cima a Impegni)<input type="checkbox" id="evImp"${e.imp ? ' checked' : ''}></label>
      <button class="btn tap">${e.id ? 'Salva le modifiche' : 'Salva impegno'}</button></form>`, () => { if (!e.id) setTimeout(() => $('#evT').focus(), 380); });
+  }
+  /* Foglio del "da babbo": chi va (solo chi è in DA_BABBO), quando parte e quando torna.
+     Di base parte fra poco (la prossima mezz'ora) e torna domenica alle 20, cioè il fine settimana. */
+  function sheetBabbo(e) {
+    const ids = DA_BABBO.filter(i => S.persone[i]);
+    if (!e) {
+      const m = Math.min(23 * 60 + 30, Math.ceil((minuti(oraAdesso()) + 1) / 30) * 30);
+      let dom = addDays(TODAY, (7 - TODAY.getDay()) % 7); if (iso(dom) === T && m >= 19 * 60) dom = addDays(dom, 7);
+      e = { d: T, h: hm(m), fino: iso(dom), fine: '20:00', who: ids.includes(S.me) ? [S.me] : [], n: '' };
+    }
+    openSheet(`<h3>${e.id ? 'Modifica: da babbo' : 'Da babbo'}</h3><form class="stack" id="fBb" data-id="${e.id || ''}">
+     <div class="empty">Chi resta a casa lo vede in Oggi e nel calendario. A pranzo e a cena risulta fuori da solo.</div>
+     <label>Chi va</label>${pickHtml(e.who || [], ids)}
+     <div class="row2"><label>Parte il<input id="bbD" type="date" value="${esc(e.d)}" required></label><label>alle<input id="bbH" type="time" value="${esc(e.h || '')}" required></label></div>
+     <div class="row2"><label>Torna il<input id="bbF" type="date" value="${esc(bbFineG(e))}" required></label><label>alle<input id="bbFo" type="time" value="${esc(e.fine || '')}" required></label></div>
+     <label>Nota<input id="bbN" maxlength="200" value="${esc(e.n || '')}" placeholder="Facoltativa, es. mi riaccompagna lui"></label>
+     <button class="btn tap">${e.id ? 'Salva le modifiche' : 'Salva'}</button></form>`);
+  }
+  function sheetBabboDett(e) {
+    const m = minuti(oraAdesso()), ora = bbInizio(e) <= m && m < bbFine(e), chi = (e.who || []).filter(w => S.persone[w]);
+    const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+    const casa = chi.length === 1 && chi[0] !== S.me ? `${esc(P(chi[0]).nome)} è a casa` : 'Sono a casa';
+    openSheet(`<h3>Da babbo</h3><div class="dots">${chips(chi)}</div>
+      <div class="bbw"><span><small>Parte</small><b>${cap(quandoBb(e.d, e.h))}</b></span><span><small>${e.tornato ? 'A casa' : 'Torna'}</small><b>${cap(tornaBb(e))}</b></span></div>
+      ${e.n ? `<div class="muted">${esc(e.n)}</div>` : ''}<div class="src">Segnato da ${esc(P(e.creatoDa).nome)}</div>
+      ${ora ? `<button class="btn tap" data-bbcasa="${e.id}">🏠 ${casa} adesso</button>` : ''}
+      <div class="row2"><button class="btn ghost tap" data-bbmod="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">${bbInizio(e) > m ? 'Annulla' : 'Elimina'}</button></div>`);
   }
   function sheetDettaglio(e) {
     const fonte = e.fonte && e.fonte.startsWith('calendario:') ? `Dal calendario di ${esc(P(e.fonte.slice(11)).nome)}` : e.fonte && e.fonte.startsWith('import:') ? `Importato da ${esc(P(e.fonte.slice(7)).nome)}` : e.fonte && e.fonte.startsWith('orario:') ? `Dall'orario di lavoro di ${esc(P(e.fonte.slice(7)).nome)}` : e.scuola ? `Dall'orario scolastico di ${esc(P(e.who[0]).nome)}` : `Aggiunto da ${esc(P(e.creatoDa).nome)}`;
@@ -2492,12 +2573,23 @@
     if (d.cena) {
       if (d.cena !== S.me) return openPersona(d.cena);
       const k = d.k === 'pranzo' ? 'pranzo' : 'cena', g = GP[k] || giornoPasto(k), doc = S[k] = S[k] || {};
+      const mioBb = pastoDi(k, S.me).auto; if (mioBb && mioBb.babbo) return toast('Risulti da babbo: per cambiare tocca la tua riga nella scheda Da babbo');
       const o = ['si', 'no', '?']; const v = o[(o.indexOf(doc[S.me] || '?') + 1) % 3]; // dal "fuori" automatico si passa a sì, poi no, poi di nuovo automatico
       tic(); doc[S.me] = v; rOggi(); const n = document.querySelector(`[data-cena="${S.me}"][data-k="${k}"]`); n && n.classList.add('bump');
       if (v === 'si' && IDS().every(i => doc[i] === 'si')) { festa(n); toast(`${titoloPasto(k, g).replace(/^A (pranzo|cena) /, '').replace('?', '').replace(/^./, c => c.toUpperCase())} tutti a tavola! 🍝`); }
       return DATI.imposta(k, g, { [S.me]: v }).catch(sbaglio);
     }
-    if (d.ev) { const e = S.impegni.find(x => x.id === d.ev); return e && (e.cmp ? sheetC(e.cmp) : sheetDettaglio(e)); }
+    if (d.ev) { const e = S.impegni.find(x => x.id === d.ev); return e && (e.cmp ? sheetC(e.cmp) : e.babbo ? sheetBabboDett(e) : sheetDettaglio(e)); }
+    if (d.babbo) return sheetBabbo();
+    if (d.bbmod) return sheetBabbo(S.impegni.find(x => x.id === d.bbmod));
+    if (d.bbcasa) {
+      // Tornato prima: il "da babbo" finisce adesso (e chi è a casa riceve l'avviso, se lo vuole).
+      const e = S.impegni.find(x => x.id === d.bbcasa); if (!e) return;
+      const ora = oraAdesso(), v = T > e.d ? { fino: T, fine: ora } : { fino: '', fine: ora > e.h ? ora : hm(minuti(e.h) + 1) };
+      closeSheet();
+      try { await DATI.aggiorna('impegni', e.id, Object.assign(v, { tornato: Date.now(), tornatoDa: S.me, modificato: Date.now(), modificatoDa: S.me })); } catch (er) { return sbaglio(er); }
+      return toast('🏠 Segnato: a casa');
+    }
     // Sezione Personale
     if (t.id === 'mioBtn') return openMio();
     if (t.id === 'mioBack') return closeMio();
@@ -2732,6 +2824,22 @@
           fresh = id; render(); toast('🔒 Impegno salvato: gli altri vedono «Occupato»');
         }
         else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('Impegno salvato: lo vedono tutti'); }
+      } catch (er) { sbaglio(er); }
+    } else if (f.id === 'fBb') {
+      const who = [...f.querySelectorAll('.pk.on')].map(b => b.dataset.pk); if (!who.length) return toast('Scegli chi va');
+      const d = $('#bbD').value, h = $('#bbH').value; let fd = $('#bbF').value || d, fine = $('#bbFo').value;
+      if (!d || !/^\d\d:\d\d$/.test(h) || !/^\d\d:\d\d$/.test(fine)) return toast('Scrivi quando parte e quando torna');
+      if (fd + fine <= d + h) return toast('Il ritorno è prima della partenza');
+      // Torna a mezzanotte: per il calendario è la fine del giorno prima (altrimenti quel giorno risulterebbe tutto fuori).
+      if (fine === '00:00') { fd = iso(addDays(new Date(fd + 'T12:00:00'), -1)); fine = '23:59'; }
+      const e = { t: 'Da babbo', babbo: true, d, h, fino: fd > d ? fd : '', fine, who, n: $('#bbN').value.trim(), ripeti: '', mezzo: '', imp: false, nascosto: false };
+      closeSheet();
+      try {
+        if (f.dataset.id) {
+          const prima = S.impegni.find(x => x.id === f.dataset.id);
+          Object.assign(e, { aggiunti: who.filter(p => prima && !(prima.who || []).includes(p)), modificato: Date.now(), modificatoDa: S.me });
+          await DATI.aggiorna('impegni', f.dataset.id, e); toast('Aggiornato');
+        } else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('🏡 Segnato: lo vedono tutti in Oggi'); }
       } catch (er) { sbaglio(er); }
     } else if (f.id === 'fFilm') {
       const tt = $('#fiT').value.trim().slice(0, 90); if (!tt) return toast('Scrivi il titolo');

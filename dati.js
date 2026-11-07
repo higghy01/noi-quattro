@@ -39,6 +39,7 @@
        ev('Spesa grande', 2, '10:00', ['p2'], 'Chi vuole qualcosa lo scrive in Spesa'),
        ev('Compleanno della nonna', 4, '', tutti, '', { ripeti: 'annuale' }),
        ev('Revisione auto', 5, '09:00', ['p4'], 'Portare il libretto'),
+       ev('Da babbo', -1, '18:00', ['p3'], '', { babbo: true, fino: iso(1), fine: '20:00' }),
        ev('Riunione di condominio', 1, '19:00', ['p1'], ''), ev('Matrimonio di Chiara', 12, '11:00', ['p1', 'p2'], 'In comune')].forEach(e => o.impegni[uid()] = e);
       // Proposte: una aperta con voti, una appena fatta senza idee, una già decisa.
       const op = (x, by, k) => ({ x, by, creato: now - 5e6 + k });
