@@ -35,7 +35,7 @@ echo "Versione: $VERSIONE"
 
 passo "4/8 Programmi automatici (funzioni)"
 cp scripts/notifiche.py scripts/comune.py scripts/sincronizza_calendari.py scripts/libri.py scripts/mostre.py \
-   scripts/film.py scripts/orario.py scripts/scuola.py scripts/compiti.py scripts/aggiornamento.py functions/ || ferma "copia dei programmi"
+   scripts/film.py scripts/orario.py scripts/scuola.py scripts/compiti.py scripts/aggiornamento.py scripts/pubblica_sito.py functions/ || ferma "copia dei programmi"
 # Le funzioni girano con Python 3.12: serve lo stesso qui (se manca, lo scarica uv).
 rm -rf functions/venv
 if command -v python3.12 >/dev/null 2>&1; then python3.12 -m venv functions/venv
@@ -69,5 +69,10 @@ ONLINE=$(curl -s "https://$PROGETTO.web.app/versione.json?t=$(date +%s)" | grep 
 echo
 echo "##############################################################"
 echo "  FATTO: https://$PROGETTO.web.app  (versione $VERSIONE)"
-echo "  Puoi chiudere Cloud Shell e tornare su Claude."
 echo "##############################################################"
+# Da qui in poi Claude pubblica da solo dal cloud (funzione "pubblica"): gli serve la parola d'ordine, una volta sola.
+echo
+echo "Parola d'ordine per Claude (incollala SOLO nel modulo sicuro che Claude ti apre, mai in chat):"
+firebase functions:secrets:access COMANDO_TOKEN 2>/dev/null || echo "(non trovata: dillo a Claude)"
+echo
+echo "Quando l'hai incollata nel modulo, puoi chiudere Cloud Shell."

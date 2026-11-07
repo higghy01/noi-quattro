@@ -5,6 +5,8 @@
 - calendari, libri, mostre, film: i programmi che prima giravano su GitHub, agli stessi orari ma in ora italiana.
 - comando: per i thread di Claude (orario di lavoro, orario scolastico, note di scuola, stato dei programmi), con una
   parola d'ordine segreta (COMANDO_TOKEN, nei segreti di Firebase). Prima erano i workflow "a mano" di GitHub.
+- pubblica: Claude pubblica dal cloud il sito (ed eventualmente le regole) anche quando Sasha non è al PC, con la
+  stessa parola d'ordine; di base su un canale di prova, sul sito vero solo con canale=live (scripts/pubblica_sito.py).
 I file di scripts/ li copia qui lo script di pubblicazione (strumenti/pubblica.sh): la fonte resta una sola.
 Se qualcosa va storto, l'errore si scrive in sistema/<nome>-errore (con una chiamata web semplice, che funziona anche
 se il collegamento al database del programma è rotto) e si vede con comando "stato".
@@ -142,6 +144,11 @@ def film(event: scheduler_fn.ScheduledEvent) -> None:
 AZIONI = {"orario": ("orario", "turni"), "scuola": ("scuola", "orario"), "compiti": ("compiti", "note")}
 
 
+def _token_giusto(req):
+    atteso, dato = COMANDO.value or "", req.headers.get("X-Comando-Token", "")
+    return len(atteso) >= 32 and hmac.compare_digest(dato.encode(), atteso.encode())
+
+
 def _stato():
     from comune import database
     db = database()
@@ -159,8 +166,7 @@ def _stato():
 def comando(req: https_fn.Request) -> https_fn.Response:
     if req.method != "POST":
         return https_fn.Response("Solo POST.", status=405)
-    atteso, dato = COMANDO.value or "", req.headers.get("X-Comando-Token", "")
-    if len(atteso) < 32 or not hmac.compare_digest(dato.encode(), atteso.encode()):
+    if not _token_giusto(req):
         return https_fn.Response("Parola d'ordine sbagliata.", status=403)
     corpo = req.get_json(silent=True) or {}
     azione = corpo.get("azione")
@@ -181,3 +187,41 @@ def comando(req: https_fn.Request) -> https_fn.Response:
     except Exception:
         return https_fn.Response(uscita.getvalue() + "\n" + traceback.format_exc()[-1500:], status=500)
     return https_fn.Response(uscita.getvalue() or "Fatto.", status=200)
+
+
+@https_fn.on_request(region=REGIONE, secrets=[COMANDO], memory=options.MemoryOption.GB_1, timeout_sec=540, max_instances=1)
+def pubblica(req: https_fn.Request) -> https_fn.Response:
+    """POST di uno zip con i file del sito (e, solo per canale=live, le regole in _regole/). ?canale=prova|live&titolo=..."""
+    if req.method != "POST":
+        return https_fn.Response("Solo POST.", status=405)
+    if not _token_giusto(req):
+        return https_fn.Response("Parola d'ordine sbagliata.", status=403)
+    dati = req.get_data(cache=False)
+    if not dati or len(dati) > 25 * 1024 * 1024:
+        return https_fn.Response("Pacchetto vuoto o troppo grande.", status=400)
+    canale = (req.args.get("canale") or "prova").strip().lower()
+    titolo = (req.args.get("titolo") or "").strip()
+    import google.auth
+    from google.auth.transport.requests import AuthorizedSession
+    import pubblica_sito as ps
+    try:
+        sito, regole = ps.leggi_pacchetto(dati)
+        if regole and canale != "live":
+            raise ps.Rifiutato("le regole si pubblicano solo col canale live")
+        cred, progetto = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        progetto = progetto or os.environ.get("GCLOUD_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        s = AuthorizedSession(cred)
+        esito = {"regole": []}
+        if regole:  # prima le regole: se non vanno, il sito resta com'era
+            esito["regole"] = ps.pubblica_regole(s, progetto, os.environ.get("SECCHIO") or f"{progetto}.firebasestorage.app", regole)
+        esito.update(ps.pubblica_sito(s, progetto, sito, canale, titolo))
+        _segna(f"pubblica-{canale}", "ok")
+        return https_fn.Response(json.dumps(esito, ensure_ascii=False), status=200, mimetype="application/json")
+    except ps.Rifiutato as e:
+        return https_fn.Response(f"Non pubblicato: {e}", status=400)
+    except Exception:
+        testo = traceback.format_exc()
+        print(testo)
+        _scrivi_errore(testo, "pubblica-errore")
+        _segna(f"pubblica-{canale}", "errore")
+        return https_fn.Response("Non pubblicato: " + testo[-800:], status=500)

@@ -1,6 +1,6 @@
 // NDSZ - service worker: app usabile offline + notifiche (Firebase Cloud Messaging).
 // A ogni pubblicazione alzare VERSIONE, altrimenti i telefoni restano sulla copia vecchia.
-const VERSIONE = 'noi4-v89';
+const VERSIONE = 'noi4-v90';
 // Le librerie esterne hanno la versione nell'indirizzo: stanno in una copia a parte che NON si cancella a ogni
 // aggiornamento, così l'app si apre anche senza rete subito dopo una nuova versione.
 const CACHE_LIB = 'noi4-librerie';
@@ -31,7 +31,10 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => /^noi4-/.test(n) && n !== VERSIONE && n !== CACHE_LIB).map(n => caches.delete(n)))).then(() => self.clients.claim()));
 });
-// Prima la rete (per avere sempre l'ultima versione), la copia solo se manca internet.
+// Prima la rete (per avere sempre l'ultima versione); se la rete non risponde entro 3 secondi e c'è la copia,
+// si usa la copia (con poco segnale l'app non resta bianca). Nella copia vanno solo le risposte buone (mai un errore).
+// Dopo una rete lenta, per mezzo minuto la copia si usa subito, senza riaspettare 3 secondi per ogni file.
+let lentaFino = 0;
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
@@ -41,8 +44,17 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (u.origin !== location.origin) return;
-  e.respondWith(fetch(e.request).then(r => { const c = r.clone(); caches.open(VERSIONE).then(x => x.put(e.request, c)); return r; })
-    .catch(() => caches.match(e.request).then(r => r || caches.match('index.html'))));
+  const rete = fetch(e.request).then(r => { if (r.ok) { const c = r.clone(); caches.open(VERSIONE).then(x => x.put(e.request, c)); } return r; });
+  rete.catch(() => {}); // se si usa la copia, un errore della rete arrivato dopo non deve finire in console
+  e.respondWith(caches.match(e.request).then(copia => {
+    if (!copia) return rete.catch(() => caches.match('index.html'));
+    if (Date.now() < lentaFino) return copia; // la rete è appena stata lenta: subito la copia (la rete intanto la aggiorna)
+    let arrivata = false;
+    return Promise.race([
+      rete.then(r => { arrivata = true; return r.ok ? r : copia; }).catch(() => { arrivata = true; return copia; }),
+      new Promise(ok => setTimeout(() => { if (!arrivata) lentaFino = Date.now() + 30000; ok(copia); }, 3000))
+    ]);
+  }));
 });
 // Toccando la notifica si apre (o si porta davanti) l'app.
 self.addEventListener('notificationclick', e => {

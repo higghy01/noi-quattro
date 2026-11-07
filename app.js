@@ -90,14 +90,14 @@
     const det = S.priv.dettagli || {};
     S.impegni = (S.impRaw || []).map(e => e.nascosto && (mioCal(e) || e.creatoDa === S.me) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e)
       .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')) && !e.annullato);
-    // La scuola non entra nel calendario di famiglia (scelta di Sasha del 01/11/2026: la sorella non vuole impegni e scuola
+    // La scuola non entra nel calendario di famiglia (scelta del 01/11/2026: chi va a scuola non vuole impegni e scuola
     // mischiati): lezioni e note stanno nel Calendario della sua sezione Personale. Le lezioni servono solo a dire
     // "è a scuola" in Oggi e ad avvisarla se un impegno vero cade durante la scuola.
     S.scuolaEv = eventiScuola();
     S.impegni = S.impegni.concat(proveComuni());
     allineaAppu();
   }
-  /* Gli appuntamenti fissi della sezione "Per me" vanno anche nel calendario comune (Sasha, 02/11/2026): gli altri vedono
+  /* Gli appuntamenti fissi della sezione "Per me" vanno anche nel calendario comune (02/11/2026): gli altri vedono
      "Occupato" col lucchetto, il titolo vero sta nella parte privata di chi l'ha scritto (come per i calendari collegati).
      Si cambiano solo dalla sezione Personale: qui l'impegno si rifà da solo uguale all'appuntamento. */
   const appuFatti = new Set(); let impOk = false, mieOk = false;
@@ -128,7 +128,7 @@
       }, 15000);
     }
   }
-  // Interrogazioni e verifiche nel calendario comune (Sasha, 02/11/2026): solo per chi è in scuola/<persona>.prove
+  // Interrogazioni e verifiche nel calendario comune (02/11/2026): solo per chi è in scuola/<persona>.prove
   // (le regole del database non le danno a nessun altro). Chi le ha scritte le vede nel suo Calendario della scuola.
   function proveComuni() {
     const out = [];
@@ -181,7 +181,7 @@
   }
   // Perché uno non è a cena stasera (o null): un turno che finisce tardi, o un impegno all'ora di cena.
   // Non contano gli impegni con tutta la famiglia (es. "Cena tutti insieme") né quelli di tutto il giorno.
-  /* Pranzo e cena (Sasha, 04/11/2026): verso le 15:30 la domanda del pranzo passa a domani, alle 21 quella della cena.
+  /* Pranzo e cena (04/11/2026): verso le 15:30 la domanda del pranzo passa a domani, alle 21 quella della cena.
      Il pranzo funziona come la cena: chi è al lavoro o impegnato tra le 13 e le 14 risulta fuori da solo. */
   const PASTI = { pranzo: { fascia: [13 * 60, 14 * 60], cambia: 15 * 60 + 30 }, cena: { fascia: CENA, cambia: 21 * 60 } };
   const giornoPasto = (k) => minuti(oraAdesso()) >= PASTI[k].cambia ? iso(addDays(TODAY, 1)) : T;
@@ -403,7 +403,7 @@
     };
     const pasti = [pasto('pranzo'), pasto('cena')].sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]).join('');
     $('#p-oggi').innerHTML = `<div class="stack">
-     <div class="storie${ri(0)}" role="list">${ids.map((i, k) => { const st = statoOra(i); return `<button class="st tap" role="listitem" data-persona="${i}" style="--pc:${col(i)};--k:${k}" aria-label="${esc(P(i).nome)}: ${esc(st.t)}"><span class="ring ${st.k}"><span>${avt(i)}</span></span><b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b><small>${esc(st.c)}</small></button>`; }).join('')}</div>
+     <div class="storie${ri(0)}" role="list">${(() => { let resp = 0; return ids.map((i, k) => { const st = statoOra(i), ferma = st.k === 'occ' && ++resp > 2; return `<button class="st tap" role="listitem" data-persona="${i}" style="--pc:${col(i)};--k:${k}" aria-label="${esc(P(i).nome)}: ${esc(st.t)}"><span class="ring ${st.k}${ferma ? ' fermo' : ''}"><span>${avt(i)}</span></span><b>${i === S.me ? 'Tu' : esc(P(i).nome)}</b><small>${esc(st.c)}</small></button>`; }).join(''); })()}</div>
      ${cardBabbo(ri(1))}
      ${pasti}
      ${propOggi(ri(1))}
@@ -440,10 +440,10 @@
     segSet($('#segNote'), seg === 'film' ? 3 : seg === 'regali' ? 2 : seg === 'note' ? 1 : 0);
     $('#noteBody').innerHTML = seg === 'film' ? rFilm() : seg === 'regali' ? rRegali() : seg === 'note' ? rFoglietti() : rProposte();
   }
-  /* ---------- Note (02/11/2026, Sasha): foglietti per tutti e 4, tipo "Sasha: domani sono da babbo".
+  /* ---------- Note (02/11/2026): foglietti per tutti e 4, tipo "domani sono da babbo".
      Chi scrive la nota la può togliere; agli altri arriva un avviso "X ha scritto una nota", senza il testo. */
-  const NOTA_VITA = 24 * 3600e3; // Le note spariscono 24 ore dopo essere state scritte (Sasha, 03/11/2026); le cancella anche il programma degli avvisi.
-  /* ---------- Film (Sasha, 04/11/2026): una parte Cinema (uscite in Italia, da ComingSoon) e una Streaming
+  const NOTA_VITA = 24 * 3600e3; // Le note spariscono 24 ore dopo essere state scritte (03/11/2026); le cancella anche il programma degli avvisi.
+  /* ---------- Film (04/11/2026): una parte Cinema (uscite in Italia, da ComingSoon) e una Streaming
      (HBO Max, Netflix, Prime Video, da TMDB), aggiornate una volta a settimana dal programma "Film" in info/film.
      Ognuno segna 👀 Da vedere, ✅ Già visto o 🚫 Non mi interessa (raccolta "film", ognuno scrive solo il suo) e,
      se l'ha visto, le stelle. In più i titoli aggiunti a mano (raccolta "filmextra"). */
@@ -527,7 +527,7 @@
         <div class="fby"><small><span class="fqt" data-ms="${+n.creato || Date.now()}">${quantoFa(n.creato || Date.now())}</span>${n.modificato ? ' · modificata' : ''}<br><span class="fsc">${scade(n.creato)}</span></small>${mio ? `<span class="fac"><button class="gx tap" data-modnota="${n.id}" aria-label="Modifica la nota">✎</button><button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button></span>` : ''}</div></div>`;
     }).join('')}</div>`;
   }
-  // Quanto tempo fa (Sasha, 02/11/2026): "adesso", "5 min fa", "3 ore fa", "ieri", "4 giorni fa", "2 settimane fa", "3 mesi fa".
+  // Quanto tempo fa (02/11/2026): "adesso", "5 min fa", "3 ore fa", "ieri", "4 giorni fa", "2 settimane fa", "3 mesi fa".
   function quantoFa(ms) {
     const m = Math.max(0, Math.floor((Date.now() - ms) / 60000)), h = Math.floor(m / 60), g = Math.floor(h / 24);
     if (m < 1) return 'adesso';
@@ -545,7 +545,7 @@
     if ([...document.querySelectorAll('.fqt')].some(e => +e.dataset.ms <= Date.now() - NOTA_VITA)) return render();
     document.querySelectorAll('.fqt').forEach(e => { const t = quantoFa(+e.dataset.ms), sc = e.parentElement.querySelector('.fsc'), u = scade(+e.dataset.ms); if (e.textContent !== t) e.textContent = t; if (sc && sc.textContent !== u) sc.textContent = u; });
   }, 60000);
-  // Con una nota (solo mia) il foglio serve a modificarla (Sasha, 03/11/2026): niente avviso agli altri.
+  // Con una nota (solo mia) il foglio serve a modificarla (03/11/2026): niente avviso agli altri.
   function sheetNota(n) {
     // id "fNota" (non "fNo": è già del foglio "+ Aggiungi" dell'Agenda di scuola, che con lo stesso nome non salvava più).
     openSheet(`<h3>${n ? 'Modifica la nota' : 'Nuova nota'}</h3><form class="stack" id="fNota"${n ? ` data-id="${esc(n.id)}"` : ''}>
@@ -1384,7 +1384,7 @@
   /* ---------- Fogli dal basso ---------- */
   let ignoraPop = 0; // i "torna indietro" fatti dall'app stessa
   const aperto = () => $('#sheet').classList.contains('on');
-  // Tastiera dell'iPhone (02/11/2026, Sasha: "la tastiera copre la nota"): Safari non sposta i fogli fissi,
+  // Tastiera dell'iPhone (02/11/2026: "la tastiera copre la nota"): Safari non sposta i fogli fissi,
   // quindi alziamo il foglio dell'altezza della tastiera, letta dal visualViewport.
   if (window.visualViewport) {
     const vv = window.visualViewport, kb = () => {
@@ -1433,7 +1433,7 @@
 
   function sheetEvento(e) {
     e = e || { t: '', d: page === 'cal' ? selDay : T, h: '18:00', fine: '19:00', who: [S.me], n: '', ripeti: '' };
-    // Privato (Sasha, 02/11/2026): chi l'ha scritto vede il titolo, gli altri «Occupato». Solo per gli impegni scritti nell'app.
+    // Privato (02/11/2026): chi l'ha scritto vede il titolo, gli altri «Occupato». Solo per gli impegni scritti nell'app.
     const puoPriv = !e.id || (e.fonte === 'app' && e.creatoDa === S.me && !e.appu);
     openSheet(`<h3>${e.id ? 'Modifica impegno' : 'Nuovo impegno'}</h3>${!e.id && puoBabbo() ? `<button type="button" class="bbq tap" data-babbo="nuovo"><i class="ic">${ICO.casa}</i><span>${DA_BABBO.includes(S.me) ? '<b>Vai da babbo?</b><small>Segna quando parti e quando torni</small>' : '<b>Qualcuno va da babbo?</b><small>Segna chi va, quando parte e quando torna</small>'}</span><span class="bbx">›</span></button>` : ''}<form class="stack" id="fEv" data-id="${e.id || ''}">
      <label>Cosa<input id="evT" required maxlength="80" value="${esc(e.t)}" placeholder="Es. visita, partita, compleanno"></label>
@@ -1503,7 +1503,7 @@
      <button type="button" class="link tap" id="prPiu">+ Un'altra idea</button>
      <button class="btn tap">Proponi a tutti</button></form>`);
   }
-  /* LEGO (31/10/2026, per la collezione della sorella): i set si cercano nel catalogo di "I miei LEGO",
+  /* LEGO (31/10/2026): i set si cercano nel catalogo di "I miei LEGO",
      l'app della collezione, che è pubblico. Si scarica solo la prima volta che serve (circa 2 MB). */
   const LEGO_URL = 'https://higghy01.github.io/app-lego/';
   let legoCat = null;
@@ -1574,11 +1574,11 @@
   const inPausa = (s, d) => pause(s).some(p => d >= p[0] && d <= p[1]);
   const aScuola = (s, d) => d >= (s.dal || '') && (!s.al || d <= s.al) && !inPausa(s, d) && lezioni(s, gSett(d)).length > 0;
   // Ogni materia il suo colore, sempre lo stesso (in ordine di come appare nell'orario), poi le materie senza ore
-  // nell'orario (campo "materie", es. Storia ed Educazione civica: Sasha 05/11/2026), per voti e note.
+  // nell'orario (campo "materie", es. Storia ed Educazione civica: 05/11/2026), per voti e note.
   function coloriMat(s) {
     const m = [...new Set([...(s.orario || [])].sort((a, b) => a.g - b.g || a.o - b.o).map(x => x.m)
       .concat((Array.isArray(s.materie) ? s.materie : []).filter(x => typeof x === 'string' && x)))];
-    // Mai il rosso (è il colore di Sasha): le tinte girano tra l'arancio (28) e il magenta (335), partendo dal blu.
+    // Mai il rosso (è il colore di una persona): le tinte girano tra l'arancio (28) e il magenta (335), partendo dal blu.
     return Object.fromEntries(m.map((x, i) => [x, `hsl(${28 + Math.round(182 + i * 307 / Math.max(1, m.length)) % 307} 62% 56%)`]));
   }
   // Cosa vede una persona nella sua sezione: la sua scuola, o la copia di quella di qualcun altro.
@@ -1590,7 +1590,7 @@
     for (const [pid, s] of Object.entries(S.scuola)) if (pid !== id && ok(s) && (s.copie || []).includes(id) && S.persone[pid]) out.push({ k: 'scuola', di: pid, copia: true });
     return out;
   }
-  // Chi scrive in una sezione: nella mia io; in una copia (Sasha guarda quella della sorella, 02/11/2026) la sua proprietaria,
+  // Chi scrive in una sezione: nella mia io; in una copia (chi controlla guarda quella di un altro, 02/11/2026) la sua proprietaria,
   // così vedo esattamente le sue note e i suoi voti, in sola lettura.
   const diSez = (x) => x.per === (x.di === S.me ? S.me : x.di);
   const mieiC = (di) => S.compiti.filter(c => diSez(c) && (!di || c.di === di) && !c.via);
@@ -1662,13 +1662,13 @@
      <div class="imp-top"><button class="back tap" id="mioBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Indietro</button></div>
      <h1 class="hello${sr(0)}">Personale</h1>${corpo}`;
   }
-  /* Sezione "Per me" (Sasha, 02/11/2026: la sezione Personale della madre). Tre schede: Oggi (promemoria con "Fatto",
+  /* Sezione "Per me" (02/11/2026: una sezione Personale). Tre schede: Oggi (promemoria con "Fatto",
      appuntamenti fissi, scadenze), Mostre (Firenze, aggiornate da sole), Liste (serie, documentari, libri, beauty e moda).
      Tutto quello che c'è dentro lo scrive lei e lo vede solo lei (raccolta "mie", regola per == io): nel codice pubblico
      nessun suo dato, solo esempi generici da toccare. */
   const CASA = ['p2'];
   // Chi è in CONTROLLA vede le sezioni personali di tutti, in sola lettura, per dire cosa va e cosa no (02/11/2026).
-  // Gli appuntamenti fissi restano solo di chi li scrive (scelta di Sasha): le regole del database non li danno a nessun altro.
+  // Gli appuntamenti fissi restano solo di chi li scrive: le regole del database non li danno a nessun altro.
   const CONTROLLA = ['p1'], MIE_VISTE = ['prom', 'scad', 'lista', 'mostra', 'autore'];
   let mDi = null, mRO = false;
   const TABS_M = [['oggi', 'Oggi'], ['mostre', 'Mostre'], ['libri', 'Libri'], ['liste', 'Liste']];
@@ -1749,7 +1749,10 @@
      <div class="empty mnota">${mRO ? (voglio ? `Ne ha segnate ${voglio}. ` : '') : `${voglio ? `Ne hai segnate ${voglio}: ti avviso una settimana prima che chiudano. ` : ''}Quando apre una mostra nuova ti arriva un avviso.`}${info.agg ? ` Aggiornato ${fmt(new Date(info.agg).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }).replace(/\./g, '')}.` : ''}</div>`;
   }
 
-  /* Libri (Sasha, 04/11/2026): i libri nuovi degli autori che sceglie lei, con il link ad Amazon. Gli autori li scrive lei
+  // Copertine che non arrivano (non ci sono su IBS o manca la rete): un riquadro col libro, mai l'icona dell'immagine rotta.
+  const COP_ROTTE = new Set();
+  window.ndszCopRotta = (img) => { COP_ROTTE.add(img.dataset.ean); const x = document.createElement('span'); x.className = 'mimg'; x.textContent = '📖'; img.replaceWith(x); };
+  /* Libri (04/11/2026): i libri nuovi degli autori che sceglie lei, con il link ad Amazon. Gli autori li scrive lei
      (raccolta "mie", k = 'autore'); i libri li trova ogni settimana il programma "Libri" (scripts/libri.py) e li scrive
      nello stesso documento. "+ Da leggere" mette il libro nella sua lista Libri. */
   const EAN = /^97\d{11}$/;
@@ -1760,7 +1763,7 @@
       if (!x || !EAN.test(String(x.ean))) return '';
       const nuovo = (a.nuovi || {})[x.ean], mio = libroInLista(x.ean), am = `https://www.amazon.it/s?k=${x.ean}&i=stripbooks`;
       const st = nuovo ? '<span class="mst ora">Nuovo</span>' : +x.anno >= anno ? '<span class="mst arr">Uscito quest\'anno</span>' : '';
-      return `<div class="mos"><img src="https://www.ibs.it/images/${x.ean}_0_0_300_0_75.jpg" alt="" loading="lazy" referrerpolicy="no-referrer">
+      return `<div class="mos">${COP_ROTTE.has(x.ean) ? '<span class="mimg">📖</span>' : `<img src="https://www.ibs.it/images/${esc(x.ean)}_0_0_300_0_75.jpg" alt="" loading="lazy" referrerpolicy="no-referrer" data-ean="${esc(x.ean)}" onerror="ndszCopRotta(this)">`}
         <div class="mtx">${st}<b>${esc(x.t)}</b><small>${esc(x.ed || '')}${+x.anno ? `${x.ed ? ' · ' : ''}${+x.anno}` : ''}</small></div>
         <span class="mbt"><a class="tap" href="${am}" target="_blank" rel="noopener">Su Amazon</a>${mRO ? (mio ? '<span class="mvo on">📖 In lista</span>' : '') : `<button type="button" class="tap mvo${mio ? ' on' : ''}" data-mlibro="${esc(a.id)}" data-ean="${x.ean}">${mio ? '📖 In lista' : '+ Da leggere'}</button>`}</span></div>`;
     };
@@ -1836,9 +1839,9 @@
       <div class="mbt">${link ? `<a class="tap" href="${esc(link)}" target="_blank" rel="noopener">Apri il link</a>` : ''}<a class="tap" href="${dove}" target="_blank" rel="noopener">${x.cat === 'libro' && /^97\d{11}$/.test(x.ean || '') ? 'Su Amazon' : x.cat === 'libro' ? 'Cerca il libro' : x.cat === 'beauty' ? 'Cerca' : 'Dove vederla'}</a></div>
       ${ro ? `<div class="src">È di ${esc(P(x.per).nome)}: solo lei può cambiarlo</div>` : `<button class="btn tap">Salva</button><button type="button" class="btn bad tap" data-mvia="${x.id}">Elimina</button>`}</form>`);
   }
-  // La scheda Scuola ha quattro parti, come un diario di scuola: Orario, Agenda, Voti, Materie (scelta di Sasha del 01/11/2026:
-  // "praticamente uguale" all'app che usa la sorella).
-  // Tre schede (scelta di Sasha del 02/11/2026): Oggi (lezioni della settimana), Agenda (mese + cose da fare), Voti (con le materie).
+  // La scheda Scuola ha quattro parti, come un diario di scuola: Orario, Agenda, Voti, Materie (scelta del 01/11/2026:
+  // "praticamente uguale" all'app di scuola usata finora).
+  // Tre schede (scelta del 02/11/2026): Oggi (lezioni della settimana), Agenda (mese + cose da fare), Voti (con le materie).
   const TABS_S = [['oggi', 'Oggi'], ['agenda', 'Agenda'], ['voti', 'Voti']];
   let scTab = { orario: 'oggi', materie: 'voti' }[LS.get('noi4-scuola-tab', 'oggi')] || LS.get('noi4-scuola-tab', 'oggi');
   if (!TABS_S.some(t => t[0] === scTab)) scTab = 'oggi';
@@ -1923,7 +1926,7 @@
     st.mese = iso(n).slice(0, 7); st.anim = dir > 0 ? 'av' : 'in'; st.ag = null;
   }
   const rigaC = (c, colM, senzaData) => `<div class="cmp${c.fatto ? ' fatto' : ''}" style="--mc:${colM[c.m] || 'var(--acc)'}">${c.per === S.me ? `<button type="button" class="ck tap" data-cmpfatto="${c.id}" aria-label="${c.fatto ? 'Da rifare' : 'Fatto'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : `<span class="ck" aria-label="${c.fatto ? 'Fatto' : 'Da fare'}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`}<button type="button" class="cmx tap" data-cmp="${c.id}"><b>${esc(titoloC(c))}</b>${senzaData ? (c.x ? `<small>${esc(c.x)}</small>` : '') : `<small>${quando(c.d)}${c.x ? ' · ' + esc(c.x) : ''}</small>`}</button></div>`;
-  /* Voti (regole di Sasha del 01/11/2026): da 1 a 10 con i decimali (6+ = 6,25, 6½, 7− = 6,75, o un numero qualsiasi),
+  /* Voti (regole del 01/11/2026): da 1 a 10 con i decimali (6+ = 6,25, 6½, 7− = 6,75, o un numero qualsiasi),
      scritto/orale/pratico, un peso per i voti che non contano al 100%, tutte le materie, gli anni scolastici separati,
      media di ogni materia (pesata), media delle materie e media di tutti i voti, e il voto minimo per tornare al 6. */
   const TIPI_V = [['scritto', 'Scritto'], ['orale', 'Orale'], ['pratico', 'Pratico']];
@@ -1933,9 +1936,9 @@
     const i = Math.floor(n), r = n - i; return r === 0 ? `${i}` : r === 0.25 ? `${i}+` : r === 0.5 ? `${i}½` : `${i + 1}−`; };
   const fmtMedia = (v) => v.toFixed(2).replace('.', ',').replace(/,?0+$/, '');
   // Mai i colori delle persone (verde, rosso, blu, grigio): sufficiente viola, quasi ambra, insufficiente rosa.
-  // Scelta di Sasha (02/11/2026): sufficiente (dal 6 compreso) verde, insufficiente rosso.
+  // Scelta del 02/11/2026: sufficiente (dal 6 compreso) verde, insufficiente rosso.
   const coloreVoto = (v) => (v = Math.round(v * 100) / 100) >= 6 ? 'var(--p-verde)' : 'var(--p-rosso)';
-  // Il cerchietto della media (Sasha, 02/11/2026): l'anello si riempie in proporzione alla media su 10.
+  // Il cerchietto della media (02/11/2026): l'anello si riempie in proporzione alla media su 10.
   // Si anima solo quando la scheda appare (anelloAnim), non a ogni aggiornamento della pagina.
   let anelloAnim = true;
   const anello = (media, grande) => { const ok = media != null, pc = ok ? Math.max(0, Math.min(100, media * 10)) : 0;
@@ -2979,7 +2982,7 @@
       closeSheet(); toast(v >= 6 ? `${fmtVoto(v)} in ${mat} 🎉` : `${fmtVoto(v)} in ${mat}: la prossima andrà meglio 💪`);
       if (v >= 8) festa(document.querySelector('#mio .vbig'));
       try { await DATI.aggiungi('voti', voto); } catch (er) { return sbaglio(er); }
-      // Il voto chiude la prova (Sasha, 02/11/2026): l'interrogazione o la verifica di quella materia ancora da fare
+      // Il voto chiude la prova (02/11/2026): l'interrogazione o la verifica di quella materia ancora da fare
       // (dalle 4 settimane prima fino al giorno del voto) diventa fatta. Prima quella dello stesso tipo (orale → interrogazione).
       const prova = provaDelVoto(voto);
       if (prova) { try { await DATI.aggiorna('compiti', prova.id, { fatto: true }); toast(`${titoloC(prova)}: fatta ✓`); } catch (er) { sbaglio(er); } }
@@ -3115,7 +3118,7 @@
         // Gli avvisi delle mostre nuove partono per chi ha questo segno (lo legge il programma "Mostre").
         DATI.imposta('mie', persona + '-avvisi', { per: persona, k: 'avvisi', mostre: true }).catch(() => {});
       }
-      // Chi controlla (Sasha) legge anche le sezioni "Per me" degli altri, senza gli appuntamenti fissi (le regole lo permettono solo così).
+      // Chi controlla legge anche le sezioni "Per me" degli altri, senza gli appuntamenti fissi (le regole lo permettono solo così).
       if (CONTROLLA.includes(persona)) for (const pid of CASA) if (pid !== persona) a(DATI.ascolta('mie', l => { mieDati[pid] = l; unisciMie(); }, [['per', '==', pid], ['k', 'in', MIE_VISTE]]));
       if (CASA.includes(persona) || CONTROLLA.includes(persona)) a(DATI.ascoltaDoc('info', 'mostre', d => { S.mostre = d || {}; render(); }));
       a(DATI.ascoltaDoc('info', 'film', d => { S.filmInfo = d || {}; if (page === 'note' && seg === 'film') render(); }));

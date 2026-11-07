@@ -28,16 +28,16 @@
 /* Un colore per scheda (come La mia app), mai uguale a quello di una persona (rosso, blu, verde, grigio):
    Oggi viola, Impegni petrolio, Bacheca oro, Ricordi fucsia, Spesa arancio. */
 :root[data-page=cal]{--acc:#0E7C8A}
-:root[data-page=note]{--acc:#D9A400;--acc-ink:#1C1A24}
+:root[data-page=note]{--acc:#D9A400;--acc-ink:#1C1A24;--acc-txt:#8A6500}
 :root[data-page=spesa]{--acc:#C2570F}
 :root[data-page=viaggi]{--acc:#B5338A}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme=light])[data-page=cal]{--acc:#4FC3D1}
-  :root:not([data-theme=light])[data-page=note]{--acc:#F2C230}
+  :root:not([data-theme=light])[data-page=note]{--acc:#F2C230;--acc-txt:#F2C230}
   :root:not([data-theme=light])[data-page=spesa]{--acc:#FF8F3A}
   :root:not([data-theme=light])[data-page=viaggi]{--acc:#E879B9}}
 :root[data-theme=dark][data-page=cal]{--acc:#4FC3D1}
-:root[data-theme=dark][data-page=note]{--acc:#F2C230}
+:root[data-theme=dark][data-page=note]{--acc:#F2C230;--acc-txt:#F2C230}
 :root[data-theme=dark][data-page=spesa]{--acc:#FF8F3A}
 :root[data-theme=dark][data-page=viaggi]{--acc:#E879B9}
 /* "Fatto / ok" (--ok) prende il colore della scheda: il verde è di una persona. */
@@ -47,7 +47,7 @@ html,body{overflow-x:clip;overscroll-behavior:none}
 /* Pagina ferma di lato e senza barre di scorrimento (richiesta del 31/10/2026):
    col dito si scorre solo in su e in giù; le file che scorrono di lato (storie, filtri) restano libere. */
 html,body{width:100%;max-width:100%;overscroll-behavior-x:none;scrollbar-width:none}
-/* Scorrimento (Sasha 02/11/2026: "deve essere tutto super smooth"): su iPhone in cima e in fondo la pagina rimbalza
+/* Scorrimento (02/11/2026: "deve essere tutto super smooth"): su iPhone in cima e in fondo la pagina rimbalza
    come nelle app native, invece di fermarsi di colpo. Di lato resta ferma. Su Android resta com'era. */
 @supports (-webkit-touch-callout:none){html,body{overscroll-behavior-y:auto}}
 body{touch-action:pan-y;position:relative}
@@ -198,7 +198,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .item .who{position:relative;width:28px;height:28px;border-radius:999px;background:var(--pc);color:#fff;display:grid;place-items:center;font:600 12px var(--f-body);flex:none;transition:background-color .3s}
 .item .tx small{display:block;font-size:12px;color:var(--muted);margin-top:1px;text-decoration:none}
 .item{padding:6px 0}
-.link{color:var(--acc);font-weight:600;font-size:13px;min-height:44px;text-align:left}
+.link{color:var(--acc-txt,var(--acc));font-weight:600;font-size:13px;min-height:44px;text-align:left}
 
 /* Barra in basso */
 .tabs{position:fixed;z-index:20;left:max(12px,calc(50% - 260px));right:max(12px,calc(50% - 260px));bottom:max(10px,calc(env(safe-area-inset-bottom,0px) - 10px));
@@ -473,6 +473,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .st .ring.lib{background:var(--line);box-shadow:none}
 .st .ring>span{position:relative;border-radius:999px;background:var(--pc);color:#fff;display:grid;place-items:center;font:650 25px var(--f-disp);border:3px solid var(--bg);overflow:hidden}
 .st .ring.occ{animation:fm-respira 2.6s ease-in-out infinite}
+.st .ring.occ.fermo{animation:none} /* al massimo due cerchi che respirano insieme */
 .st b{margin-top:3px;font-size:13px;font-weight:600;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st small{font-size:11.5px;color:var(--muted);line-height:1.25;max-width:100%;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .storie.rise{animation:none}.storie.rise .st{animation:fm-pop .5s var(--pop) both;animation-delay:calc(var(--k)*70ms)}
@@ -676,7 +677,7 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .cfr{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--soft)}
 .cfr svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .cgr{display:grid;grid-template-columns:repeat(var(--c),1fr);gap:4px}
-/* Cambio mese con una direzione, mai di lato (Sasha): il mese dopo sale dal basso, quello prima scende dall'alto */
+/* Cambio mese con una direzione, mai di lato: il mese dopo sale dal basso, quello prima scende dall'alto */
 .cgr-av{animation:fm-cal-av .32s var(--ease) both}.cgr-in{animation:fm-cal-in .32s var(--ease) both}
 @keyframes fm-cal-av{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes fm-cal-in{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:none}}
@@ -724,7 +725,7 @@ html .topbar.on b{transform:none}
 /* Al posto dei titoli doppi (Bacheca, Ricordi): solo il conteggio, piccolo (v53) */
 .conta{font-size:13px;color:var(--muted);margin:-4px 0 -2px 4px}
 
-/* Cerchietto della media (v57, Sasha 02/11/2026): anello che si riempie con la media su 10, verde dal 6, rosso sotto */
+/* Cerchietto della media (v57, 02/11/2026): anello che si riempie con la media su 10, verde dal 6, rosso sotto */
 .anello{--sz:44px;position:relative;width:var(--sz);height:var(--sz);flex:none;display:grid;place-items:center}
 .anello.big{--sz:76px}
 .anello svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
@@ -756,7 +757,7 @@ html .topbar.on b{transform:none}
 .agg{font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 2px 0}
 .agg:first-child{padding-top:0}
 .agg::first-letter{text-transform:uppercase}
-.agg.tardi{color:var(--p-rosso)}
+.agg.tardi{color:var(--p-ambra)}
 .agtutto{font-size:13px;font-weight:600;color:var(--me);min-height:36px;padding:0 4px}
 .agpass{justify-self:center;font-size:13px;font-weight:600;color:var(--muted);min-height:40px;padding:0 12px}
 .vinfo{font-size:14px;color:var(--muted)}.vinfo b{color:var(--fg);font-weight:600}
@@ -769,7 +770,7 @@ html .topbar.on b{transform:none}
 
 /* Sezione "Per me" (v62, 02/11/2026): promemoria, appuntamenti fissi, scadenze, mostre, liste */
 .mcard{display:grid;gap:6px}
-.mtardi{color:var(--p-rosso);font-weight:600}
+.mtardi{color:var(--p-ambra);font-weight:600}
 .mriga{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;min-height:52px;text-align:left;width:100%;padding:6px 2px;border-radius:12px}
 .mriga:not(:has(.mico)){grid-template-columns:1fr auto}
 .mico{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:var(--soft)}
@@ -806,7 +807,7 @@ html .topbar.on b{transform:none}
 .mvota button{width:44px;height:44px;border-radius:12px;font-size:24px;color:var(--line);background:var(--soft);transition:color .2s,transform .15s var(--ease)}
 .mvota button.on{color:var(--p-ambra)}
 .mvota button:active{transform:scale(.9)}
-/* Sola lettura (Sasha guarda la sezione di un altro, v65): il fieldset non deve mostrare bordi. */
+/* Sola lettura (chi controlla guarda la sezione di un altro, v65): il fieldset non deve mostrare bordi. */
 .mro{border:0;margin:0;padding:0;min-width:0}
 .mro:disabled .seg button,.mro:disabled input,.mro:disabled select,.mro:disabled textarea{opacity:1;color:var(--fg);-webkit-text-fill-color:var(--fg)}
 /* Note della Bacheca (v72): foglietti nel colore di chi scrive, due per riga */
