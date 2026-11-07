@@ -22,6 +22,11 @@ if ! firebase projects:list --non-interactive >/dev/null 2>&1; then
 fi
 firebase use "$PROGETTO" >/dev/null || ferma "progetto $PROGETTO non trovato"
 
+# I servizi di Google che servono (se sono già accesi non cambia niente). Se compare "Autorizza Cloud Shell", premere Autorizza.
+gcloud services enable firebasehosting.googleapis.com cloudfunctions.googleapis.com run.googleapis.com cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com cloudscheduler.googleapis.com pubsub.googleapis.com eventarc.googleapis.com \
+  secretmanager.googleapis.com firebaserules.googleapis.com --project "$PROGETTO" >/dev/null 2>&1 || echo "(servizi: ci pensa il passo 8)"
+
 passo "3/8 Versione e titolo"
 VERSIONE=$(grep -o "noi4-v[0-9]*" sw.js | head -1)
 [ -n "$VERSIONE" ] || ferma "versione non trovata in sw.js"
@@ -55,7 +60,14 @@ gsutil cors set strumenti/cors.json "$SECCHIO" || echo "(non riuscito: il tasto 
 
 passo "8/8 Pubblicazione"
 bash strumenti/prepara_sito.sh || ferma "sito non preparato"
-firebase hosting:sites:get "$PROGETTO" >/dev/null 2>&1 || firebase hosting:sites:create "$PROGETTO" || true
+# La prima volta il sito su Firebase non c'è ancora: si crea (indirizzo https://noi-quattro.web.app).
+firebase hosting:sites:get "$PROGETTO" >/dev/null 2>&1 || firebase hosting:sites:create "$PROGETTO" --non-interactive || true
 firebase deploy --only hosting,functions,firestore:rules,storage --non-interactive --force || ferma "pubblicazione non riuscita (vedi sopra)"
+sleep 5
+ONLINE=$(curl -s "https://$PROGETTO.web.app/versione.json?t=$(date +%s)" | grep -o "noi4-v[0-9]*")
+[ "$ONLINE" = "$VERSIONE" ] || ferma "il sito non risponde ancora con $VERSIONE (risponde: ${ONLINE:-niente})"
 echo
-echo "FATTO: https://$PROGETTO.web.app  (versione $VERSIONE)"
+echo "##############################################################"
+echo "  FATTO: https://$PROGETTO.web.app  (versione $VERSIONE)"
+echo "  Puoi chiudere Cloud Shell e tornare su Claude."
+echo "##############################################################"
