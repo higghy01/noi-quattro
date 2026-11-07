@@ -478,6 +478,28 @@ h2 small{font:500 13px var(--f-body);color:var(--muted)}
 .storie.rise{animation:none}.storie.rise .st{animation:fm-pop .5s var(--pop) both;animation-delay:calc(var(--k)*70ms)}
 @keyframes fm-respira{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
 @media (prefers-reduced-motion: reduce){.st .ring.occ{animation:none}}
+/* Da babbo (07/11/2026): cerchio tratteggiato con la casetta = non è a casa; scheda in Oggi con chi è lì e chi parte */
+.st .ring{position:relative}
+.st .ring.via{background:repeating-conic-gradient(from 6deg,var(--pc) 0 21deg,transparent 21deg 30deg);box-shadow:none}
+.st .ring.via::after{content:'🏡';position:absolute;right:-4px;bottom:-4px;width:26px;height:26px;border-radius:999px;background:var(--panel);display:grid;place-items:center;font-size:14px;line-height:1;box-shadow:0 0 0 2px var(--bg),0 2px 6px rgb(0 0 0 / .12)}
+.bbc .link{margin-top:-10px}
+.bbl{display:grid}
+.bbr{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;text-align:left;padding:8px 0;min-height:56px}
+.bbr+.bbr{border-top:1px solid var(--line)}
+.bav{position:relative;width:44px;height:44px;border-radius:999px;background:var(--pc);color:#fff;display:grid;place-items:center;font:650 18px var(--f-disp);overflow:hidden}
+.bbt{display:grid;gap:2px;min-width:0}
+.bbt b{font-size:15px;font-weight:600}
+.bbt small{font-size:13px;color:var(--muted);line-height:1.3;overflow-wrap:anywhere}
+.bbp{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap;color:var(--pc);background:color-mix(in srgb,var(--pc) 14%,transparent)}
+.bbq{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:var(--soft);text-align:left;min-height:56px}
+.bbq span{display:grid;gap:2px;min-width:0}
+.bbq b{font-size:15px;font-weight:600}
+.bbq small{font-size:13px;color:var(--muted)}
+.bbx{font-size:22px;color:var(--muted)}
+.bbw{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.bbw span{display:grid;gap:2px;padding:10px 12px;border-radius:12px;background:var(--soft);min-width:0}
+.bbw small{font-size:12px;color:var(--muted)}
+.bbw b{font-size:15px;font-weight:600}
 /* Proposte: sondaggi aperti */
 .prop{gap:10px;border-color:color-mix(in srgb,var(--pc) 24%,var(--line))}
 .prop .pt{display:flex;align-items:center;gap:10px;min-width:0}

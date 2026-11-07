@@ -8,6 +8,7 @@ si può ancora lanciare a mano da GitHub (workflow Notifiche).
 - proposte: una proposta nuova (a tutti tranne chi l'ha fatta), "hanno votato tutti" (a chi l'ha fatta)
   e cosa si è deciso (a tutti tranne chi ha deciso);
 - conflitti: a chi ha due impegni che si accavallano oggi, domani o dopodomani;
+- babbo (07/11/2026): quando qualcuno segna che va da babbo, cambia le date o torna prima, a chi resta a casa;
 - note: quando qualcuno scrive una nota nella Bacheca, a tutti gli altri, senza il testo (e le note più vecchie di 24 ore si cancellano);
 - mie (sezione "Per me", 02/11/2026): i promemoria all'ora giusta (e di nuovo dopo mezz'ora se non è stato toccato
   "Fatto"), le scadenze il mese prima e una settimana prima della fine del mese,
@@ -95,8 +96,8 @@ def main():
     # Promemoria: impegni che iniziano tra 30 e 62 minuti (anche subito dopo mezzanotte, guardando domani).
     for giorno in (oggi, domani):
         for e in impegni:
-            if not e.get("h") or not capita(e, giorno):
-                continue
+            if not e.get("h") or e.get("babbo") or not capita(e, giorno):
+                continue  # il "da babbo" non ha il promemoria: ha il suo avviso, a chi resta a casa
             if (e.get("fino") or "") > e.get("d", "") and giorno != e.get("d"):
                 continue  # impegno di più giorni: il promemoria solo il primo giorno
             inizio = dt.datetime.fromisoformat(f"{giorno}T{e['h']}").replace(tzinfo=ROMA)
@@ -121,11 +122,52 @@ def main():
             elif nuovo and p != e.get("creatoDa"):
                 manda(p, "nuovi", f"{nome(e.get('creatoDa'))} ti ha aggiunto", f"{e['t']} · {quando}", f"nuovo|{e['id']}|{p}")
 
+    # Da babbo (Sasha, 07/11/2026): a chi resta a casa (non a chi va, non a chi l'ha scritto), quando qualcuno lo segna,
+    # quando cambiano le date e quando torna prima. Quando finisce all'ora prevista, niente avviso.
+    GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+
+    def quando_bb(d, h):
+        g = dt.date.fromisoformat(d)
+        n = (g - ora.date()).days
+        giorno = "oggi" if n == 0 else "domani" if n == 1 else GIORNI[g.weekday()] if 1 < n < 7 else f"{GIORNI[g.weekday()]} {g.day}/{g.month}"
+        return f"{giorno} alle {h}" if h else giorno
+
+    for e in impegni:
+        if not e.get("babbo") or e.get("fonte") != "app" or not e.get("h"):
+            continue
+        chi = [p for p in e.get("who") or [] if p in persone]
+        if not chi:
+            continue
+        nomi = " e ".join(nome(p) for p in chi)
+        fine_d = e.get("fino") or e.get("d")
+        try:
+            fine = dt.datetime.fromisoformat(f"{fine_d}T{e.get('fine') or '23:59'}").replace(tzinfo=ROMA)
+            creato, modificato, tornato = (int(e.get(k) or 0) for k in ("creato", "modificato", "tornato"))
+        except (TypeError, ValueError):
+            continue  # un impegno scritto male non deve fermare gli avvisi di tutti
+        altri = [p for p in persone if p not in chi]
+        if tornato > recente and tornato >= modificato:
+            for p in altri:
+                if p != e.get("tornatoDa"):
+                    manda(p, "babbo", f"🏠 {nomi} {'è' if len(chi) == 1 else 'sono'} a casa", "Il da babbo è finito prima: lo vedi in Oggi.",
+                          f"bbcasa|{e['id']}|{tornato}|{p}")
+            continue
+        if fine.timestamp() <= ora.timestamp():
+            continue  # già finito
+        testo = f"Parte {quando_bb(e['d'], e['h'])} · torna {quando_bb(fine_d, e.get('fine'))}"
+        for p in altri:
+            if creato > recente and p != e.get("creatoDa"):
+                manda(p, "babbo", f"🏡 {nomi} da babbo", testo, f"bb|{e['id']}|{p}")
+            # Cambiato dopo il primo avviso (se l'avviso non era ancora partito, arriva già con le date nuove).
+            if modificato > recente and modificato > creato + 60000 and p != e.get("modificatoDa") and (f"bb|{e['id']}|{p}" in gia or creato <= recente):
+                manda(p, "babbo", f"🏡 {nomi} da babbo: cambiato", testo, f"bbmod|{e['id']}|{modificato}|{p}")
+
     # Riepilogo serale: ognuno all'ora che ha scelto (di solito le 21).
     serale = [p for p in persone if ora.hour == ora_di(p, "oraRiepilogo", 21)]
     if serale:
         # Come l'app: i compleanni arrivati dai calendari prima della regola non si contano.
-        lista = sorted((e for e in impegni if capita(e, domani)
+        # Il "da babbo" solo il giorno in cui parte (nei giorni dopo non è una novità).
+        lista = sorted((e for e in impegni if capita(e, domani) and not (e.get("babbo") and e.get("d") != domani)
                         and not (str(e.get("fonte", "")).startswith(("calendario:", "import:"))
                                  and compleanno(e.get("t", ""), e.get("ripeti") == "annuale" and not e.get("h")))),
                        key=lambda e: e.get("h") or "")
@@ -195,7 +237,7 @@ def main():
     # Due impegni della stessa persona alla stessa ora (oggi, domani, dopodomani: "inviati" ricorda per 2 giorni).
     for k in range(3):
         giorno = (ora.date() + dt.timedelta(days=k)).isoformat()
-        del_giorno = [e for e in impegni if e.get("h") and capita(e, giorno)]
+        del_giorno = [e for e in impegni if e.get("h") and not e.get("babbo") and capita(e, giorno)]  # il da babbo non si accavalla
         for p in persone:
             suoi = sorted((e for e in del_giorno if p in (e.get("who") or [])), key=lambda e: e["h"])
             for i, x in enumerate(suoi):
