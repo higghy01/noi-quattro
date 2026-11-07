@@ -139,7 +139,7 @@ service cloud.firestore {
         && request.resource.data.k in ['prom', 'appu', 'scad', 'lista', 'mostra', 'avvisi', 'autore']
         && request.resource.data.get('t', '') is string && request.resource.data.get('t', '').size() <= 80
         && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 300; }
-      // Sasha (p1) le legge anche degli altri, per controllare che la sezione funzioni (02/11/2026), ma mai gli appuntamenti fissi.
+      // p1 le legge anche degli altri, per controllare che la sezione funzioni (02/11/2026), ma mai gli appuntamenti fissi.
       allow read: if membro() && (resource.data.per == io() || (io() == 'p1' && resource.data.k in ['prom', 'scad', 'lista', 'mostra', 'autore']));
       allow create: if membro() && ok();
       allow update: if membro() && resource.data.per == io() && ok();

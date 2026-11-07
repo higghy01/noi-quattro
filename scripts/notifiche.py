@@ -65,6 +65,9 @@ def main():
         for d in q.stream():
             tutti[d.id] = dict(d.to_dict(), id=d.id)
     impegni = list(tutti.values())
+    # "Da babbo" annullati (07/11/2026): restano nel database solo per avvisare chi l'aveva saputo; per il resto non esistono.
+    annullati = [e for e in impegni if e.get("babbo") and e.get("annullato")]
+    impegni = [e for e in impegni if not (e.get("babbo") and e.get("annullato"))]
     # Titoli veri degli impegni nascosti ("Occupato"): solo per il loro proprietario.
     dettagli = {d.id: (d.to_dict() or {}).get("dettagli") or {} for d in db.collection("privati").stream()}
 
@@ -109,8 +112,8 @@ def main():
 
     # Nuovi impegni con altre persone dentro, e persone aggiunte dopo a un impegno che c'era già.
     for e in impegni:
-        if e.get("fonte") != "app":
-            continue
+        if e.get("fonte") != "app" or (e.get("babbo") and e.get("tornato")):
+            continue  # un "da babbo" già tornato (anche quello di chi torna prima dell'altro) non è una novità
         quando = dt.date.fromisoformat(e["d"]).strftime("%d/%m") + (f" alle {e['h']}" if e.get("h") else "")
         nuovo = e.get("creato", 0) > recente
         aggiunti = (e.get("aggiunti") or []) if e.get("modificato", 0) > recente else []
@@ -122,45 +125,61 @@ def main():
             elif nuovo and p != e.get("creatoDa"):
                 manda(p, "nuovi", f"{nome(e.get('creatoDa'))} ti ha aggiunto", f"{e['t']} · {quando}", f"nuovo|{e['id']}|{p}")
 
-    # Da babbo (Sasha, 07/11/2026): a chi resta a casa (non a chi va, non a chi l'ha scritto), quando qualcuno lo segna,
-    # quando cambiano le date e quando torna prima. Quando finisce all'ora prevista, niente avviso.
+    # Da babbo (07/11/2026): a chi resta a casa (non a chi va, non a chi l'ha scritto), quando qualcuno lo segna, quando
+    # cambiano le date o le persone, quando torna prima e quando lo toglie. Quando finisce all'ora prevista, niente avviso.
+    # A chi va: se un altro gli cambia le date. "cambiato" lo scrive l'app solo se cambiano date o persone.
     GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
 
     def quando_bb(d, h):
         g = dt.date.fromisoformat(d)
         n = (g - ora.date()).days
-        giorno = "oggi" if n == 0 else "domani" if n == 1 else GIORNI[g.weekday()] if 1 < n < 7 else f"{GIORNI[g.weekday()]} {g.day}/{g.month}"
-        return f"{giorno} alle {h}" if h else giorno
+        giorno = "oggi" if n == 0 else "domani" if n == 1 else "ieri" if n == -1 else GIORNI[g.weekday()] if 1 < n < 7 else f"{GIORNI[g.weekday()]} {g.day}/{g.month}"
+        return f"{giorno} a mezzanotte" if h == "23:59" else f"{giorno} alle {h}" if h else giorno
 
-    for e in impegni:
+    nomi_bb = lambda e: " e ".join(nome(p) for p in e.get("who") or [] if p in persone)
+    for e in impegni + annullati:
         if not e.get("babbo") or e.get("fonte") != "app" or not e.get("h"):
             continue
         chi = [p for p in e.get("who") or [] if p in persone]
         if not chi:
             continue
-        nomi = " e ".join(nome(p) for p in chi)
+        nomi, uno = nomi_bb(e), len(chi) == 1
         fine_d = e.get("fino") or e.get("d")
         try:
             fine = dt.datetime.fromisoformat(f"{fine_d}T{e.get('fine') or '23:59'}").replace(tzinfo=ROMA)
-            creato, modificato, tornato = (int(e.get(k) or 0) for k in ("creato", "modificato", "tornato"))
+            creato, cambiato, tornato, annullato = (int(e.get(k) or 0) for k in ("creato", "cambiato", "tornato", "annullato"))
         except (TypeError, ValueError):
             continue  # un impegno scritto male non deve fermare gli avvisi di tutti
         altri = [p for p in persone if p not in chi]
-        if tornato > recente and tornato >= modificato:
+        # Avvisato prima (o l'ha scritto lui): solo a lui interessa sapere che è cambiato o annullato.
+        sapeva = lambda p: f"bb|{e['id']}|{p}" in gia or creato <= recente or p == e.get("creatoDa")
+        if annullato:
+            if annullato > recente and fine.timestamp() * 1000 > annullato:
+                for p in altri:
+                    if p != e.get("annullatoDa") and sapeva(p):
+                        manda(p, "babbo", f"🏡 {nomi} non {'va' if uno else 'vanno'} più da babbo", f"Tolto da {nome(e.get('annullatoDa'))}: lo vedi in Oggi.",
+                              f"bbvia|{e['id']}|{p}")
+            elif annullato <= recente:
+                db.collection("impegni").document(e["id"]).delete()  # avvisato ieri: ora si può cancellare
+            continue
+        if tornato > recente:
             for p in altri:
                 if p != e.get("tornatoDa"):
-                    manda(p, "babbo", f"🏠 {nomi} {'è' if len(chi) == 1 else 'sono'} a casa", "Il da babbo è finito prima: lo vedi in Oggi.",
+                    manda(p, "babbo", f"🏠 {nomi} {'è' if uno else 'sono'} a casa", "Il da babbo è finito prima: lo vedi in Oggi.",
                           f"bbcasa|{e['id']}|{tornato}|{p}")
             continue
-        if fine.timestamp() <= ora.timestamp():
+        if tornato or fine.timestamp() <= ora.timestamp():
             continue  # già finito
         testo = f"Parte {quando_bb(e['d'], e['h'])} · torna {quando_bb(fine_d, e.get('fine'))}"
         for p in altri:
             if creato > recente and p != e.get("creatoDa"):
                 manda(p, "babbo", f"🏡 {nomi} da babbo", testo, f"bb|{e['id']}|{p}")
             # Cambiato dopo il primo avviso (se l'avviso non era ancora partito, arriva già con le date nuove).
-            if modificato > recente and modificato > creato + 60000 and p != e.get("modificatoDa") and (f"bb|{e['id']}|{p}" in gia or creato <= recente):
-                manda(p, "babbo", f"🏡 {nomi} da babbo: cambiato", testo, f"bbmod|{e['id']}|{modificato}|{p}")
+            if cambiato > recente and p != e.get("modificatoDa") and sapeva(p):
+                manda(p, "babbo", f"🏡 {nomi} da babbo: cambiato", testo, f"bbmod|{e['id']}|{cambiato}|{p}")
+        for p in chi:
+            if cambiato > recente and p != e.get("modificatoDa") and (f"nuovo|{e['id']}|{p}" in gia or creato <= recente or p == e.get("creatoDa")):
+                manda(p, "babbo", "🏡 Il tuo da babbo è cambiato", testo, f"bbmod|{e['id']}|{cambiato}|{p}")
 
     # Riepilogo serale: ognuno all'ora che ha scelto (di solito le 21).
     serale = [p for p in persone if ora.hour == ora_di(p, "oraRiepilogo", 21)]
@@ -173,7 +192,7 @@ def main():
                        key=lambda e: e.get("h") or "")
         if lista:
             for p in serale:
-                righe = [f"{e['h'] or 'tutto il giorno'} {titolo_per(e, p)[0]}" for e in lista[:4]]
+                righe = [f"{e['h'] or 'tutto il giorno'} " + (f"{nomi_bb(e)} da babbo" if e.get("babbo") else titolo_per(e, p)[0]) for e in lista[:4]]
                 testo = " · ".join(righe) + (f" e altri {len(lista) - 4}" if len(lista) > 4 else "")
                 manda(p, "riepilogo", f"Domani: {len(lista)} impegni in famiglia", testo, f"riep|{oggi}|{p}")
 

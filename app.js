@@ -89,7 +89,7 @@
   function mappaImpegni() {
     const det = S.priv.dettagli || {};
     S.impegni = (S.impRaw || []).map(e => e.nascosto && (mioCal(e) || e.creatoDa === S.me) ? Object.assign({}, e, det[e.id] ? { t: det[e.id].t, n: det[e.id].n || '' } : {}, { privato: true, svelabile: !!det[e.id] }) : e)
-      .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')));
+      .filter(e => !(daCalendario(e) && !e.imp && compleanno(e.t || '')) && !e.annullato);
     // La scuola non entra nel calendario di famiglia (scelta di Sasha del 01/11/2026: la sorella non vuole impegni e scuola
     // mischiati): lezioni e note stanno nel Calendario della sua sezione Personale. Le lezioni servono solo a dire
     // "è a scuola" in Oggi e ad avvisarla se un impegno vero cade durante la scuola.
@@ -186,10 +186,9 @@
   const PASTI = { pranzo: { fascia: [13 * 60, 14 * 60], cambia: 15 * 60 + 30 }, cena: { fascia: CENA, cambia: 21 * 60 } };
   const giornoPasto = (k) => minuti(oraAdesso()) >= PASTI[k].cambia ? iso(addDays(TODAY, 1)) : T;
   const GP = { pranzo: null, cena: null }; // il giorno che si sta ascoltando per ogni pasto
-  /* Da babbo (Sasha, 07/11/2026): chi va a dormire dal babbo segna quando parte e quando torna, così chi resta sa chi
-     è a casa. È un impegno con babbo: true (nel calendario comune lo vedono tutti): in Oggi ha la sua scheda e il cerchio
-     tratteggiato con la casetta, a pranzo e a cena risulta fuori da solo, non dà avvisi di accavallamento né promemoria.
-     Solo per le persone in DA_BABBO (nel codice pubblico niente nomi: sono gli id del database). */
+  /* Da babbo (07/11/2026): un impegno con babbo: true, con l'ora in cui si parte e quella in cui si torna. In Oggi ha la
+     sua scheda e il cerchio tratteggiato con la casetta, a pranzo e a cena risulta fuori da solo, non dà avvisi di
+     accavallamento né promemoria. Annullato: resta con "annullato" finché il programma degli avvisi non l'ha detto. */
   const DA_BABBO = ['p1', 'p3'];
   const GIORNI_BB = 7; // in Oggi si vede anche chi parte nei prossimi 7 giorni
   const gDiff = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
@@ -209,10 +208,12 @@
   function quandoBb(d, h) {
     const n = gDiff(T, d);
     const g = n === 0 ? 'oggi' : n === 1 ? 'domani' : n === -1 ? 'ieri' : n > 1 && n < 7 ? fmt(d, { weekday: 'long' }) : fmt(d, { weekday: 'long', day: 'numeric', month: 'short' }).replace(/\./g, '');
-    return g + (h ? ` alle ${h}` : '');
+    return g + (h === '23:59' ? ' a mezzanotte' : h ? ` alle ${h}` : '');
   }
   const tornaBb = (e) => quandoBb(bbFineG(e), e.fine);
   const puoBabbo = () => DA_BABBO.some(i => S.persone[i]);
+  // Quello che si vede del "da babbo" adesso: se cambia (qualcuno parte o torna all'ora segnata) Oggi si ridisegna da solo.
+  const firmaBb = () => babboProssimi().map(x => `${x.id}${x.e.id}${x.ora}`).join();
   function fuoriCena(id, d, k) {
     d = d || T; const F = PASTI[k || 'cena'].fascia;
     // Da babbo vince su tutto, anche sul turno: dopo il lavoro non torna a casa.
@@ -335,7 +336,7 @@
     if (!list.length) return `<div class="empty">${vuoto || 'Nessun impegno. Tocca + per aggiungerne uno.'}</div>`;
     return list.map(e => `<button class="ev tap${e.id === fresh ? ' pop' : ''}" data-ev="${e.id}">
       <div class="h">${oraEv(e, giorno)}</div>
-      <div><div class="t">${e.imp ? '⭐ ' : ''}${e.babbo ? '🏡 ' : ''}${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${e.babbo ? `<div class="n">Parte ${quandoBb(e.d, e.h)} · torna ${tornaBb(e)}</div>` : piuGiorni(e) ? `<div class="n">🗓️ ${durataGiorni(e)}</div>` : ''}${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${eTurno(e) && e.h && e.fine && e.fine > e.h ? `<div class="n">🏠 A casa verso le ${hm(Math.min(minuti(e.fine) + strada((e.who || [])[0]), 24 * 60 - 1))}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}${giorno && (e.who || []).includes(S.me) ? accavallati(e, giorno, S.me).slice(0, 1).map(x => `<div class="acc">⚠️ Alla stessa ora hai «${esc(x.t)}»</div>`).join('') : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
+      <div><div class="t">${e.imp ? '⭐ ' : ''}${e.babbo ? '🏡 ' : ''}${esc(e.t)}${e.privato ? ' <span class="lk" title="Gli altri vedono Occupato">🔒</span>' : ''}</div>${e.babbo ? `<div class="n">Parte ${esc(quandoBb(e.d, e.h))} · torna ${esc(tornaBb(e))}</div>` : piuGiorni(e) ? `<div class="n">🗓️ ${durataGiorni(e)}</div>` : ''}${e.n ? `<div class="n">${esc(e.n)}</div>` : ''}${eTurno(e) && e.h && e.fine && e.fine > e.h ? `<div class="n">🏠 A casa verso le ${hm(Math.min(minuti(e.fine) + strada((e.who || [])[0]), 24 * 60 - 1))}</div>` : ''}${e.mezzo ? `<div class="mzr">${esc(e.mezzo)}</div>` : ''}${giorno && (e.who || []).includes(S.me) ? accavallati(e, giorno, S.me).slice(0, 1).map(x => `<div class="acc">⚠️ Alla stessa ora hai «${esc(x.t)}»</div>`).join('') : ''}<div class="dots">${chips(e.who || [])}</div></div></button>`).join('');
   }
 
   /* ---------- Fluidità ----------
@@ -374,11 +375,12 @@
 
   /* ---------- Pagine ---------- */
   // Scheda "Da babbo" in Oggi: chi è lì adesso e chi parte nei prossimi giorni. Senza nessuno, non c'è.
+  let bbPrima = null; // c'era la scheda nel disegno di prima? Se compare dopo, entra con un piccolo "pop".
   function cardBabbo(r) {
-    const l = babboProssimi(); if (!l.length) return '';
-    return `<div class="card bbc${r}"><h2><span class="ttl"><i class="ic">${ICO.casa}</i>Da babbo</span> <small>${l.some(x => x.ora) ? 'chi non è a casa' : 'nei prossimi giorni'}</small></h2>
+    const l = babboProssimi(), nuova = bbPrima === false && !r; bbPrima = !!l.length; if (!l.length) return '';
+    return `<div class="card bbc${r}${nuova ? ' pop' : ''}"><h2><span class="ttl"><i class="ic">${ICO.casa}</i>Da babbo</span> <small>${l.some(x => x.ora) ? 'chi non è a casa' : l.some(x => x.e.d === T) ? 'oggi' : 'nei prossimi giorni'}</small></h2>
       <div class="bbl">${l.map(({ id, e, ora }) => `<button class="bbr tap" data-ev="${e.id}" style="--pc:${col(id)}" aria-label="${esc(P(id).nome)}: ${ora ? 'da babbo, torna ' + esc(tornaBb(e)) : 'va da babbo ' + esc(quandoBb(e.d, e.h))}"><span class="bav">${avt(id)}</span>
-        <span class="bbt"><b>${id === S.me ? 'Tu' : esc(P(id).nome)}</b><small>${ora ? `Torna ${tornaBb(e)}` : `Va ${quandoBb(e.d, e.h)} · torna ${tornaBb(e)}`}</small>${e.n ? `<small>${esc(e.n)}</small>` : ''}</span>
+        <span class="bbt"><b>${id === S.me ? 'Tu' : esc(P(id).nome)}</b><small>${ora ? `Torna ${esc(tornaBb(e))}` : `Va ${esc(quandoBb(e.d, e.h))} · torna ${esc(tornaBb(e))}`}</small>${e.n ? `<small>${esc(e.n)}</small>` : ''}</span>
         ${ora ? '<span class="bbp">Ora lì</span>' : ''}</button>`).join('')}</div>
       <button class="link tap" data-babbo="nuovo">+ Segna chi va da babbo</button></div>`;
   }
@@ -732,7 +734,7 @@
     const sr = (i) => nuova ? ` rise" style="--i:${Math.min(i, 8)}` : '';
     const giorni = [...Array(14)].map((_, i) => iso(addDays(TODAY, i))), dom = giorni[1];
     const per = giorni.map(d => [d, delGiorno(d, suoi).filter(e => d !== T || !e.h || inCorso(e, d) || (e.fine || e.h) >= ora)]).filter(([, l]) => l.length);
-    const sett = giorni.slice(0, 7).reduce((n, d) => n + delGiorno(d, e => suoi(e) && !e.virtuale).length, 0); // la scuola e le note di scuola non contano
+    const sett = giorni.slice(0, 7).reduce((n, d) => n + delGiorno(d, e => suoi(e) && !e.virtuale && !e.babbo).length, 0); // la scuola, le note di scuola e il da babbo non contano
     const cd = cenaDi(id), c = cd.auto && cd.auto.babbo ? '' : S.cena[id], cOggi = GP.cena === T, sera = cOggi ? 'Stasera' : 'Domani sera';
     const pr = pastoDi('pranzo', id), prQ = GP.pranzo === T ? 'oggi' : 'domani';
     const pezzi = [statoOra(id).t,
@@ -1433,7 +1435,7 @@
     e = e || { t: '', d: page === 'cal' ? selDay : T, h: '18:00', fine: '19:00', who: [S.me], n: '', ripeti: '' };
     // Privato (Sasha, 02/11/2026): chi l'ha scritto vede il titolo, gli altri «Occupato». Solo per gli impegni scritti nell'app.
     const puoPriv = !e.id || (e.fonte === 'app' && e.creatoDa === S.me && !e.appu);
-    openSheet(`<h3>${e.id ? 'Modifica impegno' : 'Nuovo impegno'}</h3>${!e.id && puoBabbo() ? `<button type="button" class="bbq tap" data-babbo="nuovo"><i class="ic">${ICO.casa}</i><span><b>Vai da babbo?</b><small>Segna quando parti e quando torni</small></span><span class="bbx">›</span></button>` : ''}<form class="stack" id="fEv" data-id="${e.id || ''}">
+    openSheet(`<h3>${e.id ? 'Modifica impegno' : 'Nuovo impegno'}</h3>${!e.id && puoBabbo() ? `<button type="button" class="bbq tap" data-babbo="nuovo"><i class="ic">${ICO.casa}</i><span>${DA_BABBO.includes(S.me) ? '<b>Vai da babbo?</b><small>Segna quando parti e quando torni</small>' : '<b>Qualcuno va da babbo?</b><small>Segna chi va, quando parte e quando torna</small>'}</span><span class="bbx">›</span></button>` : ''}<form class="stack" id="fEv" data-id="${e.id || ''}">
      <label>Cosa<input id="evT" required maxlength="80" value="${esc(e.t)}" placeholder="Es. visita, partita, compleanno"></label>
      <div class="row2"><label>Giorno<input id="evD" type="date" value="${esc(e.d)}" required></label><label>Si ripete<select id="evR">${Object.entries(RIPETI).map(([k, v]) => `<option value="${k}"${(e.ripeti || '') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label></div>
      <label>Fino al giorno (facoltativo, per più giorni)<input id="evFino" type="date" value="${esc(e.fino || '')}"></label>
@@ -1451,9 +1453,11 @@
   function sheetBabbo(e) {
     const ids = DA_BABBO.filter(i => S.persone[i]);
     if (!e) {
-      const m = Math.min(23 * 60 + 30, Math.ceil((minuti(oraAdesso()) + 1) / 30) * 30);
-      let dom = addDays(TODAY, (7 - TODAY.getDay()) % 7); if (iso(dom) === T && m >= 19 * 60) dom = addDays(dom, 7);
-      e = { d: T, h: hm(m), fino: iso(dom), fine: '20:00', who: ids.includes(S.me) ? [S.me] : [], n: '' };
+      // Da Impegni con un giorno dopo oggi scelto: parte quel giorno alle 18.
+      const dd = page === 'cal' && selDay > T ? selDay : T, g0 = new Date(dd + 'T12:00:00');
+      const m = dd > T ? 18 * 60 : Math.min(23 * 60 + 30, Math.ceil((minuti(oraAdesso()) + 1) / 30) * 30);
+      let dom = addDays(g0, (7 - g0.getDay()) % 7); if (iso(dom) === dd && m >= 19 * 60) dom = addDays(dom, 7);
+      e = { d: dd, h: hm(m), fino: iso(dom), fine: '20:00', who: ids.includes(S.me) ? [S.me] : [], n: '' };
     }
     openSheet(`<h3>${e.id ? 'Modifica: da babbo' : 'Da babbo'}</h3><form class="stack" id="fBb" data-id="${e.id || ''}">
      <div class="empty">Chi resta a casa lo vede in Oggi e nel calendario. A pranzo e a cena risulta fuori da solo.</div>
@@ -1466,12 +1470,14 @@
   function sheetBabboDett(e) {
     const m = minuti(oraAdesso()), ora = bbInizio(e) <= m && m < bbFine(e), chi = (e.who || []).filter(w => S.persone[w]);
     const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
-    const casa = chi.length === 1 && chi[0] !== S.me ? `${esc(P(chi[0]).nome)} è a casa` : 'Sono a casa';
+    // Un tasto per persona: se sono da babbo in due e ne torna uno, l'altro resta lì.
+    const casa = (p) => p === S.me ? 'Sono a casa adesso' : `${esc(P(p).nome)} è a casa adesso`;
+    const nonVa = chi.length > 1 ? 'Non vanno più' : chi[0] === S.me ? 'Non vado più' : 'Non va più';
     openSheet(`<h3>Da babbo</h3><div class="dots">${chips(chi)}</div>
-      <div class="bbw"><span><small>Parte</small><b>${cap(quandoBb(e.d, e.h))}</b></span><span><small>${e.tornato ? 'A casa' : 'Torna'}</small><b>${cap(tornaBb(e))}</b></span></div>
+      <div class="bbw"><span><small>Parte</small><b>${esc(cap(quandoBb(e.d, e.h)))}</b></span><span><small>${e.tornato && !ora ? 'A casa' : 'Torna'}</small><b>${esc(cap(tornaBb(e)))}</b></span></div>
       ${e.n ? `<div class="muted">${esc(e.n)}</div>` : ''}<div class="src">Segnato da ${esc(P(e.creatoDa).nome)}</div>
-      ${ora ? `<button class="btn tap" data-bbcasa="${e.id}">🏠 ${casa} adesso</button>` : ''}
-      <div class="row2"><button class="btn ghost tap" data-bbmod="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">${bbInizio(e) > m ? 'Annulla' : 'Elimina'}</button></div>`);
+      ${ora ? chi.map(p => `<button class="btn tap" data-bbcasa="${e.id}" data-bbchi="${p}">🏠 ${casa(p)}</button>`).join('') : ''}
+      <div class="row2"><button class="btn ghost tap" data-bbmod="${e.id}">Modifica</button><button class="btn bad tap" data-elimina="${e.id}">${bbInizio(e) > m ? nonVa : 'Elimina'}</button></div>`);
   }
   function sheetDettaglio(e) {
     const fonte = e.fonte && e.fonte.startsWith('calendario:') ? `Dal calendario di ${esc(P(e.fonte.slice(11)).nome)}` : e.fonte && e.fonte.startsWith('import:') ? `Importato da ${esc(P(e.fonte.slice(7)).nome)}` : e.fonte && e.fonte.startsWith('orario:') ? `Dall'orario di lavoro di ${esc(P(e.fonte.slice(7)).nome)}` : e.scuola ? `Dall'orario scolastico di ${esc(P(e.who[0]).nome)}` : `Aggiunto da ${esc(P(e.creatoDa).nome)}`;
@@ -1659,7 +1665,7 @@
      Tutto quello che c'è dentro lo scrive lei e lo vede solo lei (raccolta "mie", regola per == io): nel codice pubblico
      nessun suo dato, solo esempi generici da toccare. */
   const CASA = ['p2'];
-  // Sasha (p1) vede le sezioni personali di tutti, in sola lettura, per dire cosa va e cosa no (02/11/2026).
+  // Chi è in CONTROLLA vede le sezioni personali di tutti, in sola lettura, per dire cosa va e cosa no (02/11/2026).
   // Gli appuntamenti fissi restano solo di chi li scrive (scelta di Sasha): le regole del database non li danno a nessun altro.
   const CONTROLLA = ['p1'], MIE_VISTE = ['prom', 'scad', 'lista', 'mostra', 'autore'];
   let mDi = null, mRO = false;
@@ -2576,7 +2582,7 @@
       const mioBb = pastoDi(k, S.me).auto; if (mioBb && mioBb.babbo) return toast('Risulti da babbo: per cambiare tocca la tua riga nella scheda Da babbo');
       const o = ['si', 'no', '?']; const v = o[(o.indexOf(doc[S.me] || '?') + 1) % 3]; // dal "fuori" automatico si passa a sì, poi no, poi di nuovo automatico
       tic(); doc[S.me] = v; rOggi(); const n = document.querySelector(`[data-cena="${S.me}"][data-k="${k}"]`); n && n.classList.add('bump');
-      if (v === 'si' && IDS().every(i => doc[i] === 'si')) { festa(n); toast(`${titoloPasto(k, g).replace(/^A (pranzo|cena) /, '').replace('?', '').replace(/^./, c => c.toUpperCase())} tutti a tavola! 🍝`); }
+      if (v === 'si' && IDS().every(i => pastoDi(k, i).v === 'si')) { festa(n); toast(`${titoloPasto(k, g).replace(/^A (pranzo|cena) /, '').replace('?', '').replace(/^./, c => c.toUpperCase())} tutti a tavola! 🍝`); }
       return DATI.imposta(k, g, { [S.me]: v }).catch(sbaglio);
     }
     if (d.ev) { const e = S.impegni.find(x => x.id === d.ev); return e && (e.cmp ? sheetC(e.cmp) : e.babbo ? sheetBabboDett(e) : sheetDettaglio(e)); }
@@ -2584,10 +2590,18 @@
     if (d.bbmod) return sheetBabbo(S.impegni.find(x => x.id === d.bbmod));
     if (d.bbcasa) {
       // Tornato prima: il "da babbo" finisce adesso (e chi è a casa riceve l'avviso, se lo vuole).
+      // Se erano in due e torna uno solo, lui esce da quello comune e ha il suo, finito adesso.
       const e = S.impegni.find(x => x.id === d.bbcasa); if (!e) return;
+      const chi = d.bbchi && (e.who || []).includes(d.bbchi) ? d.bbchi : null, adesso = Date.now();
       const ora = oraAdesso(), v = T > e.d ? { fino: T, fine: ora } : { fino: '', fine: ora > e.h ? ora : hm(minuti(e.h) + 1) };
+      Object.assign(v, { tornato: adesso, tornatoDa: S.me, cambiato: 0 });
       closeSheet();
-      try { await DATI.aggiorna('impegni', e.id, Object.assign(v, { tornato: Date.now(), tornatoDa: S.me, modificato: Date.now(), modificatoDa: S.me })); } catch (er) { return sbaglio(er); }
+      try {
+        if (chi && e.who.length > 1) {
+          await DATI.aggiungi('impegni', Object.assign({ t: 'Da babbo', babbo: true, d: e.d, h: e.h, who: [chi], n: e.n || '', ripeti: '', mezzo: '', imp: false, nascosto: false, fonte: 'app', creatoDa: S.me, creato: adesso }, v));
+          await DATI.aggiorna('impegni', e.id, { who: e.who.filter(p => p !== chi) });
+        } else await DATI.aggiorna('impegni', e.id, v);
+      } catch (er) { return sbaglio(er); }
       return toast('🏠 Segnato: a casa');
     }
     // Sezione Personale
@@ -2684,6 +2698,12 @@
     if (d.modifica) return sheetEvento(S.impegni.find(x => x.id === d.modifica));
     if (d.elimina) {
       if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.textContent = 'Tocca ancora per eliminare'; return; }
+      const bbX = S.impegni.find(x => x.id === d.elimina && x.babbo && bbFine(x) > minuti(oraAdesso()));
+      if (bbX) {
+        closeSheet();
+        try { await DATI.aggiorna('impegni', bbX.id, { annullato: Date.now(), annullatoDa: S.me }); } catch (er) { return sbaglio(er); }
+        return toast('Tolto: lo sanno tutti');
+      }
       closeSheet(); try { await DATI.elimina('impegni', d.elimina); } catch (er) { return sbaglio(er); }
       if ((S.priv.dettagli || {})[d.elimina]) DATI.aggiorna('privati', S.me, { dettagli: senzaDettagli([{ id: d.elimina }]) }).catch(() => {}); // via anche il titolo privato
       return toast('Impegno eliminato');
@@ -2836,8 +2856,17 @@
       closeSheet();
       try {
         if (f.dataset.id) {
-          const prima = S.impegni.find(x => x.id === f.dataset.id);
-          Object.assign(e, { aggiunti: who.filter(p => prima && !(prima.who || []).includes(p)), modificato: Date.now(), modificatoDa: S.me });
+          const prima = S.impegni.find(x => x.id === f.dataset.id) || {}, adesso = Date.now(), mOra = minuti(oraAdesso());
+          // "ti ha aggiunto": come per gli altri impegni, chi era già in lista nelle ultime 24 ore resta.
+          const aggiunti = [...new Set([...(adesso - (prima.modificato || 0) < 864e5 ? prima.aggiunti || [] : []), ...who.filter(p => !(prima.who || []).includes(p))])].filter(p => who.includes(p));
+          Object.assign(e, { aggiunti, modificato: adesso, modificatoDa: S.me });
+          const firma = (x) => [x.d, x.h, x.fino || '', x.fine, [...(x.who || [])].sort().join()].join('|');
+          if (firma(e) !== firma(prima)) {
+            const eraLi = prima.d && bbInizio(prima) <= mOra && mOra < bbFine(prima);
+            // Ritorno messo a un'ora già passata mentre era lì = è tornato prima (stesso avviso del tasto).
+            if (eraLi && bbFine(e) <= mOra) Object.assign(e, { tornato: adesso, tornatoDa: S.me, cambiato: 0 });
+            else Object.assign(e, { cambiato: adesso, tornato: 0, tornatoDa: '' });
+          }
           await DATI.aggiorna('impegni', f.dataset.id, e); toast('Aggiornato');
         } else { fresh = await DATI.aggiungi('impegni', Object.assign(e, { fonte: 'app', creatoDa: S.me, creato: Date.now() })); render(); toast('🏡 Segnato: lo vedono tutti in Oggi'); }
       } catch (er) { sbaglio(er); }
@@ -3019,7 +3048,13 @@
     }
   }
   // Alle 15:30 e alle 21 la scheda Oggi cambia da sola, anche con l'app aperta.
-  setInterval(() => { if (S.me && (giornoPasto('pranzo') !== GP.pranzo || giornoPasto('cena') !== GP.cena)) render(); }, 30000);
+  // Anche quando qualcuno parte o torna da babbo all'ora segnata.
+  let bbFirma = '';
+  setInterval(() => {
+    if (!S.me) return;
+    const fb = firmaBb(), cambio = fb !== bbFirma; bbFirma = fb;
+    if (giornoPasto('pranzo') !== GP.pranzo || giornoPasto('cena') !== GP.cena || cambio) render();
+  }, 30000);
   // All'uscita si staccano tutti i collegamenti ai dati (con l'accesso chiuso si fermerebbero da soli e non ripartirebbero):
   // al prossimo accesso, anche di un'altra persona sullo stesso telefono, ripartono da capo.
   const stopDati = [];
