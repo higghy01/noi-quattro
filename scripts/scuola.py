@@ -47,9 +47,12 @@ def data(x):
     return x
 
 
-def main():
-    with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
-        dati = json.loads((json.load(f).get("inputs") or {}).get("orario") or "{}")
+def main(evento=None):
+    # evento: da GitHub il file dell'avvio a mano; dalla funzione "comando" di Firebase (07/11/2026) lo stesso contenuto.
+    if evento is None:
+        with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+            evento = json.load(f)
+    dati = json.loads((evento.get("inputs") or {}).get("orario") or "{}")
     persona = str(dati.get("persona", ""))
     if not PERSONA.match(persona):
         raise SystemExit("Manca la persona")

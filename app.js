@@ -1509,7 +1509,9 @@
   let legoCat = null;
   async function catalogoLego() {
     if (legoCat) return legoCat;
-    const r = await fetch(LEGO_URL + 'data/catalog.json'); if (!r.ok) throw new Error('catalogo');
+    // Prima la copia che sta col sito (07/11/2026: preparata alla pubblicazione, senza GitHub), poi quella dell'app LEGO.
+    let r = await fetch('lego/catalog.json').catch(() => null);
+    if (!r || !r.ok) r = await fetch(LEGO_URL + 'data/catalog.json'); if (!r.ok) throw new Error('catalogo');
     const d = await r.json(), base = d.imgBase || '';
     legoCat = (d.sets || []).map(x => ({ num: String(x[0]), nome: String(x[1] || ''), anno: x[2] || 0, pezzi: x[4] || 0, img: x[5] ? (/^https:/.test(x[5]) ? x[5] : base + x[5]) : '' }));
     legoCat = legoCat.filter(x => !/^\d{9,}(-\d+)?$/.test(x.num)); // via i libri (codice ISBN al posto del numero del set)

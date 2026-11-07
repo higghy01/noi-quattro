@@ -3,6 +3,9 @@ __pycache__/
 chiave*.json
 functions/venv/
 functions/__pycache__/
-functions/notifiche.py
-functions/comune.py
-functions/sincronizza_calendari.py
+functions/*.py
+!functions/main.py
+lego/
+pubblico/
+versione.json
+strumenti/__pycache__/

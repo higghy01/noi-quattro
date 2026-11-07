@@ -103,7 +103,8 @@ def cattedrale():
 
 
 def main():
-    if not os.environ.get("FIREBASE_CHIAVE"):
+    # Su GitHub serve la chiave; dentro Firebase (funzioni, 07/11/2026) si usa l'account del progetto (K_SERVICE).
+    if not os.environ.get("FIREBASE_CHIAVE") and not os.environ.get("K_SERVICE"):
         print("Chiave di Firebase non ancora inserita: niente da fare.")
         return
     db = database()

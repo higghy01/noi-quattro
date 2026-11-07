@@ -17,9 +17,12 @@ from comune import database
 ORA = re.compile(r"^\d{2}:\d{2}$")
 
 
-def main():
-    with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
-        dati = json.loads((json.load(f).get("inputs") or {}).get("turni") or "{}")
+def main(evento=None):
+    # evento: da GitHub il file dell'avvio a mano; dalla funzione "comando" di Firebase (07/11/2026) lo stesso contenuto.
+    if evento is None:
+        with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+            evento = json.load(f)
+    dati = json.loads((evento.get("inputs") or {}).get("turni") or "{}")
     persona = str(dati.get("persona", ""))
     turni = dati.get("turni") or []
     giorni = sorted(str(t.get("d", "")) for t in turni)

@@ -18,15 +18,19 @@ def main():
     m = re.search(r"VERSIONE\s*=\s*'noi4-v(\d+)'", testo)
     if not m:
         raise SystemExit("Versione non trovata in sw.js")
-    versione = f"v{m.group(1)}"
+    annuncia(f"v{m.group(1)}", os.environ.get("TITOLO") or "")
+
+
+def annuncia(versione, titolo_cambio, db=None):
+    """Avvisa della versione nuova (una volta sola). Usata da GitHub (main) e dalla funzione di Firebase (07/11/2026)."""
     # Solo la prima riga del messaggio è il titolo: un [tutti] più sotto (es. nell'elenco dei cambi uniti) non conta.
-    prima_riga = ((os.environ.get("TITOLO") or "").strip().splitlines() or [""])[0]
+    prima_riga = ((titolo_cambio or "").strip().splitlines() or [""])[0]
     tutti = "[tutti]" in prima_riga
     lista = (os.environ.get("AVVISA_TUTTI") if tutti else None) or os.environ.get("AVVISA") or ""
     chi = [p.strip() for p in lista.split(",") if re.fullmatch(r"p\d{1,2}", p.strip())]
     if not chi:
         raise SystemExit("Nessuno da avvisare (AVVISA)")
-    db = database()
+    db = db or database()
     stato = db.collection("sistema").document("aggiornamento")
     if (stato.get().to_dict() or {}).get("versione") == versione:
         print(f"{versione} già avvisata")
