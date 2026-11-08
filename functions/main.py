@@ -5,14 +5,18 @@
 - calendari, libri, mostre, film: i programmi che prima giravano su GitHub, agli stessi orari ma in ora italiana.
 - comando: per i thread di Claude (orario di lavoro, orario scolastico, note di scuola, stato dei programmi), con una
   parola d'ordine segreta (COMANDO_TOKEN, nei segreti di Firebase). Prima erano i workflow "a mano" di GitHub.
-- pubblica: Claude pubblica dal cloud il sito (ed eventualmente le regole) anche quando Sasha non è al PC, con la
-  stessa parola d'ordine; di base su un canale di prova, sul sito vero solo con canale=live (scripts/pubblica_sito.py).
+- pubblica: il pubblicatore di tutte le app (dal 08/11/2026): Claude pubblica dal cloud NDSZ e le altre app (ognuna
+  col suo sito su Firebase Hosting), di base su un canale di prova, sul sito vero solo con canale=live; aggiorna anche
+  il codice di questi programmi, così Cloud Shell non serve più (scripts/pubblica_sito.py).
+- programmi: ogni 5 minuti lancia i programmi delle altre app quando è la loro ora (tabella PROGRAMMI): per aggiungerne
+  uno basta aggiornare il codice dal cloud, senza creare funzioni nuove.
 I file di scripts/ li copia qui lo script di pubblicazione (strumenti/pubblica.sh): la fonte resta una sola.
 Se qualcosa va storto, l'errore si scrive in sistema/<nome>-errore (con una chiamata web semplice, che funziona anche
 se il collegamento al database del programma è rotto) e si vede con comando "stato".
 """
 import contextlib
 import datetime as dt
+import hashlib
 import hmac
 import importlib
 import io
@@ -159,6 +163,7 @@ def _stato():
         "errori": {k: v for k, v in sis.items() if k.endswith("-errore")},
         "notifiche_ultimo_giro": notif.get("ultimo"), "notifiche_da": notif.get("da"),
         "versione_avvisata": sis.get("aggiornamento", {}).get("versione"),
+        "app": {n: a.get("sito") for n, a in (sis.get("pubblicatore", {}).get("app") or {}).items()},
     }
 
 
@@ -189,33 +194,140 @@ def comando(req: https_fn.Request) -> https_fn.Response:
     return https_fn.Response(uscita.getvalue() or "Fatto.", status=200)
 
 
-@https_fn.on_request(region=REGIONE, secrets=[COMANDO], memory=options.MemoryOption.GB_1, timeout_sec=540, max_instances=1)
-def pubblica(req: https_fn.Request) -> https_fn.Response:
-    """POST di uno zip con i file del sito (e, solo per canale=live, le regole in _regole/). ?canale=prova|live&titolo=..."""
-    if req.method != "POST":
-        return https_fn.Response("Solo POST.", status=405)
-    if not _token_giusto(req):
-        return https_fn.Response("Parola d'ordine sbagliata.", status=403)
+def _registro():
+    """Le app del pubblicatore: {nome: {"sito": ..., "impronta": sha256 della chiave dell'app, ...}}."""
+    from comune import database
+    return (database().collection("sistema").document("pubblicatore").get().to_dict() or {}).get("app") or {}
+
+
+def _salva_app(nome, dati):
+    from comune import database
+    database().collection("sistema").document("pubblicatore").set({"app": {nome: dati}}, merge=True)
+
+
+def _chiave_app_giusta(req, app):
+    """La chiave propria di un'app (intestazione X-Chiave-App): vale solo per pubblicare il sito di quell'app."""
+    dato = req.headers.get("X-Chiave-App", "")
+    if len(dato) < 32:
+        return False
+    try:
+        impronta = str((_registro().get(app) or {}).get("impronta") or "")
+    except Exception:
+        print("Chiave dell'app non controllata:", traceback.format_exc())
+        return False
+    return len(impronta) == 64 and hmac.compare_digest(hashlib.sha256(dato.encode()).hexdigest(), impronta)
+
+
+def _adesso_iso():
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
+MAX_PACCHETTO = 25 * 1024 * 1024
+
+
+def _pacchetto(req, ps):
     dati = req.get_data(cache=False)
-    if not dati or len(dati) > 25 * 1024 * 1024:
-        return https_fn.Response("Pacchetto vuoto o troppo grande.", status=400)
+    if not dati or len(dati) > MAX_PACCHETTO:
+        raise ps.Rifiutato("pacchetto vuoto o troppo grande")
+    return dati
+
+
+def _pubblica_sito(req, ps, s, progetto, app):
+    dati = _pacchetto(req, ps)
     canale = (req.args.get("canale") or "prova").strip().lower()
     titolo = (req.args.get("titolo") or "").strip()
-    import google.auth
-    from google.auth.transport.requests import AuthorizedSession
-    import pubblica_sito as ps
-    try:
+    if app == "ndsz":
         sito, regole = ps.leggi_pacchetto(dati)
         if regole and canale != "live":
             raise ps.Rifiutato("le regole si pubblicano solo col canale live")
-        cred, progetto = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        progetto = progetto or os.environ.get("GCLOUD_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
-        s = AuthorizedSession(cred)
         esito = {"regole": []}
         if regole:  # prima le regole: se non vanno, il sito resta com'era
             esito["regole"] = ps.pubblica_regole(s, progetto, os.environ.get("SECCHIO") or f"{progetto}.firebasestorage.app", regole)
         esito.update(ps.pubblica_sito(s, progetto, sito, canale, titolo))
         _segna(f"pubblica-{canale}", "ok")
+        return esito
+    dati_app = _registro().get(app)
+    if not dati_app or not dati_app.get("sito"):
+        raise ps.Rifiutato(f"l'app {app} non è registrata (azione=app)")
+    esito = ps.pubblica_sito(s, dati_app["sito"], ps.leggi_pacchetto_app(dati), canale, titolo, ps.INTESTAZIONI_APP)
+    esito["app"] = app
+    _segna(f"pubblica-{app}-{canale}", "ok")
+    return esito
+
+
+def _registra_app(req, ps, s, progetto):
+    corpo = req.get_json(silent=True) or {}
+    nome, sito_id = str(corpo.get("app") or "").strip().lower(), str(corpo.get("sito") or "").strip().lower()
+    if not ps.NOME_APP.fullmatch(nome) or nome == "ndsz":
+        raise ps.Rifiutato("nome dell'app non valido")
+    if sito_id == progetto:
+        raise ps.Rifiutato("quel sito è di NDSZ")
+    reg = _registro()
+    if nome in reg and reg[nome].get("sito") and reg[nome]["sito"] != sito_id:
+        raise ps.Rifiutato(f"{nome} ha già il sito {reg[nome]['sito']}")
+    altra = [n for n, a in reg.items() if n != nome and a.get("sito") == sito_id]
+    if altra:
+        raise ps.Rifiutato(f"il sito {sito_id} è già di {altra[0]}")
+    esito = ps.crea_sito(s, progetto, sito_id, corpo.get("versioni", 10))
+    _salva_app(nome, {"sito": sito_id, "registrata": _adesso_iso()})
+    return dict(esito, app=nome)
+
+
+def _chiave_app(req, ps):
+    corpo = req.get_json(silent=True) or {}
+    nome, impronta = str(corpo.get("app") or "").strip().lower(), str(corpo.get("impronta") or "").strip().lower()
+    if nome not in _registro():
+        raise ps.Rifiutato(f"l'app {nome} non è registrata")
+    if not re.fullmatch(r"[0-9a-f]{64}", impronta):
+        raise ps.Rifiutato("l'impronta deve essere lo sha256 della chiave (64 caratteri esadecimali)")
+    _salva_app(nome, {"impronta": impronta, "chiave_dal": _adesso_iso()})
+    return {"app": nome, "chiave": "salvata"}
+
+
+@https_fn.on_request(region=REGIONE, secrets=[COMANDO], memory=options.MemoryOption.GB_1, timeout_sec=540, max_instances=1)
+def pubblica(req: https_fn.Request) -> https_fn.Response:
+    """Il pubblicatore di tutte le app. Sempre POST, con ?azione= (di base "sito"):
+    - sito: zip dei file del sito; ?app=ndsz (di base) o un'app registrata, &canale=prova|live&titolo=...
+      Con la parola d'ordine: tutte le app (per NDSZ anche le regole, solo live). Con la chiave di un'app
+      (intestazione X-Chiave-App): solo il sito di quell'app, nient'altro.
+    - app: JSON {"app": nome, "sito": nome del sito, "versioni": 10} registra un'app e crea il suo sito.
+    - chiave: JSON {"app": nome, "impronta": sha256 della chiave} la chiave propria di un'app (per il thread che la aggiorna).
+    - elenco: le app registrate.
+    - funzioni: zip del codice dei programmi (?solo=a,b; "pubblica" solo con &anche_pubblica=1).
+    - funzioni-stato: come stanno i programmi dopo l'aggiornamento.
+    Tutto tranne "sito con la chiave dell'app" vuole la parola d'ordine (COMANDO_TOKEN)."""
+    if req.method != "POST":
+        return https_fn.Response("Solo POST.", status=405)
+    azione = (req.args.get("azione") or "sito").strip().lower()
+    app = (req.args.get("app") or "ndsz").strip().lower()
+    import pubblica_sito as ps
+    try:
+        if not _token_giusto(req):
+            if azione != "sito" or app == "ndsz" or not ps.NOME_APP.fullmatch(app) or not _chiave_app_giusta(req, app):
+                return https_fn.Response("Parola d'ordine sbagliata.", status=403)
+        import google.auth
+        from google.auth.transport.requests import AuthorizedSession
+        cred, progetto = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        progetto = progetto or os.environ.get("GCLOUD_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        s = AuthorizedSession(cred)
+        if azione == "sito":
+            esito = _pubblica_sito(req, ps, s, progetto, app)
+        elif azione == "app":
+            esito = _registra_app(req, ps, s, progetto)
+        elif azione == "chiave":
+            esito = _chiave_app(req, ps)
+        elif azione == "elenco":
+            esito = {n: {"sito": a.get("sito"), "url": f"https://{a.get('sito')}.web.app", "chiave": bool(a.get("impronta"))}
+                     for n, a in _registro().items()}
+        elif azione == "funzioni":
+            solo = [x.strip() for x in (req.args.get("solo") or "").split(",") if x.strip()]
+            anche = (req.args.get("anche_pubblica") or "").lower() in ("1", "si", "true")
+            esito = ps.aggiorna_funzioni(s, progetto, REGIONE, _pacchetto(req, ps), solo or None, anche)
+            _segna("aggiorna-funzioni", "inviato")
+        elif azione == "funzioni-stato":
+            esito = ps.stato_funzioni(s, progetto, REGIONE)
+        else:
+            raise ps.Rifiutato("azione sconosciuta: sito, app, chiave, elenco, funzioni o funzioni-stato")
         return https_fn.Response(json.dumps(esito, ensure_ascii=False), status=200, mimetype="application/json")
     except ps.Rifiutato as e:
         return https_fn.Response(f"Non pubblicato: {e}", status=400)
@@ -223,5 +335,71 @@ def pubblica(req: https_fn.Request) -> https_fn.Response:
         testo = traceback.format_exc()
         print(testo)
         _scrivi_errore(testo, "pubblica-errore")
-        _segna(f"pubblica-{canale}", "errore")
+        _segna(f"pubblica-{app}-{azione}", "errore")
         return https_fn.Response("Non pubblicato: " + testo[-800:], status=500)
+
+
+# Programmi delle altre app (08/11/2026). Si aggiungono qui e si aggiornano dal cloud (azione=funzioni), senza Cloud
+# Shell: nome → (orario come in cron, in ORA ITALIANA: "minuto ora giorno mese giorno-della-settimana", modulo in scripts/).
+# Esempio: "rigo-promemoria": ("0 * * * *", "rigo_promemoria"). Ogni programma gira al massimo una volta per orario.
+PROGRAMMI = {}
+
+
+def _campo_giusto(espr, valore, minimo, massimo):
+    for parte in espr.split(","):
+        passo = 1
+        if "/" in parte:
+            parte, p = parte.split("/", 1)
+            passo = int(p)
+        if parte == "*":
+            a, b = minimo, massimo
+        elif "-" in parte:
+            a, b = (int(x) for x in parte.split("-", 1))
+        else:
+            a = b = int(parte)
+            if passo > 1:
+                b = massimo
+        if a <= valore <= b and (valore - a) % passo == 0:
+            return True
+    return False
+
+
+def _orario_giusto(cron, t):
+    m, h, g, me, gs = cron.split()
+    dow = t.isoweekday() % 7  # 0 = domenica, come in cron (anche 7)
+    return (_campo_giusto(m, t.minute, 0, 59) and _campo_giusto(h, t.hour, 0, 23) and _campo_giusto(g, t.day, 1, 31)
+            and _campo_giusto(me, t.month, 1, 12) and (_campo_giusto(gs, dow, 0, 7) or (dow == 0 and _campo_giusto(gs, 7, 0, 7))))
+
+
+def _da_lanciare(programmi, ultimo, adesso):
+    """I programmi che hanno avuto la loro ora dopo l'ultimo giro (al massimo nell'ultima ora), ognuno una volta."""
+    inizio = max(ultimo, adesso - dt.timedelta(hours=1)).replace(second=0, microsecond=0) + dt.timedelta(minutes=1)
+    fine = adesso.replace(second=0, microsecond=0)
+    scelti, t = [], inizio
+    while t <= fine:
+        for nome, (cron, _) in programmi.items():
+            if nome not in scelti and _orario_giusto(cron, t):
+                scelti.append(nome)
+        t += dt.timedelta(minutes=1)
+    return scelti
+
+
+@scheduler_fn.on_schedule(schedule="every 5 minutes", timeout_sec=540, **PIANIFICATA)
+def programmi(event: scheduler_fn.ScheduledEvent) -> None:
+    if not PROGRAMMI:
+        return
+    from zoneinfo import ZoneInfo
+    from comune import database
+    adesso = dt.datetime.now(ZoneInfo("Europe/Rome"))
+    doc = database().collection("sistema").document("programmi-altri")
+    ultimo_iso = (doc.get().to_dict() or {}).get("ultimo")
+    ultimo = dt.datetime.fromisoformat(ultimo_iso) if ultimo_iso else adesso - dt.timedelta(minutes=5)
+    doc.set({"ultimo": adesso.isoformat(timespec="seconds")}, merge=True)  # prima: mai due volte lo stesso orario
+    errori = []
+    for nome in _da_lanciare(PROGRAMMI, ultimo, adesso):
+        try:
+            _esegui(nome, PROGRAMMI[nome][1])
+        except BaseException as e:  # un programma rotto non ferma gli altri (l'errore è già scritto da _esegui)
+            errori.append(f"{nome}: {type(e).__name__}")
+    if errori:
+        raise RuntimeError("; ".join(errori))

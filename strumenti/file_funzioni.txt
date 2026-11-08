@@ -1,0 +1,13 @@
+# I file di scripts/ che servono ai programmi (funzioni di Firebase): una lista sola, la usano
+# strumenti/pubblica.sh, strumenti/aggiorna_programmi.sh e strumenti/pubblica_dal_cloud.py (--programmi).
+notifiche.py
+comune.py
+sincronizza_calendari.py
+libri.py
+mostre.py
+film.py
+orario.py
+scuola.py
+compiti.py
+aggiornamento.py
+pubblica_sito.py

@@ -34,8 +34,7 @@ python3 -c 'import json,sys; json.dump({"versione": sys.argv[1], "titolo": sys.a
 echo "Versione: $VERSIONE"
 
 passo "4/8 Programmi automatici (funzioni)"
-cp scripts/notifiche.py scripts/comune.py scripts/sincronizza_calendari.py scripts/libri.py scripts/mostre.py \
-   scripts/film.py scripts/orario.py scripts/scuola.py scripts/compiti.py scripts/aggiornamento.py scripts/pubblica_sito.py functions/ || ferma "copia dei programmi"
+for f in $(grep -v '^#' strumenti/file_funzioni.txt); do cp "scripts/$f" functions/ || ferma "copia di $f"; done
 # Le funzioni girano con Python 3.12: serve lo stesso qui (se manca, lo scarica uv).
 rm -rf functions/venv
 if command -v python3.12 >/dev/null 2>&1; then python3.12 -m venv functions/venv
