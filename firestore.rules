@@ -53,7 +53,25 @@ service cloud.firestore {
       // Chi l'ha scritta può cambiare il testo (Sasha, 03/11/2026).
       allow update: if membro() && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin'])
         || (resource.data.by == io() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['x', 'modificato'])
-            && request.resource.data.x is string && request.resource.data.x.size() > 0 && request.resource.data.x.size() <= 300));
+            && request.resource.data.x is string && request.resource.data.x.size() > 0 && request.resource.data.x.size() <= 300)
+        // Reazioni (v91, 08/11/2026): ognuno cambia solo la sua, tra quelle previste ('' = tolta).
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reazioni'])
+            && request.resource.data.reazioni is map
+            && request.resource.data.reazioni.diff(resource.data.get('reazioni', {})).affectedKeys().hasOnly([io()])
+            && request.resource.data.reazioni.get(io(), '') in ['', '👍', '❤️', '😂', '😮', '🙏']));
+      allow delete: if membro() && resource.data.by == io();
+    }
+
+    // Risposte alle note (v91): le scrive chiunque della famiglia, a nome suo, solo su una nota che c'è;
+    // non si cambiano, le toglie chi le ha scritte (e il programma degli avvisi quando la nota sparisce).
+    match /risposte/{id} {
+      allow read: if membro();
+      allow create: if membro() && request.resource.data.keys().hasOnly(['nota', 'by', 'x', 'creato'])
+        && request.resource.data.by == io() && request.resource.data.nota is string
+        && exists(/databases/$(db)/documents/note/$(request.resource.data.nota))
+        && request.resource.data.x is string && request.resource.data.x.size() > 0 && request.resource.data.x.size() <= 200
+        && request.resource.data.creato is int;
+      allow update: if false;
       allow delete: if membro() && resource.data.by == io();
     }
 

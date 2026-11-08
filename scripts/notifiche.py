@@ -5,11 +5,13 @@ si può ancora lanciare a mano da GitHub (workflow Notifiche).
 - nuovi: quando qualcuno ti aggiunge a un impegno;
 - riepilogo: la sera (alle 21, o all'ora scelta nelle Impostazioni), gli impegni di domani;
 - cena: il pomeriggio (alle 17, o all'ora scelta), "A cena stasera?" a chi non ha ancora risposto;
+- pranzo (v91, 08/11/2026): la sera (alle 20, o all'ora scelta), "A pranzo domani?" a chi non ha ancora risposto;
 - proposte: una proposta nuova (a tutti tranne chi l'ha fatta), "hanno votato tutti" (a chi l'ha fatta)
   e cosa si è deciso (a tutti tranne chi ha deciso);
 - conflitti: a chi ha due impegni che si accavallano oggi, domani o dopodomani;
 - babbo (07/11/2026): quando qualcuno segna che va da babbo, cambia le date o torna prima, a chi resta a casa;
 - note: quando qualcuno scrive una nota nella Bacheca, a tutti gli altri, senza il testo (e le note più vecchie di 24 ore si cancellano);
+  quando qualcuno risponde a una nota, a chi l'ha scritta (v91; le risposte spariscono con la nota);
 - mie (sezione "Per me", 02/11/2026): i promemoria all'ora giusta (e di nuovo dopo mezz'ora se non è stato toccato
   "Fatto"), le scadenze il mese prima e una settimana prima della fine del mese,
   le mostre segnate una settimana prima che chiudano e le mostre nuove a chi le segue.
@@ -208,16 +210,15 @@ def main():
         a = minuti(e["h"])
         b = minuti(e["fine"]) if e.get("fine") else a + 60
         return a, (b if b > a else 24 * 60)
-    # Cena automatica (stessa regola dell'app, app.js fuoriCena): chi è impegnato tra le 20 e le 21 non è a cena.
-    # Un turno di lavoro dura fino all'arrivo a casa (fine + il tempo di strada scelto, di base 20 minuti).
-    # Non contano gli impegni con tutta la famiglia né quelli di tutto il giorno.
-    def fuori_cena(p):
-        cena0, cena1 = 20 * 60, 21 * 60
+    # Pasti automatici (stessa regola dell'app, app.js fuoriCena): chi è impegnato nell'ora del pasto non c'è
+    # (cena 20-21, pranzo 13-14). Un turno di lavoro dura fino all'arrivo a casa (fine + il tempo di strada scelto,
+    # di base 20 minuti). Non contano gli impegni con tutta la famiglia né quelli di tutto il giorno.
+    def fuori_pasto(p, giorno, cena0, cena1):
         strada = persone.get(p, {}).get("strada")
         strada = strada if strada in (0, 10, 20, 30, 45) else 20
         for e in impegni:
             who = e.get("who") or []
-            if p not in who or not e.get("h") or not capita(e, oggi):
+            if p not in who or not e.get("h") or not capita(e, giorno):
                 continue
             if e.get("fonte") == f"orario:{p}":
                 if e.get("fine"):
@@ -227,10 +228,13 @@ def main():
                 continue
             if str(e.get("fonte", "")).startswith("orario:") or (len(who) >= len(persone) > 1):
                 continue
-            a, b = intervallo(e, oggi)
+            a, b = intervallo(e, giorno)
             if a < cena1 and b > cena0:
                 return True
         return False
+
+    def fuori_cena(p):
+        return fuori_pasto(p, oggi, 20 * 60, 21 * 60)
 
     # Cena: ognuno all'ora che ha scelto (di solito le 17). Chi risulta già fuori (turno o impegno a cena) non serve chiederlo.
     pomeriggio = [p for p in persone if ora.hour == ora_di(p, "oraCena", 17)]
@@ -239,6 +243,15 @@ def main():
         for p in pomeriggio:
             if cena.get(p) not in ("si", "no") and not fuori_cena(p):
                 manda(p, "cena", "A cena stasera?", "Rispondi con un tocco nella scheda Oggi.", f"cena|{oggi}|{p}")
+
+    # Pranzo di domani (v91, 08/11/2026, Sasha): la sera, all'ora scelta (di solito le 20), a chi non ha ancora
+    # risposto. Chi domani è al lavoro o impegnato tra le 13 e le 14 (anche da babbo) non serve chiederlo.
+    sera = [p for p in persone if ora.hour == ora_di(p, "oraPranzo", 20)]
+    if sera:
+        pranzo = (db.collection("pranzo").document(domani).get().to_dict() or {})
+        for p in sera:
+            if pranzo.get(p) not in ("si", "no") and not fuori_pasto(p, domani, 13 * 60, 14 * 60):
+                manda(p, "pranzo", "A pranzo domani?", "Rispondi con un tocco nella scheda Oggi.", f"pranzo|{domani}|{p}")
 
     # Le note durano 24 ore (Sasha, 03/11/2026): dopo si cancellano. Sono poche, quindi si leggono tutte.
     scadute = int((ora - dt.timedelta(hours=24)).timestamp() * 1000)
@@ -252,6 +265,18 @@ def main():
         for p in persone:
             if p != n.get("by"):
                 manda(p, "note", f"{nome(n.get('by'))} ha scritto una nota", "Leggila nella Bacheca, tra le Note.", f"nota|{d.id}|{p}")
+
+    # Risposte alle note (v91): a chi ha scritto la nota, senza il testo. Spariscono con la nota (o dopo 24 ore).
+    vive = {d.id: (d.to_dict() or {}) for d in db.collection("note").stream()}
+    for d in db.collection("risposte").stream():
+        r = d.to_dict() or {}
+        creata = int(r.get("creato") or 0)
+        if r.get("nota") not in vive or creata <= scadute:
+            d.reference.delete()
+            continue
+        autore = vive[r["nota"]].get("by")
+        if creata > recente and autore in persone and r.get("by") in persone and autore != r.get("by"):
+            manda(autore, "note", f"{nome(r.get('by'))} ha risposto alla tua nota", "Leggila nella Bacheca, tra le Note.", f"risp|{d.id}|{autore}")
 
     # Due impegni della stessa persona alla stessa ora (oggi, domani, dopodomani: "inviati" ricorda per 2 giorni).
     for k in range(3):

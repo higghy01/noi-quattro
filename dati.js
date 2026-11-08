@@ -53,6 +53,10 @@
       [['Latte', 'p2', false], ['Pane', 'p4', false], ['Mozzarella per la pizza', 'p1', false], ['Mele', 'p3', true], ['Detersivo piatti', 'p2', false]]
         .forEach(([x, by, done], i) => o.spesa[uid()] = { x, by, done, creato: now - i * 1000 });
       o.cena[iso(0)] = { p1: 'si', p2: 'si', p4: 'no' };
+      // Note della Bacheca con reazioni e una risposta (v91).
+      o.note = { n1: { by: 'p2', x: 'Stasera passo dal mercato: serve qualcosa?', creato: now - 3e6, reazioni: { p1: '👍', p3: '❤️' } },
+        n2: { by: 'p3', x: 'Domani verifica di matematica 😬', creato: now - 6e5 } };
+      o.risposte = { r1: { nota: 'n1', by: 'p1', x: 'Le mele e un po\' di pane', creato: now - 2e6 } };
       o.pranzo = { [iso(0)]: { p2: 'si' } };
       // Film di esempio (le locandine vere arrivano dal programma "Film").
       o.info = Object.assign(o.info || {}, { film: { agg: now, l: [

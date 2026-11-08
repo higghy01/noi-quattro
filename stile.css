@@ -828,6 +828,8 @@ html .topbar.on b{transform:none}
    la fascia in alto col colore dello sfondo resta sopra di loro mentre sono aperte (e finché scivolano via). */
 body::before{transition:z-index 0s linear .46s}
 html:has(.screen.on) body::before{z-index:26;transition:none}
+/* v91: nelle pagine intere ci pensa la barra in vetro (sotto), che copre anche l'orario e l'isola. */
+html:has(.screen.on) body::before{z-index:24}
 /* Accesso: il modulo al centro dello spazio visibile, senza il margine della barra in basso (che lì non c'è) e senza scorrere a vuoto. */
 body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
 .login{min-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
@@ -860,3 +862,43 @@ body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
 .maut{width:100%;text-align:left;background:none;border:0;padding:0 0 4px;color:inherit;font:inherit}
 .maut b::after{content:' ›';color:var(--muted);font-weight:400}
 .mcard .mos .mtx b{overflow-wrap:anywhere}
+
+/* Bacheca, v91 (08/11/2026): reazioni e risposte alle note. Una reazione a testa; le risposte nel foglio della nota. */
+.frx{display:flex;flex-wrap:wrap;gap:5px;margin:-2px 0 -4px}
+.rxc{display:inline-flex;align-items:center;gap:3px;min-height:32px;padding:0 9px;border-radius:999px;font-size:15px;line-height:1;
+  background:color-mix(in srgb,var(--pc,var(--acc)) 10%,var(--panel));border:1px solid color-mix(in srgb,var(--pc,var(--acc)) 22%,transparent);color:var(--fg);
+  transition:background-color .22s var(--ease),border-color .22s var(--ease),transform .12s var(--ease)}
+.rxc small{font:600 12px var(--f-body);color:var(--muted)}
+.rxc.on{background:color-mix(in srgb,var(--me) 16%,var(--panel));border-color:var(--me);animation:fm-bump .38s var(--pop)}
+.rxc.on small{color:var(--me)}
+.rxc.rxm small{color:var(--muted)}
+.nconv{padding:14px;border-radius:14px;background:color-mix(in srgb,var(--pc) 12%,var(--panel));border:1px solid color-mix(in srgb,var(--pc) 26%,transparent)}
+.nconv p{margin:0 0 6px;font-size:15.5px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text}
+.nconv small{color:var(--muted);font-size:12px}
+.rxr{display:flex;gap:8px;justify-content:space-between}
+.rxr .rxc{flex:1;justify-content:center;min-height:44px;font-size:20px;--pc:var(--acc)}
+.rls{display:grid;gap:8px}
+.rl{display:grid;grid-template-columns:1fr auto;align-items:start;gap:2px 6px;padding:10px 6px 8px 12px;border-radius:12px;background:var(--soft);border-left:3px solid var(--pc)}
+.rl p{margin:0;font-size:14.5px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-wrap;-webkit-user-select:text;user-select:text}
+.rl p b{color:color-mix(in srgb,var(--pc) 70%,var(--fg))}
+.rl small{grid-column:1;color:var(--muted);font-size:12px}
+.rl .gx{grid-row:1/3;grid-column:2;margin:-6px 0 0}
+.rlv{padding:8px 0}
+@media (prefers-reduced-motion:reduce){.rxc.on{animation:none}}
+
+/* v91 (08/11/2026): barra in vetro con "Indietro" nelle pagine intere (Impostazioni, persona, Personale, ricordo).
+   Resta in alto anche scorrendo; diventa vetro appena il testo ci passa sotto (anche sotto l'orario e l'isola) e,
+   quando il titolo grande sparisce, il titolo compare piccolo al centro. Stesso vetro della barra delle schede. */
+.screen .imp-top{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin:calc(-1 * env(safe-area-inset-top,0px)) calc(-1 * max(16px,env(safe-area-inset-right,0px))) 0 calc(-1 * max(16px,env(safe-area-inset-left,0px)));
+  padding:env(safe-area-inset-top,0px) max(12px,env(safe-area-inset-right,0px)) 0 max(8px,env(safe-area-inset-left,0px));
+  min-height:calc(env(safe-area-inset-top,0px) + 50px);background:color-mix(in srgb,var(--bg) 0%,transparent);
+  border-bottom:.5px solid transparent;transition:background-color .22s var(--ease),border-color .22s var(--ease)}
+.screen.vetro .imp-top{background:color-mix(in srgb,var(--bg) 74%,transparent);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom-color:color-mix(in srgb,var(--line) 90%,transparent)}
+.screen .imp-top .itit{position:absolute;left:50%;bottom:0;height:50px;display:flex;align-items:center;max-width:52%;
+  font:600 16px var(--f-body);letter-spacing:-.01em;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  opacity:0;transform:translate(-50%,6px);pointer-events:none;transition:opacity .2s var(--ease),transform .3s var(--ease)}
+.screen.tit .imp-top .itit{opacity:1;transform:translate(-50%,0)}
+.screen .imp-top .itit{display:block;line-height:50px}
+@media (prefers-reduced-motion:reduce){.screen .imp-top,.screen .imp-top .itit{transition:none}}
