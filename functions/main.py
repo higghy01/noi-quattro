@@ -232,9 +232,13 @@ def _pacchetto(req, ps):
     return dati
 
 
+def canale_di(req):
+    return (req.args.get("canale") or "prova").strip().lower()
+
+
 def _pubblica_sito(req, ps, s, progetto, app):
     dati = _pacchetto(req, ps)
-    canale = (req.args.get("canale") or "prova").strip().lower()
+    canale = canale_di(req)
     titolo = (req.args.get("titolo") or "").strip()
     if app == "ndsz":
         sito, regole = ps.leggi_pacchetto(dati)
@@ -249,6 +253,8 @@ def _pubblica_sito(req, ps, s, progetto, app):
     dati_app = _registro().get(app)
     if not dati_app or not dati_app.get("sito"):
         raise ps.Rifiutato(f"l'app {app} non è registrata (azione=app)")
+    if dati_app["sito"] == progetto:  # mai il sito di NDSZ con la chiave o il nome di un'altra app
+        raise ps.Rifiutato("quel sito è di NDSZ")
     esito = ps.pubblica_sito(s, dati_app["sito"], ps.leggi_pacchetto_app(dati), canale, titolo, ps.INTESTAZIONI_APP)
     esito["app"] = app
     _segna(f"pubblica-{app}-{canale}", "ok")
@@ -268,8 +274,9 @@ def _registra_app(req, ps, s, progetto):
     altra = [n for n, a in reg.items() if n != nome and a.get("sito") == sito_id]
     if altra:
         raise ps.Rifiutato(f"il sito {sito_id} è già di {altra[0]}")
-    esito = ps.crea_sito(s, progetto, sito_id, corpo.get("versioni", 10))
-    _salva_app(nome, {"sito": sito_id, "registrata": _adesso_iso()})
+    esito = ps.crea_sito(s, progetto, sito_id)
+    _salva_app(nome, {"sito": sito_id, "registrata": _adesso_iso()})  # subito: se il resto non va, si riprova
+    esito["versioni"] = ps.limita_versioni(s, sito_id, corpo.get("versioni", 10))
     return dict(esito, app=nome)
 
 
@@ -301,10 +308,18 @@ def pubblica(req: https_fn.Request) -> https_fn.Response:
     azione = (req.args.get("azione") or "sito").strip().lower()
     app = (req.args.get("app") or "ndsz").strip().lower()
     import pubblica_sito as ps
+    # Con la chiave di un'app si fa SOLO quello che quella chiave permette, anche se la richiesta porta pure la parola
+    # d'ordine (per esempio aggiunta dalla rete della sessione): così la chiave isola davvero (revisione 08/11).
+    con_chiave = "X-Chiave-App" in req.headers
+    padrone = False
     try:
-        if not _token_giusto(req):
+        if con_chiave:
             if azione != "sito" or app == "ndsz" or not ps.NOME_APP.fullmatch(app) or not _chiave_app_giusta(req, app):
                 return https_fn.Response("Parola d'ordine sbagliata.", status=403)
+        elif not _token_giusto(req):
+            return https_fn.Response("Parola d'ordine sbagliata.", status=403)
+        else:
+            padrone = True
         import google.auth
         from google.auth.transport.requests import AuthorizedSession
         cred, progetto = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
@@ -335,70 +350,114 @@ def pubblica(req: https_fn.Request) -> https_fn.Response:
         testo = traceback.format_exc()
         print(testo)
         _scrivi_errore(testo, "pubblica-errore")
-        _segna(f"pubblica-{app}-{azione}", "errore")
-        return https_fn.Response("Non pubblicato: " + testo[-800:], status=500)
+        _segna(f"pubblica-{canale_di(req)}" if (app, azione) == ("ndsz", "sito") else f"pubblica-{app}-{azione}", "errore")
+        # Il dettaglio solo a chi ha la parola d'ordine; agli altri basta sapere dov'è scritto.
+        return https_fn.Response("Non pubblicato: " + (testo[-800:] if padrone else "errore interno (in sistema/pubblica-errore)"), status=500)
 
 
 # Programmi delle altre app (08/11/2026). Si aggiungono qui e si aggiornano dal cloud (azione=funzioni), senza Cloud
 # Shell: nome → (orario come in cron, in ORA ITALIANA: "minuto ora giorno mese giorno-della-settimana", modulo in scripts/).
-# Esempio: "rigo-promemoria": ("0 * * * *", "rigo_promemoria"). Ogni programma gira al massimo una volta per orario.
+# Esempio: "rigo-promemoria": ("0 * * * *", "rigo_promemoria"). Ogni programma gira al massimo una volta per orario;
+# dopo un buco recupera solo l'ultima ora. Nella notte del cambio d'ora gli orari tra le 2 e le 3 possono saltare o
+# (se non sono gli stessi minuti) ripetersi: meglio non metterci programmi.
 PROGRAMMI = {}
+LIMITI_CRON = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))
 
 
-def _campo_giusto(espr, valore, minimo, massimo):
+def _insieme(espr, minimo, massimo):
+    valori = set()
     for parte in espr.split(","):
-        passo = 1
-        if "/" in parte:
-            parte, p = parte.split("/", 1)
-            passo = int(p)
-        if parte == "*":
+        m = re.fullmatch(r"(\*|\d+(?:-\d+)?)(?:/(\d+))?", parte)
+        if not m:
+            raise ValueError(f"campo non valido: {espr!r}")
+        base, passo = m.group(1), int(m.group(2) or 1)
+        if base == "*":
             a, b = minimo, massimo
-        elif "-" in parte:
-            a, b = (int(x) for x in parte.split("-", 1))
+        elif "-" in base:
+            a, b = (int(x) for x in base.split("-", 1))
         else:
-            a = b = int(parte)
-            if passo > 1:
-                b = massimo
-        if a <= valore <= b and (valore - a) % passo == 0:
-            return True
-    return False
+            a = int(base)
+            b = massimo if m.group(2) else a
+        if passo < 1 or not minimo <= a <= b <= massimo:
+            raise ValueError(f"campo fuori misura: {espr!r}")
+        valori.update(range(a, b + 1, passo))
+    return valori
+
+
+def _cron(cron):
+    """Controlla un orario cron (5 campi) e lo trasforma negli insiemi dei valori buoni. Errore se è scritto male."""
+    parti = str(cron).split()
+    if len(parti) != 5:
+        raise ValueError(f"servono 5 campi: {cron!r}")
+    ins = [_insieme(p, *lim) for p, lim in zip(parti, LIMITI_CRON)]
+    if 7 in ins[4]:
+        ins[4].add(0)  # 7 = domenica, come 0
+    return ins, not parti[2].startswith("*"), not parti[4].startswith("*")
 
 
 def _orario_giusto(cron, t):
-    m, h, g, me, gs = cron.split()
-    dow = t.isoweekday() % 7  # 0 = domenica, come in cron (anche 7)
-    return (_campo_giusto(m, t.minute, 0, 59) and _campo_giusto(h, t.hour, 0, 23) and _campo_giusto(g, t.day, 1, 31)
-            and _campo_giusto(me, t.month, 1, 12) and (_campo_giusto(gs, dow, 0, 7) or (dow == 0 and _campo_giusto(gs, 7, 0, 7))))
+    (mi, ho, gi, me, gs), gi_scelto, gs_scelto = _cron(cron)
+    if t.minute not in mi or t.hour not in ho or t.month not in me:
+        return False
+    g_ok, s_ok = t.day in gi, (t.isoweekday() % 7) in gs
+    return (g_ok or s_ok) if (gi_scelto and gs_scelto) else (g_ok and s_ok)  # come cron: giorno O giorno della settimana
 
 
-def _da_lanciare(programmi, ultimo, adesso):
-    """I programmi che hanno avuto la loro ora dopo l'ultimo giro (al massimo nell'ultima ora), ognuno una volta."""
-    inizio = max(ultimo, adesso - dt.timedelta(hours=1)).replace(second=0, microsecond=0) + dt.timedelta(minutes=1)
+def _da_lanciare(programmi, ultimo, adesso, fatti=None):
+    """{nome: orario italiano "AAAA-MM-GGTHH:MM"} dei programmi che hanno avuto la loro ora dopo l'ultimo giro (al
+    massimo nell'ultima ora), ognuno una volta, mai due volte per lo stesso orario. ultimo/adesso con fuso orario:
+    si conta in UTC e si guarda l'ora italiana solo per gli orari (giusto anche nelle notti del cambio d'ora)."""
+    from zoneinfo import ZoneInfo
+    roma, utc = ZoneInfo("Europe/Rome"), dt.timezone.utc
+    fatti = fatti or {}
+    adesso, ultimo = adesso.astimezone(utc), ultimo.astimezone(utc)
+    t = max(ultimo, adesso - dt.timedelta(hours=1)).replace(second=0, microsecond=0) + dt.timedelta(minutes=1)
     fine = adesso.replace(second=0, microsecond=0)
-    scelti, t = [], inizio
+    scelti = {}
     while t <= fine:
+        loc = t.astimezone(roma)
+        chiave = loc.strftime("%Y-%m-%dT%H:%M")
         for nome, (cron, _) in programmi.items():
-            if nome not in scelti and _orario_giusto(cron, t):
-                scelti.append(nome)
+            if fatti.get(nome) != chiave and _orario_giusto(cron, loc):
+                scelti[nome] = chiave
         t += dt.timedelta(minutes=1)
     return scelti
 
 
-@scheduler_fn.on_schedule(schedule="every 5 minutes", timeout_sec=540, **PIANIFICATA)
+def _programmi_validi():
+    """Le voci di PROGRAMMI scritte bene; quelle sbagliate restano fuori senza fermare le altre."""
+    buoni, sbagliati = {}, {}
+    for nome, voce in PROGRAMMI.items():
+        try:
+            cron, modulo = voce
+            _cron(cron)
+            if not re.fullmatch(r"[a-z_][a-z0-9_]*", modulo):
+                raise ValueError(f"modulo non valido: {modulo!r}")
+            buoni[nome] = (cron, modulo)
+        except Exception as e:
+            sbagliati[nome] = str(e)
+    return buoni, sbagliati
+
+
+@scheduler_fn.on_schedule(schedule="every 5 minutes", timeout_sec=540, concurrency=1, **PIANIFICATA)
 def programmi(event: scheduler_fn.ScheduledEvent) -> None:
     if not PROGRAMMI:
         return
-    from zoneinfo import ZoneInfo
     from comune import database
-    adesso = dt.datetime.now(ZoneInfo("Europe/Rome"))
+    buoni, sbagliati = _programmi_validi()
+    adesso = dt.datetime.now(dt.timezone.utc)
     doc = database().collection("sistema").document("programmi-altri")
-    ultimo_iso = (doc.get().to_dict() or {}).get("ultimo")
-    ultimo = dt.datetime.fromisoformat(ultimo_iso) if ultimo_iso else adesso - dt.timedelta(minutes=5)
-    doc.set({"ultimo": adesso.isoformat(timespec="seconds")}, merge=True)  # prima: mai due volte lo stesso orario
-    errori = []
-    for nome in _da_lanciare(PROGRAMMI, ultimo, adesso):
+    stato = doc.get().to_dict() or {}
+    ultimo = dt.datetime.fromisoformat(stato["ultimo"]) if stato.get("ultimo") else adesso - dt.timedelta(minutes=5)
+    scelti = _da_lanciare(buoni, ultimo, adesso, stato.get("fatti") or {})
+    # Prima si segna (mai due volte lo stesso orario), poi si lancia.
+    doc.set({"ultimo": adesso.isoformat(timespec="seconds"), "fatti": scelti}, merge=True)
+    errori = [f"{n}: scritto male ({e})" for n, e in sbagliati.items()]
+    if sbagliati:
+        _scrivi_errore("; ".join(errori), "programmi-errore")
+    for nome in scelti:
         try:
-            _esegui(nome, PROGRAMMI[nome][1])
+            _esegui(nome, buoni[nome][1])
         except BaseException as e:  # un programma rotto non ferma gli altri (l'errore è già scritto da _esegui)
             errori.append(f"{nome}: {type(e).__name__}")
     if errori:
