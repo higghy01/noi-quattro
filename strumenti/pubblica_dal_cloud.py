@@ -8,10 +8,14 @@ Uso (dalla cartella del codice di NDSZ):
     python3 strumenti/pubblica_dal_cloud.py --live --regole "T"   → sito vero + regole del database e dello spazio foto
   Le altre app (ognuna col suo sito)
     python3 strumenti/pubblica_dal_cloud.py --registra la-mia-app NOME-DEL-SITO   → crea il sito (una volta)
+    python3 strumenti/pubblica_dal_cloud.py --registra rigo NOME-DEL-SITO --progetto PROGETTO   → sito nel progetto dell'app
     python3 strumenti/pubblica_dal_cloud.py --app la-mia-app --cartella CARTELLA "Titolo"          → prova
     python3 strumenti/pubblica_dal_cloud.py --app la-mia-app --cartella CARTELLA --live "Titolo"   → sito vero
     python3 strumenti/pubblica_dal_cloud.py --chiave la-mia-app IMPRONTA   → chiave propria dell'app (solo l'impronta sha256)
-    python3 strumenti/pubblica_dal_cloud.py --elenco
+    python3 strumenti/pubblica_dal_cloud.py --elenco             → app, siti e account del pubblicatore
+  Cassaforte delle chiavi dei programmi (la chiave va prima nel modulo sicuro, con l'intestazione indicata)
+    python3 strumenti/pubblica_dal_cloud.py --cassaforte brickset X-Brickset-Key
+    python3 strumenti/pubblica_dal_cloud.py --cassaforte-elenco
   I programmi (funzioni di Firebase)
     python3 strumenti/pubblica_dal_cloud.py --programmi [--solo a,b] [--anche-pubblica]
     python3 strumenti/pubblica_dal_cloud.py --stato-programmi
@@ -212,6 +216,9 @@ def main():
     a.add_argument("--registra", nargs=2, metavar=("APP", "SITO"))
     a.add_argument("--chiave", nargs=2, metavar=("APP", "IMPRONTA"))
     a.add_argument("--elenco", action="store_true")
+    a.add_argument("--progetto")
+    a.add_argument("--cassaforte", nargs=2, metavar=("NOME", "INTESTAZIONE"))
+    a.add_argument("--cassaforte-elenco", action="store_true")
     a.add_argument("--programmi", action="store_true")
     a.add_argument("--solo")
     a.add_argument("--anche-pubblica", action="store_true")
@@ -222,10 +229,14 @@ def main():
     js = lambda d: json.dumps(d).encode()
 
     if o.registra:
-        e = chiama({"azione": "app"}, js({"app": o.registra[0], "sito": o.registra[1]}), "application/json")
+        e = chiama({"azione": "app"}, js({"app": o.registra[0], "sito": o.registra[1], "progetto": o.progetto}), "application/json")
         print(f"App {e['app']}: sito {e['sito']} {'creato' if e['nuovo'] else 'già pronto'} → {e['url']}")
     elif o.chiave:
         print(chiama({"azione": "chiave"}, js({"app": o.chiave[0], "impronta": o.chiave[1]}), "application/json"))
+    elif o.cassaforte:
+        print(chiama({"azione": "cassaforte"}, js({"nome": o.cassaforte[0], "intestazione": o.cassaforte[1]}), "application/json"))
+    elif o.cassaforte_elenco:
+        print(chiama({"azione": "cassaforte-elenco"}, b"{}", "application/json"))
     elif o.elenco:
         print(json.dumps(chiama({"azione": "elenco"}, b"{}", "application/json"), indent=1, ensure_ascii=False))
     elif o.programmi:

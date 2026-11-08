@@ -20,6 +20,11 @@ def database():
     return firestore.client()
 
 
+def chiave_cassaforte(nome):
+    """Una chiave di un servizio esterno salvata nella cassaforte del pubblicatore (privato/cassaforte), o None."""
+    return (database().collection("privato").document("cassaforte").get().to_dict() or {}).get(nome)
+
+
 def adesso():
     return dt.datetime.now(ROMA)
 

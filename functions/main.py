@@ -262,10 +262,16 @@ def _pubblica_sito(req, ps, s, progetto, app):
 
 
 def _registra_app(req, ps, s, progetto):
+    """Un'app nuova col suo sito. Di base il sito sta nel progetto di NDSZ; con "progetto" sta nel progetto Firebase
+    dell'app (es. Rigo, che non deve avere niente in comune con NDSZ): lì serve che Sasha abbia dato al pubblicatore
+    il permesso, una volta (Google Cloud → IAM, account del pubblicatore, ruolo Editor)."""
     corpo = req.get_json(silent=True) or {}
     nome, sito_id = str(corpo.get("app") or "").strip().lower(), str(corpo.get("sito") or "").strip().lower()
+    progetto_app = str(corpo.get("progetto") or progetto).strip().lower()
     if not ps.NOME_APP.fullmatch(nome) or nome == "ndsz":
         raise ps.Rifiutato("nome dell'app non valido")
+    if not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", progetto_app):
+        raise ps.Rifiutato("nome del progetto Firebase non valido")
     if sito_id == progetto:
         raise ps.Rifiutato("quel sito è di NDSZ")
     reg = _registro()
@@ -274,8 +280,8 @@ def _registra_app(req, ps, s, progetto):
     altra = [n for n, a in reg.items() if n != nome and a.get("sito") == sito_id]
     if altra:
         raise ps.Rifiutato(f"il sito {sito_id} è già di {altra[0]}")
-    esito = ps.crea_sito(s, progetto, sito_id)
-    _salva_app(nome, {"sito": sito_id, "registrata": _adesso_iso()})  # subito: se il resto non va, si riprova
+    esito = ps.crea_sito(s, progetto_app, sito_id)
+    _salva_app(nome, {"sito": sito_id, "progetto": progetto_app, "registrata": _adesso_iso()})  # subito: se il resto non va, si riprova
     esito["versioni"] = ps.limita_versioni(s, sito_id, corpo.get("versioni", 10))
     return dict(esito, app=nome)
 
@@ -291,13 +297,59 @@ def _chiave_app(req, ps):
     return {"app": nome, "chiave": "salvata"}
 
 
+# Cassaforte (08/11/2026): le chiavi dei servizi esterni che servono ai programmi (es. Brickset per l'app LEGO).
+# Sasha le mette nel modulo sicuro di Claude (mai in chat): la rete della sessione le aggiunge come intestazione
+# (es. X-Brickset-Key) alle richieste al pubblicatore, che le salva in privato/cassaforte (database chiuso a tutti:
+# lo leggono solo i programmi). Il valore non torna mai indietro, nemmeno a Claude.
+INTESTAZIONE_CHIAVE = re.compile(r"X-[A-Za-z0-9]{2,20}-(?:Key|Apikey|Token|Secret)", re.I)
+
+
+def _cassaforte(req, ps):
+    from comune import database
+    corpo = req.get_json(silent=True) or {}
+    nome, intestazione = str(corpo.get("nome") or "").strip().lower(), str(corpo.get("intestazione") or "").strip()
+    if not re.fullmatch(r"[a-z][a-z0-9_-]{1,30}", nome):
+        raise ps.Rifiutato("nome della chiave non valido")
+    doc = database().collection("privato").document("cassaforte")
+    if corpo.get("cancella"):
+        from google.cloud import firestore as fs
+        doc.set({nome: fs.DELETE_FIELD, nome + "_dal": fs.DELETE_FIELD}, merge=True)
+        return {"chiave": nome, "cancellata": True}
+    if not INTESTAZIONE_CHIAVE.fullmatch(intestazione) or intestazione.lower() in ("x-comando-token", "x-chiave-app"):
+        raise ps.Rifiutato("intestazione non valida (es. X-Brickset-Key)")
+    valore = (req.headers.get(intestazione) or "").strip()
+    if len(valore) < 8 or valore.startswith("messa-dalla-rete"):
+        raise ps.Rifiutato(f"la richiesta non porta la chiave in {intestazione}: va salvata prima nel modulo sicuro")
+    doc.set({nome: valore, nome + "_dal": _adesso_iso()}, merge=True)
+    return {"chiave": nome, "salvata": True, "lunghezza": len(valore)}
+
+
+def _cassaforte_elenco():
+    from comune import database
+    d = database().collection("privato").document("cassaforte").get().to_dict() or {}
+    return {k: d.get(k + "_dal") for k in sorted(d) if not k.endswith("_dal")}
+
+
+def _account_del_pubblicatore():
+    """L'account Google con cui girano i programmi: serve a Sasha per dargli il permesso su un altro progetto."""
+    try:
+        import requests
+        return requests.get("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email",
+                            headers={"Metadata-Flavor": "Google"}, timeout=5).text.strip()
+    except Exception:
+        return None
+
+
 @https_fn.on_request(region=REGIONE, secrets=[COMANDO], memory=options.MemoryOption.GB_1, timeout_sec=540, max_instances=1)
 def pubblica(req: https_fn.Request) -> https_fn.Response:
     """Il pubblicatore di tutte le app. Sempre POST, con ?azione= (di base "sito"):
     - sito: zip dei file del sito; ?app=ndsz (di base) o un'app registrata, &canale=prova|live&titolo=...
       Con la parola d'ordine: tutte le app (per NDSZ anche le regole, solo live). Con la chiave di un'app
       (intestazione X-Chiave-App): solo il sito di quell'app, nient'altro.
-    - app: JSON {"app": nome, "sito": nome del sito, "versioni": 10} registra un'app e crea il suo sito.
+    - app: JSON {"app": nome, "sito": nome del sito, "progetto": progetto Firebase (facoltativo), "versioni": 10}
+      registra un'app e crea il suo sito.
+    - cassaforte: JSON {"nome": "brickset", "intestazione": "X-Brickset-Key"} salva una chiave arrivata dal modulo
+      sicuro (o {"nome": ..., "cancella": true}); cassaforte-elenco: solo i nomi e da quando.
     - chiave: JSON {"app": nome, "impronta": sha256 della chiave} la chiave propria di un'app (per il thread che la aggiorna).
     - elenco: le app registrate.
     - funzioni: zip del codice dei programmi (?solo=a,b; "pubblica" solo con &anche_pubblica=1).
@@ -332,8 +384,14 @@ def pubblica(req: https_fn.Request) -> https_fn.Response:
         elif azione == "chiave":
             esito = _chiave_app(req, ps)
         elif azione == "elenco":
-            esito = {n: {"sito": a.get("sito"), "url": f"https://{a.get('sito')}.web.app", "chiave": bool(a.get("impronta"))}
-                     for n, a in _registro().items()}
+            esito = {"app": {n: {"sito": a.get("sito"), "progetto": a.get("progetto") or progetto,
+                                 "url": f"https://{a.get('sito')}.web.app", "chiave": bool(a.get("impronta"))}
+                             for n, a in _registro().items()},
+                     "account": _account_del_pubblicatore()}
+        elif azione == "cassaforte":
+            esito = _cassaforte(req, ps)
+        elif azione == "cassaforte-elenco":
+            esito = _cassaforte_elenco()
         elif azione == "funzioni":
             solo = [x.strip() for x in (req.args.get("solo") or "").split(",") if x.strip()]
             anche = (req.args.get("anche_pubblica") or "").lower() in ("1", "si", "true")
@@ -342,7 +400,7 @@ def pubblica(req: https_fn.Request) -> https_fn.Response:
         elif azione == "funzioni-stato":
             esito = ps.stato_funzioni(s, progetto, REGIONE)
         else:
-            raise ps.Rifiutato("azione sconosciuta: sito, app, chiave, elenco, funzioni o funzioni-stato")
+            raise ps.Rifiutato("azione sconosciuta: sito, app, chiave, elenco, cassaforte, cassaforte-elenco, funzioni o funzioni-stato")
         return https_fn.Response(json.dumps(esito, ensure_ascii=False), status=200, mimetype="application/json")
     except ps.Rifiutato as e:
         return https_fn.Response(f"Non pubblicato: {e}", status=400)
