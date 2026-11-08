@@ -236,27 +236,47 @@ def main():
     def fuori_cena(p):
         return fuori_pasto(p, oggi, 20 * 60, 21 * 60)
 
+    # Automatismo (v92, come app.js aCasaBabbo): nel giorno in cui torna da babbo prima del pasto, o ci va dopo,
+    # risulta a tavola da solo: non serve chiederglielo.
+    def a_casa_babbo(p, giorno, a, b):
+        for e in impegni:
+            if not e.get("babbo") or p not in (e.get("who") or []) or not e.get("h"):
+                continue
+            fine_g, fine = e.get("fino") or e.get("d"), e.get("fine") or ""
+            if fine_g == giorno and re.fullmatch(r"\d\d:\d\d", fine) and 0 < minuti(fine) <= a and not (e.get("d") == giorno and minuti(e["h"]) >= b):
+                return True
+            if e.get("d") == giorno and minuti(e["h"]) >= b:
+                return True
+        return False
+
     # Cena: ognuno all'ora che ha scelto (di solito le 17). Chi risulta già fuori (turno o impegno a cena) non serve chiederlo.
     pomeriggio = [p for p in persone if ora.hour == ora_di(p, "oraCena", 17)]
     if pomeriggio:
         cena = (db.collection("cena").document(oggi).get().to_dict() or {})
         for p in pomeriggio:
-            if cena.get(p) not in ("si", "no") and not fuori_cena(p):
+            if cena.get(p) not in ("si", "no") and not fuori_cena(p) and not a_casa_babbo(p, oggi, 20 * 60, 21 * 60):
                 manda(p, "cena", "A cena stasera?", "Rispondi con un tocco nella scheda Oggi.", f"cena|{oggi}|{p}")
 
-    # Pranzo di domani (v91, 08/11/2026, Sasha): la sera, all'ora scelta (di solito le 20), a chi non ha ancora
+    # Pranzo di domani (v91, 08/11/2026): la sera, all'ora scelta (di solito le 20), a chi non ha ancora
     # risposto. Chi domani è al lavoro o impegnato tra le 13 e le 14 (anche da babbo) non serve chiederlo.
     sera = [p for p in persone if ora.hour == ora_di(p, "oraPranzo", 20)]
     if sera:
         pranzo = (db.collection("pranzo").document(domani).get().to_dict() or {})
         for p in sera:
-            if pranzo.get(p) not in ("si", "no") and not fuori_pasto(p, domani, 13 * 60, 14 * 60):
+            if pranzo.get(p) not in ("si", "no") and not fuori_pasto(p, domani, 13 * 60, 14 * 60) and not a_casa_babbo(p, domani, 13 * 60, 14 * 60):
                 manda(p, "pranzo", "A pranzo domani?", "Rispondi con un tocco nella scheda Oggi.", f"pranzo|{domani}|{p}")
+
+    def num(v):
+        # Un numero strano nel database (es. testo al posto della data) non deve fermare gli avvisi di tutti.
+        try:
+            return int(v or 0)
+        except (TypeError, ValueError):
+            return 0
 
     # Le note durano 24 ore (Sasha, 03/11/2026): dopo si cancellano. Sono poche, quindi si leggono tutte.
     scadute = int((ora - dt.timedelta(hours=24)).timestamp() * 1000)
     for d in db.collection("note").stream():
-        if int((d.to_dict() or {}).get("creato") or 0) <= scadute:
+        if num((d.to_dict() or {}).get("creato")) <= scadute:
             d.reference.delete()
 
     # Note nuove della Bacheca (02/11/2026, Sasha): a tutti tranne chi l'ha scritta, senza il testo.
@@ -266,17 +286,43 @@ def main():
             if p != n.get("by"):
                 manda(p, "note", f"{nome(n.get('by'))} ha scritto una nota", "Leggila nella Bacheca, tra le Note.", f"nota|{d.id}|{p}")
 
-    # Risposte alle note (v91): a chi ha scritto la nota, senza il testo. Spariscono con la nota (o dopo 24 ore).
+    # Risposte alle note (v91): spariscono con la nota (o dopo 24 ore). L'avviso, senza il testo, va a chi ha scritto
+    # la nota e (v92) a chi aveva già risposto, così la conversazione continua; una sola notifica per nota a ogni giro.
     vive = {d.id: (d.to_dict() or {}) for d in db.collection("note").stream()}
+    risposte = []
     for d in db.collection("risposte").stream():
         r = d.to_dict() or {}
-        creata = int(r.get("creato") or 0)
+        creata = num(r.get("creato"))
         if r.get("nota") not in vive or creata <= scadute:
             d.reference.delete()
             continue
-        autore = vive[r["nota"]].get("by")
-        if creata > recente and autore in persone and r.get("by") in persone and autore != r.get("by"):
-            manda(autore, "note", f"{nome(r.get('by'))} ha risposto alla tua nota", "Leggila nella Bacheca, tra le Note.", f"risp|{d.id}|{autore}")
+        risposte.append((d.id, r, creata))
+    da_dire = {}  # (persona, nota) -> [(id della risposta, chi ha risposto)]
+    for rid, r, creata in sorted(risposte, key=lambda x: x[2]):
+        chi_r, nota = r.get("by"), r["nota"]
+        if creata <= recente or chi_r not in persone:
+            continue
+        prima = {x[1].get("by") for x in risposte if x[1].get("nota") == nota and x[2] < creata}
+        for p in ({vive[nota].get("by")} | prima) - {chi_r}:
+            if p in persone and f"risp|{rid}|{p}" not in inviati:
+                da_dire.setdefault((p, nota), []).append((rid, chi_r))
+    for (p, nota), lista in da_dire.items():
+        chi_ids = list(dict.fromkeys(c for _, c in lista))
+        chi = [nome(c) for c in chi_ids]
+        autore = vive[nota].get("by")
+        di = "alla tua nota" if autore == p else "alla sua nota" if chi_ids == [autore] else f"alla nota di {nome(autore)}"
+        nomi_r = chi[0] if len(chi) == 1 else ", ".join(chi[:-1]) + " e " + chi[-1]
+        titolo = f"{nomi_r} {'ha' if len(chi) == 1 else 'hanno'} risposto {di}"
+        manda(p, "note", titolo, "Leggi nella Bacheca, tra le Note.", f"risp|{lista[0][0]}|{p}")
+        for rid, _ in lista[1:]:
+            inviati[f"risp|{rid}|{p}"] = oggi  # le altre della stessa notifica
+
+    # Spesa (v92, automatismo): quello già nel carrello da più di 12 ore si toglie da solo.
+    dodici = int((ora - dt.timedelta(hours=12)).timestamp() * 1000)
+    for d in db.collection("spesa").where("done", "==", True).stream():
+        x = d.to_dict() or {}
+        if num(x.get("preso") or x.get("creato")) <= dodici:
+            d.reference.delete()
 
     # Due impegni della stessa persona alla stessa ora (oggi, domani, dopodomani: "inviati" ricorda per 2 giorni).
     for k in range(3):
@@ -293,6 +339,21 @@ def main():
                         manda(p, "conflitti", f"Due impegni alla stessa ora {quando}", f"{x['h']} {tx} · {y['h']} {ty}",
                               f"conf|{min(x['id'], y['id'])}|{max(x['id'], y['id'])}|{giorno}|{p}")
 
+    # Automatismo (v92): "Cosa si mangia stasera?" (proposte di tipo cena fatte oggi) alle 19:30 si decide da sola,
+    # se c'è una più votata chiara (almeno 2 voti, nessun pareggio). Chi l'ha proposta la può riaprire dall'app.
+    if (ora.hour, ora.minute) >= (19, 30):
+        mezzanotte = int(ora.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+        for d in db.collection("proposte").stream():
+            pr = d.to_dict() or {}
+            if pr.get("chiusa") or pr.get("tipo") != "cena" or num(pr.get("creato")) < mezzanotte:
+                continue
+            opz = {k: v for k, v in (pr.get("opzioni") or {}).items() if isinstance(v, dict) and v.get("x")}
+            voti = pr.get("voti") or {}
+            conta = sorted(((sum(1 for p in persone if k in (voti.get(p) or [])), k) for k in opz), reverse=True)
+            if conta and conta[0][0] >= 2 and (len(conta) == 1 or conta[0][0] > conta[1][0]):
+                quando = int(ora.timestamp() * 1000)
+                d.reference.update({"chiusa": True, "scelta": opz[conta[0][1]]["x"], "decisa": quando, "auto": True})
+
     # Proposte: nuove, "hanno votato tutti", decise.
     for d in db.collection("proposte").stream():
         pr = d.to_dict() or {}
@@ -302,8 +363,9 @@ def main():
             decisa = int(pr.get("decisa") or 0)
             if decisa > recente:
                 for p in persone:
-                    if p != chi:
-                        manda(p, "proposte", f"Deciso: {pr.get('scelta', '')}", f"{q} · ha deciso {nome(chi)}", f"deciso|{d.id}|{decisa}|{p}")
+                    if p != chi or pr.get("auto"):  # decisa da sola: lo sa anche chi l'ha proposta
+                        perche = "la più votata, deciso da solo alle 19:30" if pr.get("auto") else f"ha deciso {nome(chi)}"
+                        manda(p, "proposte", f"Deciso: {pr.get('scelta', '')}", f"{q} · {perche}", f"deciso|{d.id}|{decisa}|{p}")
             continue
         if int(pr.get("creato") or 0) > recente:
             idee = " · ".join(v["x"] for v in sorted(opz.values(), key=lambda v: v.get("creato", 0))[:4])

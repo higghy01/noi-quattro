@@ -865,11 +865,12 @@ body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
 
 /* Bacheca, v91 (08/11/2026): reazioni e risposte alle note. Una reazione a testa; le risposte nel foglio della nota. */
 .frx{display:flex;flex-wrap:wrap;gap:5px;margin:-2px 0 -4px}
-.rxc{display:inline-flex;align-items:center;gap:3px;min-height:32px;padding:0 9px;border-radius:999px;font-size:15px;line-height:1;
+.rxc{display:inline-flex;align-items:center;gap:3px;min-height:36px;padding:0 9px;border-radius:999px;font-size:15px;line-height:1;
   background:color-mix(in srgb,var(--pc,var(--acc)) 10%,var(--panel));border:1px solid color-mix(in srgb,var(--pc,var(--acc)) 22%,transparent);color:var(--fg);
   transition:background-color .22s var(--ease),border-color .22s var(--ease),transform .12s var(--ease)}
 .rxc small{font:600 12px var(--f-body);color:var(--muted)}
-.rxc.on{background:color-mix(in srgb,var(--me) 16%,var(--panel));border-color:var(--me);animation:fm-bump .38s var(--pop)}
+.rxc.on{background:color-mix(in srgb,var(--me) 16%,var(--panel));border-color:var(--me)}
+.rxc.bump{animation:fm-bump .38s var(--pop)} /* v92: il salto solo quando la si tocca, non a ogni aggiornamento */
 .rxc.on small{color:var(--me)}
 .rxc.rxm small{color:var(--muted)}
 .nconv{padding:14px;border-radius:14px;background:color-mix(in srgb,var(--pc) 12%,var(--panel));border:1px solid color-mix(in srgb,var(--pc) 26%,transparent)}
@@ -884,7 +885,8 @@ body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
 .rl small{grid-column:1;color:var(--muted);font-size:12px}
 .rl .gx{grid-row:1/3;grid-column:2;margin:-6px 0 0}
 .rlv{padding:8px 0}
-@media (prefers-reduced-motion:reduce){.rxc.on{animation:none}}
+@media (prefers-reduced-motion:reduce){.rxc.bump{animation:none}}
+.rl .gx.sicuro{opacity:1;color:var(--bad)}
 
 /* v91 (08/11/2026): barra in vetro con "Indietro" nelle pagine intere (Impostazioni, persona, Personale, ricordo).
    Resta in alto anche scorrendo; diventa vetro appena il testo ci passa sotto (anche sotto l'orario e l'isola) e,
@@ -900,5 +902,8 @@ body:has(> #login:not([hidden])){padding-bottom:env(safe-area-inset-bottom,0px)}
   font:600 16px var(--f-body);letter-spacing:-.01em;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   opacity:0;transform:translate(-50%,6px);pointer-events:none;transition:opacity .2s var(--ease),transform .3s var(--ease)}
 .screen.tit .imp-top .itit{opacity:1;transform:translate(-50%,0)}
+/* v92: anche nel ricordo (lì la vecchia regola teneva la barra 12 px più corta) e titolo che non tocca i tasti ai lati. */
+#trip.screen .imp-top{margin-right:calc(-1 * max(16px,env(safe-area-inset-right,0px)))}
+.screen .imp-top .itit{max-width:calc(100% - 230px)}
 .screen .imp-top .itit{display:block;line-height:50px}
 @media (prefers-reduced-motion:reduce){.screen .imp-top,.screen .imp-top .itit{transition:none}}

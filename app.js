@@ -235,12 +235,28 @@
       .find(x => { const [a, b] = intervallo(x, d); return a < F[1] && b > F[0]; });
     return e ? { perche: piuGiorni(e) && d !== e.d ? e.t : `alle ${e.h} ${e.t}` } : null; // di più giorni: "alle 18" era l'ora di ieri
   }
-  // Il sì/no per la cena: quello toccato a mano, altrimenti "no" da solo se è impegnato all'ora di cena.
+  /* Automatismo (v92, 08/11/2026): nel giorno in cui va o torna da babbo, chi torna prima del pasto o parte
+     dopo risulta a tavola da solo ("torna da babbo alle 18:00"), se non è impegnato. Si cambia toccando il proprio
+     cerchio; quello toccato a mano vince. Lo stesso fa il programma degli avvisi, che allora non chiede. */
+  function aCasaBabbo(id, d, k) {
+    const F = PASTI[k || 'cena'].fascia;
+    for (const e of S.impegni) {
+      if (!e.babbo || !(e.who || []).includes(id)) continue;
+      // (ritorno "00:00" = a mezzanotte, a fine giornata: non conta come "torna prima")
+      if (bbFineG(e) === d && e.fine && minuti(e.fine) > 0 && minuti(e.fine) <= F[0] && !(e.d === d && minuti(e.h) >= F[1])) return { perche: `torna da babbo alle ${e.fine}`, casa: true };
+      if (e.d === d && minuti(e.h) >= F[1]) return { perche: `va da babbo alle ${e.h}, dopo ${k === 'pranzo' ? 'pranzo' : 'cena'}`, casa: true };
+    }
+    return null;
+  }
+  // Il sì/no per la cena: quello toccato a mano, altrimenti "no" da solo se è impegnato all'ora di cena,
+  // o "sì" da solo se torna da babbo prima (o ci va dopo).
   function pastoDi(k, id) {
-    const x = (S[k] || {})[id], f = fuoriCena(id, GP[k] || giornoPasto(k), k);
+    const g = GP[k] || giornoPasto(k), x = (S[k] || {})[id], f = fuoriCena(id, g, k);
     if (f && f.babbo) return { v: 'no', auto: f }; // da babbo vince anche su un "sì" toccato prima
     if (x === 'si' || x === 'no') return { v: x };
-    return f ? { v: 'no', auto: f } : { v: '?' };
+    if (f) return { v: 'no', auto: f };
+    const c = aCasaBabbo(id, g, k);
+    return c ? { v: 'si', auto: c } : { v: '?' };
   }
   const cenaDi = (id) => pastoDi('cena', id);
   const titoloPasto = (k, d) => k === 'pranzo' ? (d === T ? 'A pranzo oggi?' : 'A pranzo domani?') : (d === T ? 'A cena stasera?' : 'A cena domani sera?');
@@ -354,8 +370,12 @@
         if (html === this._h) return;
         const primo = this._h == null; this._h = html;
         if (primo || !window.morphdom) return desc.set.call(this, html);
-        const prima = flipPrima(this);
+        const v = chiaveVista(), via = [];
+        const prima = this._vista === v && performance.now() - ultimoGo > 700 ? flipPrima(this) : null; this._vista = v;
         window.morphdom(this, '<div>' + html + '</div>', {
+          // I pezzi con data-flip si riconoscono dal loro nome (non dalla posizione): così si sposta e si toglie quello giusto.
+          getNodeKey(n) { return n.id || (n.dataset && n.dataset.flip) || undefined; },
+          onBeforeNodeDiscarded(n) { if (prima && n.nodeType === 1 && n.dataset && n.dataset.flip) via.push(n); return true; },
           childrenOnly: true,
           onBeforeElUpdated(da, a) {
             if (da.isEqualNode(a)) return false;
@@ -364,7 +384,7 @@
             return true;
           }
         });
-        if (prima) flipDopo(this, prima);
+        if (prima) flipDopo(this, prima, via);
       }
     });
   }
@@ -373,14 +393,17 @@
      solo la differenza, con transform: niente ricalcoli della pagina). Solo gli elementi con data-flip, solo sulla
      scheda che si vede, mai con "riduci movimento". */
   const MENO_MOTO = matchMedia('(prefers-reduced-motion: reduce)');
+  // Cambiando scheda o sezione (es. Lista → Ricette, Note → Proposte) non si anima niente: è un'altra pagina.
+  let ultimoGo = -1e9;
+  const chiaveVista = () => `${page}|${seg}|${segSpesa}`;
   function flipPrima(box) {
     if (MENO_MOTO.matches || !box.offsetParent) return null;
     const el = box.querySelectorAll('[data-flip]'); if (!el.length || el.length > 120) return null;
     const m = new Map();
-    el.forEach(e => { const r = e.getBoundingClientRect(); if (r.height) m.set(e.dataset.flip, { r, copia: e.cloneNode(true) }); });
+    el.forEach(e => { const r = e.getBoundingClientRect(); if (r.height) m.set(e.dataset.flip, { r }); });
     return m;
   }
-  function flipDopo(box, prima) {
+  function flipDopo(box, prima, via) {
     const ora = new Set(), vista = innerHeight;
     box.querySelectorAll('[data-flip]').forEach(e => {
       const k = e.dataset.flip; ora.add(k);
@@ -391,10 +414,12 @@
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
       e.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: 'none' }], { duration: 340, easing: 'cubic-bezier(.2,.8,.2,1)' });
     });
-    // Chi se ne va: una copia al suo vecchio posto che svanisce, mentre gli altri occupano lo spazio.
-    for (const [k, p] of prima) {
-      if (ora.has(k) || p.r.bottom < 0 || p.r.top > vista) continue;
-      const g = p.copia; g.removeAttribute('data-flip'); g.setAttribute('aria-hidden', 'true'); g.classList.remove('pop', 'rise');
+    // Chi se ne va: il pezzo tolto resta un attimo al suo vecchio posto e svanisce, mentre gli altri occupano lo spazio.
+    // (Solo i pezzi tolti interi: se se ne va una scheda, le sue righe vanno con lei, non doppie.)
+    for (const g of via) {
+      const k = g.dataset.flip, p = prima.get(k);
+      if (!p || ora.has(k) || p.r.bottom < 0 || p.r.top > vista) continue;
+      g.removeAttribute('data-flip'); g.setAttribute('aria-hidden', 'true'); g.classList.remove('pop', 'rise');
       Object.assign(g.style, { position: 'fixed', left: p.r.left + 'px', top: p.r.top + 'px', width: p.r.width + 'px', height: p.r.height + 'px', margin: '0', pointerEvents: 'none', zIndex: '6', boxSizing: 'border-box' });
       document.body.appendChild(g);
       const a = g.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.94)' }], { duration: 220, easing: 'ease-in' });
@@ -436,7 +461,7 @@
       return [d + (k === 'pranzo' ? 'a' : 'b'), `<div class="card${ri(1)}"><h2><span class="ttl"><i class="ic">${ICO[k]}</i>${titoloPasto(k, d)}</span> <small>${yes === ids.length && ids.length ? 'tutti a tavola 🍝' : `${yes} su ${ids.length}`}</small></h2>
        <div class="cena${k === 'pranzo' ? ' pasto-pr' : ''}" style="--n:${ids.length}">${ids.map(i => { const x = v[i].v; return `<button class="cv tap${v[i].auto ? ' auto' : ''}" data-cena="${i}" data-k="${k}" data-v="${x}" style="--pc:${col(i)}" aria-label="${esc(P(i).nome)}: ${x}${v[i].auto ? ', ' + esc(v[i].auto.perche) : ''}"><span class="av" data-b="${x === 'si' ? '✓' : x === 'no' ? '✕' : '?'}">${avt(i)}</span><span class="nm">${nm(i)}</span></button>`; }).join('')}</div>
        ${perche.length || rientri.length ? `<div class="perche">${perche.join('')}${rientri.join('')}</div>` : ''}
-       <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.${perche.length ? ` Chi è impegnato all'ora di ${k} risulta fuori da solo.` : ''}</div></div>`];
+       <div class="empty">Tocca il tuo cerchio: sì, no, non so. Quello degli altri apre la loro pagina.${perche.length ? ` Chi è impegnato all'ora di ${k} risulta fuori da solo${ids.some(i => v[i].auto && v[i].auto.casa) ? ', chi torna da babbo prima risulta a tavola' : ''}.` : ''}</div></div>`];
     };
     const pasti = [pasto('pranzo'), pasto('cena')].sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]).join('');
     $('#p-oggi').innerHTML = `<div class="stack">
@@ -475,6 +500,7 @@
     // Il selettore resta fermo (così la pillola scorre), cambia solo il contenuto sotto.
     if (!$('#segNote')) el.innerHTML = `<div class="seg" id="segNote" style="--n:4"><i class="spill"></i><button class="tap" data-seg="proposte">Proposte</button><button class="tap" data-seg="note">Note</button><button class="tap" data-seg="regali">Regali</button><button class="tap" data-seg="film">Film</button></div><div id="noteBody"></div>`;
     segSet($('#segNote'), seg === 'film' ? 3 : seg === 'regali' ? 2 : seg === 'note' ? 1 : 0);
+    fluido('#noteBody'); // (v92) #noteBody nasce qui, dopo l'avvio: prima la fluidità non si attaccava mai
     $('#noteBody').innerHTML = seg === 'film' ? rFilm() : seg === 'regali' ? rRegali() : seg === 'note' ? rFoglietti() : rProposte();
   }
   /* ---------- Note (02/11/2026): foglietti per tutti e 4, tipo "domani sono da babbo".
@@ -486,31 +512,39 @@
   const RX = ['👍', '❤️', '😂', '😮', '🙏'];
   const reazioniDi = (n) => { const r = n.reazioni && typeof n.reazioni === 'object' ? n.reazioni : {}; return IDS().filter(p => RX.includes(r[p])).map(p => [p, r[p]]); };
   const risposteDi = (id) => S.risposte.filter(r => r.nota === id && typeof r.x === 'string').sort((a, b) => (a.creato || 0) - (b.creato || 0));
-  let convAperta = null;
+  let convAperta = null, rispSicura = null;
   function rxRiga(n, grande) {
     const rr = reazioniDi(n), mia = (rr.find(([p]) => p === S.me) || [])[1];
     const conti = RX.map(e => [e, rr.filter(([, x]) => x === e).map(([p]) => p)]).filter(([e, ch]) => grande || ch.length);
-    return conti.map(([e, ch]) => `<button type="button" class="rxc tap${mia === e ? ' on' : ''}" data-rx="${n.id}" data-e="${e}" aria-pressed="${mia === e}"
+    return conti.map(([e, ch]) => `<button type="button" class="rxc tap${mia === e ? ' on' : ''}" data-rx="${esc(n.id)}" data-e="${e}" aria-pressed="${mia === e}"
       aria-label="${e}${ch.length ? ': ' + ch.map(p => esc(P(p).nome)).join(', ') : ''}">${e}${ch.length ? `<small>${ch.length}</small>` : ''}</button>`).join('');
   }
   function rlLista(id) {
     const l = risposteDi(id);
     if (!l.length) return '<div class="empty rlv">Ancora nessuna risposta.</div>';
     return l.map(r => `<div class="rl" style="--pc:${col(r.by)}"><p><b>${esc(P(r.by).nome)}:</b> ${esc(r.x)}</p>
-      <small>${quantoFa(r.creato || Date.now())}</small>${r.by === S.me ? `<button type="button" class="gx tap" data-delrisp="${r.id}" aria-label="Togli la risposta">✕</button>` : ''}</div>`).join('');
+      <small>${quantoFa(r.creato || Date.now())}</small>${r.by === S.me ? `<button type="button" class="gx tap${rispSicura === r.id ? ' sicuro' : ''}" data-delrisp="${esc(r.id)}" aria-label="${rispSicura === r.id ? 'Tocca ancora per togliere la risposta' : 'Togli la risposta'}">✕</button>` : ''}</div>`).join('');
   }
   // Il foglio della nota: testo, reazioni, risposte e il campo per rispondere. Si aggiorna da solo (senza toccare quello che si scrive).
   function sheetConv(n, aggiorna) {
-    if (!n || (+n.creato || 0) <= Date.now() - NOTA_VITA) { if (aggiorna && convAperta) { convAperta = null; closeSheet(); toast('La nota è scaduta'); } return; }
+    const viva = n && (+n.creato || 0) > Date.now() - NOTA_VITA;
     if (aggiorna) {
-      const rx = $('#convRx'), rl = $('#convRl'); if (!rx || !rl) { convAperta = null; return; }
-      rx.innerHTML = rxRiga(n, true); rl.innerHTML = rlLista(n.id); return;
+      const rx = $('#convRx'), rl = $('#convRl'), tx = $('#convTx'); if (!rx || !rl || !tx) { convAperta = null; return; }
+      if (!viva) {
+        // Tolta o scaduta mentre il foglio è aperto: si dice, e quello che si stava scrivendo resta lì da copiare.
+        convAperta = null; rx.innerHTML = ''; rl.innerHTML = `<div class="empty rlv">${n ? 'La nota è scaduta' : 'Chi l\'ha scritta l\'ha tolta'}: non si può più rispondere.</div>`;
+        const b = $('#fRisp button.btn'); if (b) { b.disabled = true; b.textContent = 'Nota non più attaccata'; } return;
+      }
+      if (tx.textContent !== n.x) tx.textContent = n.x;
+      const nuovoRx = rxRiga(n, true); if (rx._h !== nuovoRx) { rx._h = nuovoRx; rx.innerHTML = nuovoRx; }
+      const nuovoRl = rlLista(n.id); if (rl._h !== nuovoRl) { rl._h = nuovoRl; rl.innerHTML = nuovoRl; } return;
     }
+    if (!viva) return;
     openSheet(`<h3>Nota di ${n.by === S.me ? 'te' : esc(P(n.by).nome)}</h3>
-     <div class="nconv" style="--pc:${col(n.by)}"><p>${esc(n.x)}</p><small>${quantoFa(n.creato || Date.now())} · ${scade(n.creato)}</small></div>
+     <div class="nconv" style="--pc:${col(n.by)}"><p id="convTx">${esc(n.x)}</p><small>${quantoFa(n.creato || Date.now())} · ${scade(n.creato)}</small></div>
      <div class="rxr" id="convRx" role="group" aria-label="Reazioni">${rxRiga(n, true)}</div>
      <div class="rls" id="convRl">${rlLista(n.id)}</div>
-     <form class="stack" id="fRisp" data-nota="${n.id}"><label>La tua risposta<textarea id="rispX" rows="2" maxlength="200" required placeholder="Es. Ok, ci penso io"></textarea></label>
+     <form class="stack" id="fRisp" data-nota="${esc(n.id)}"><label>La tua risposta<textarea id="rispX" rows="2" maxlength="200" required placeholder="Es. Ok, ci penso io"></textarea></label>
      <p class="hint">La risposta la vedono tutti e 4${n.by === S.me ? '' : `; a ${esc(P(n.by).nome)} arriva un avviso, senza il testo`}. Sparisce con la nota.</p>
      <button class="btn tap">Rispondi</button></form>`);
     convAperta = n.id; // dopo openSheet, che la azzera
@@ -594,10 +628,10 @@
     if (!lista.length) return `<div class="empty big${ri(0)}"><b>📝</b><span>Nessuna nota. Tocca + per scrivere qualcosa per tutti, tipo «domani sono da babbo». Le note durano 24 ore.</span></div>`;
     return `<div class="fogli">${lista.map((n, i) => {
       const mio = n.by === S.me, anim = n.id === fresh ? ' pop' : nuova ? ' rise' : '';
-      return `<div class="foglio${anim}" data-flip="n${n.id}" style="--pc:${col(n.by)};--i:${Math.min(i, 6)}">
+      return `<div class="foglio${anim}" data-flip="n${esc(n.id)}" style="--pc:${col(n.by)};--i:${Math.min(i, 6)}">
         <p><b>${esc(P(n.by).nome)}:</b> ${esc(n.x)}</p>
-        <div class="frx">${rxRiga(n)}<button type="button" class="rxc rxm tap" data-conv="${n.id}" aria-label="${(() => { const k = risposteDi(n.id).length; return k ? `${k} ${k === 1 ? 'risposta' : 'risposte'}: apri` : 'Rispondi o reagisci'; })()}">💬${risposteDi(n.id).length ? `<small>${risposteDi(n.id).length}</small>` : '<small>+</small>'}</button></div>
-        <div class="fby"><small><span class="fqt" data-ms="${+n.creato || Date.now()}">${quantoFa(n.creato || Date.now())}</span>${n.modificato ? ' · modificata' : ''}<br><span class="fsc">${scade(n.creato)}</span></small>${mio ? `<span class="fac"><button class="gx tap" data-modnota="${n.id}" aria-label="Modifica la nota">✎</button><button class="gx tap" data-delnote="${n.id}" aria-label="Togli la nota">✕</button></span>` : ''}</div></div>`;
+        <div class="frx">${rxRiga(n)}<button type="button" class="rxc rxm tap" data-conv="${esc(n.id)}" aria-label="${(() => { const k = risposteDi(n.id).length; return k ? `${k} ${k === 1 ? 'risposta' : 'risposte'}: apri` : 'Rispondi o reagisci'; })()}">💬${risposteDi(n.id).length ? `<small>${risposteDi(n.id).length}</small>` : '<small>+</small>'}</button></div>
+        <div class="fby"><small><span class="fqt" data-ms="${+n.creato || Date.now()}">${quantoFa(n.creato || Date.now())}</span>${n.modificato ? ' · modificata' : ''}<br><span class="fsc">${scade(n.creato)}</span></small>${mio ? `<span class="fac"><button class="gx tap" data-modnota="${esc(n.id)}" aria-label="Modifica la nota">✎</button><button class="gx tap" data-delnote="${esc(n.id)}" aria-label="Togli la nota">✕</button></span>` : ''}</div></div>`;
     }).join('')}</div>`;
   }
   // Quanto tempo fa (02/11/2026): "adesso", "5 min fa", "3 ore fa", "ieri", "4 giorni fa", "2 settimane fa", "3 mesi fa".
@@ -670,7 +704,8 @@
     if (mio) az += `<button class="gx tap" data-delprop="${p.id}" aria-label="Togli la proposta">✕</button>`;
     return `<div class="card prop${p.chiusa ? ' chiusa' : ''}${anim}" style="--pc:${col(p.by)};--i:${Math.min(k, 6)}">
       <div class="pt"><span class="pra">${avt(p.by)}</span><div class="pq"><b>${t.e} ${esc(p.q)}</b><small>${mio ? 'La tua proposta' : esc(P(p.by).nome)} · ${fa(p.creato || Date.now())}</small></div></div>
-      ${p.chiusa ? `<div class="deciso">✅ Deciso: <b>${esc(p.scelta)}</b></div>` : ''}
+      ${p.chiusa ? `<div class="deciso">✅ Deciso: <b>${esc(p.scelta)}</b>${p.auto ? '<small> · la più votata, deciso da solo alle 19:30</small>' : ''}</div>` : ''}
+      ${!p.chiusa && p.tipo === 'cena' && (+p.creato || 0) >= TODAY.getTime() ? '<div class="empty pauto">Alle 19:30 si decide da sola la più votata, se ce n\'è una.</div>' : ''}
       ${ops.length ? `<div class="ops">${ops.map(riga).join('')}</div>` : `<div class="empty">Ancora nessuna idea: scrivi la prima qui sotto.</div>`}
       ${p.chiusa ? '' : `<form class="addop" data-prop="${p.id}"><input maxlength="60" placeholder="+ Aggiungi un'idea" enterkeyhint="done" aria-label="Nuova idea"><button class="tap" aria-label="Aggiungi l'idea">＋</button></form>`}
       <div class="pf"><small>${votanti} su ${ids.length} ${votanti === 1 ? 'ha votato' : 'hanno votato'}${p.chiusa || !ops.length ? '' : ' · puoi sceglierne più di una'}</small><span class="pfa">${az}</span></div></div>`;
@@ -1381,12 +1416,12 @@
     const todo = S.spesa.filter(x => !x.done).sort(ord), done = S.spesa.filter(x => x.done).sort(ord);
     const chi = (id) => id === S.me ? 'te' : esc(P(id).nome);
     const sotto = x => x.done && x.presoDa ? `preso da ${chi(x.presoDa)}${x.preso ? ' · ' + fa(x.preso) : ''}` : `aggiunto da ${chi(x.by)}${x.creato ? ' · ' + fa(x.creato) : ''}`;
-    const row = x => `<button class="item tap${x.done ? ' done' : ''}${x.id === fresh ? ' pop' : ''}" data-item="${x.id}" data-flip="s${x.id}" style="--pc:${col(x.done && x.presoDa ? x.presoDa : x.by)}"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><span class="nm">${esc(x.x)}</span><small>${sotto(x)}</small></span><span class="who">${S.persone[x.done && x.presoDa ? x.presoDa : x.by] ? avt(x.done && x.presoDa ? x.presoDa : x.by) : ''}</span></button>`;
+    const row = x => `<button class="item tap${x.done ? ' done' : ''}${x.id === fresh ? ' pop' : ''}" data-item="${esc(x.id)}" data-flip="s${esc(x.id)}" style="--pc:${col(x.done && x.presoDa ? x.presoDa : x.by)}"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><span class="nm">${esc(x.x)}</span><small>${sotto(x)}</small></span><span class="who">${S.persone[x.done && x.presoDa ? x.presoDa : x.by] ? avt(x.done && x.presoDa ? x.presoDa : x.by) : ''}</span></button>`;
     const keep = $('#itemTx') ? $('#itemTx').value : '';
     $('#p-spesa').innerHTML = `<div class="stack"><div class="seg" style="--n:2;--k:0"><i class="spill"></i><button class="tap on" data-segspesa="lista">Lista</button><button class="tap" data-segspesa="ricette">Ricette</button></div>
      <form class="add${ri(0)}" id="addItem"><input id="itemTx" placeholder="Cosa serve?" autocomplete="off" aria-label="Cosa serve" enterkeyhint="done"><button class="btn tap">Aggiungi</button></form>
      <div class="card${ri(1)}" data-flip="sp-da"><h2><span class="ttl"><i class="ic">${ICO.spesa}</i>Da prendere</span> <small>${todo.length}</small></h2><div>${todo.map(row).join('') || '<div class="empty">Niente da prendere.</div>'}</div></div>
-     ${done.length ? `<div class="card${ri(2)}" data-flip="sp-fatti"><h2><span class="ttl"><i class="ic">${ICO.preso}</i>Già nel carrello</span> <button class="link tap" id="clear">Togli</button></h2><div>${done.map(row).join('')}</div></div>` : ''}
+     ${done.length ? `<div class="card${ri(2)}" data-flip="sp-fatti"><h2><span class="ttl"><i class="ic">${ICO.preso}</i>Già nel carrello</span> <button class="link tap" id="clear">Togli</button></h2><div>${done.map(row).join('')}</div><div class="empty">Si tolgono anche da soli, 12 ore dopo.</div></div>` : ''}
     </div>`;
     $('#itemTx').value = keep;
   }
@@ -1426,6 +1461,7 @@
     if (!b.hidden) b.innerHTML = `<span>Vuoi sapere quando c'è qualcosa di nuovo?</span><button class="tap" id="bnOn">Attiva notifiche</button>`;
   }
   function go(p, daIndietro) {
+    ultimoGo = performance.now();
     // Toccando la scheda già aperta si torna in cima, come nelle app.
     if (p === page) return scrollTo({ top: 0, behavior: 'smooth' });
     // Tasto/gesto "indietro" (Samsung): dalle altre schede torna a Oggi invece di chiudere l'app.
@@ -2673,7 +2709,8 @@
       if (d.cena !== S.me) return openPersona(d.cena);
       const k = d.k === 'pranzo' ? 'pranzo' : 'cena', g = GP[k] || giornoPasto(k), doc = S[k] = S[k] || {};
       const mioBb = pastoDi(k, S.me).auto; if (mioBb && mioBb.babbo) return toast('Risulti da babbo: per cambiare tocca la tua riga nella scheda Da babbo');
-      const o = ['si', 'no', '?']; const v = o[(o.indexOf(doc[S.me] || '?') + 1) % 3]; // dal "fuori" automatico si passa a sì, poi no, poi di nuovo automatico
+      const o = ['si', 'no', '?'], auto = !doc[S.me] && mioBb && mioBb.casa ? 'si' : '?'; // dal "sì" automatico (torna da babbo) si passa a no
+      const v = o[(o.indexOf(doc[S.me] || auto) + 1) % 3]; // dal "fuori" automatico si passa a sì, poi no, poi di nuovo automatico
       tic(); doc[S.me] = v; rOggi(); const n = document.querySelector(`[data-cena="${S.me}"][data-k="${k}"]`); n && n.classList.add('bump');
       if (v === 'si' && IDS().every(i => pastoDi(k, i).v === 'si')) { festa(n); toast(`${titoloPasto(k, g).replace(/^A (pranzo|cena) /, '').replace('?', '').replace(/^./, c => c.toUpperCase())} tutti a tavola! 🍝`); }
       return DATI.imposta(k, g, { [S.me]: v }).catch(sbaglio);
@@ -2829,10 +2866,10 @@
     }
     if (d.decidi) {
       const p = S.proposte.find(x => x.id === d.decidi), v = p && inTesta(p); if (!v) return;
-      festa(t); try { await DATI.aggiorna('proposte', p.id, { chiusa: true, scelta: v.x, decisa: Date.now() }); } catch (er) { return sbaglio(er); }
+      festa(t); try { await DATI.aggiorna('proposte', p.id, { chiusa: true, scelta: v.x, decisa: Date.now(), auto: false }); } catch (er) { return sbaglio(er); }
       return toast(`Deciso: ${v.x}. Lo diciamo a tutti 🔔`);
     }
-    if (d.riapri) return DATI.aggiorna('proposte', d.riapri, { chiusa: false, scelta: '', decisa: 0 }).catch(sbaglio);
+    if (d.riapri) return DATI.aggiorna('proposte', d.riapri, { chiusa: false, scelta: '', decisa: 0, auto: false }).catch(sbaglio);
     if (d.delprop) {
       if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.style.opacity = 1; t.style.color = 'var(--bad)'; return toast('Tocca ancora ✕ per togliere la proposta'); }
       return DATI.elimina('proposte', d.delprop).catch(sbaglio);
@@ -2843,11 +2880,16 @@
       const n = S.note.find(x => x.id === d.rx); if (!n || !RX.includes(d.e)) return;
       const mia = ((n.reazioni || {})[S.me]) === d.e ? '' : d.e; // toccare la propria la toglie
       n.reazioni = Object.assign({}, n.reazioni, { [S.me]: mia }); render(); if (convAperta === n.id) sheetConv(n, true); // subito, poi arriva dal database
+      if (mia) document.querySelectorAll(`.rxc[data-rx="${CSS.escape(n.id)}"][data-e="${mia}"]`).forEach(b => { b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); });
       return DATI.aggiorna('note', n.id, { ['reazioni.' + S.me]: mia }).catch(sbaglio);
     }
     if (d.delrisp) {
-      if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.style.opacity = 1; t.style.color = 'var(--bad)'; return toast('Tocca ancora ✕ per togliere la risposta'); }
-      return DATI.elimina('risposte', d.delrisp).catch(sbaglio);
+      // La conferma sta in una variabile (non nel tasto): resiste se intanto arriva una risposta e il foglio si ridisegna.
+      if (rispSicura !== d.delrisp) {
+        rispSicura = d.delrisp; setTimeout(() => { if (rispSicura === d.delrisp) { rispSicura = null; if (convAperta) sheetConv(S.note.find(x => x.id === convAperta), true); } }, 4000);
+        if (convAperta) sheetConv(S.note.find(x => x.id === convAperta), true); return toast('Tocca ancora ✕ per togliere la risposta');
+      }
+      rispSicura = null; return DATI.elimina('risposte', d.delrisp).catch(sbaglio);
     }
     if (d.delnote) {
       if (!t.dataset.sicuro) { t.dataset.sicuro = '1'; t.style.opacity = 1; t.style.color = 'var(--bad)'; return toast('Tocca ancora ✕ per togliere la nota'); }
@@ -2982,7 +3024,7 @@
     } else if (f.id === 'fRisp') {
       const n = S.note.find(x => x.id === f.dataset.nota && (+x.creato || 0) > Date.now() - NOTA_VITA);
       const x = $('#rispX').value.trim().replace(/\n{3,}/g, '\n\n').slice(0, 200); if (!x) return toast('Scrivi la risposta');
-      if (!n) { closeSheet(); return toast('La nota è scaduta: la risposta non si può più attaccare'); }
+      if (!n) return toast('La nota non c\'è più: la risposta non si può attaccare (il testo resta lì, se vuoi copiarlo)');
       $('#rispX').value = '';
       try { await DATI.aggiungi('risposte', { nota: n.id, by: S.me, x, creato: Date.now() }); toast(n.by === S.me ? 'Risposta attaccata' : `Risposta attaccata: a ${P(n.by).nome} arriva un avviso 🔔`); } catch (er) { $('#rispX').value = x; sbaglio(er); }
     } else if (f.id === 'fNota') {

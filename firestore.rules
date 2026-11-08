@@ -10,6 +10,11 @@ service cloud.firestore {
       return request.auth != null && exists(/databases/$(db)/documents/membri/$(email()));
     }
     function io() { return get(/databases/$(db)/documents/membri/$(email())).data.persona; }
+    // Nomi dei documenti (v92, 08/11/2026): solo lettere, numeri e pochi segni, mai virgolette, spazi o < >.
+    // Così un nome fatto apposta non può diventare codice nella pagina degli altri (revisione della v91).
+    function idSicuro(id) { return id.matches('^[A-Za-z0-9_.:@+=-]{1,200}$'); }
+    // L'ora di creazione dei documenti che scadono da soli: non nel futuro (al massimo un'ora avanti) e non vecchissima.
+    function oraGiusta(ms) { return ms is int && ms > request.time.toMillis() - 86400000 && ms < request.time.toMillis() + 3600000; }
     // Chi è in scuola/<p>.copie vede la sezione di scuola di p così com'è: le sue note e i suoi voti, in sola lettura.
     function vedeCopia(p) { return io() in get(/databases/$(db)/documents/scuola/$(p)).data.get('copie', []); }
     // Chi è in scuola/<p>.prove vede le interrogazioni e le verifiche di p nel calendario comune (Sasha, 02/11/2026).
@@ -32,7 +37,7 @@ service cloud.firestore {
 
     match /impegni/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.creatoDa == io()
+      allow create: if membro() && idSicuro(id) && request.resource.data.creatoDa == io()
         && request.resource.data.fonte in ['app', 'import:' + io(), 'orario:' + io()];
       // Quelli dei calendari collegati li scrive solo il programma automatico.
       allow update: if membro() && ((resource.data.fonte in ['app', 'import:' + io(), 'orario:' + io()]
@@ -48,7 +53,8 @@ service cloud.firestore {
 
     match /note/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.by == io()
+      allow create: if membro() && idSicuro(id) && request.resource.data.by == io()
+        && request.resource.data.keys().hasOnly(['by', 'x', 'creato']) && oraGiusta(request.resource.data.creato)
         && request.resource.data.x is string && request.resource.data.x.size() <= 300;
       // Chi l'ha scritta può cambiare il testo (Sasha, 03/11/2026).
       allow update: if membro() && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin'])
@@ -66,11 +72,11 @@ service cloud.firestore {
     // non si cambiano, le toglie chi le ha scritte (e il programma degli avvisi quando la nota sparisce).
     match /risposte/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.keys().hasOnly(['nota', 'by', 'x', 'creato'])
+      allow create: if membro() && idSicuro(id) && request.resource.data.keys().hasOnly(['nota', 'by', 'x', 'creato'])
         && request.resource.data.by == io() && request.resource.data.nota is string
         && exists(/databases/$(db)/documents/note/$(request.resource.data.nota))
         && request.resource.data.x is string && request.resource.data.x.size() > 0 && request.resource.data.x.size() <= 200
-        && request.resource.data.creato is int;
+        && oraGiusta(request.resource.data.creato);
       allow update: if false;
       allow delete: if membro() && resource.data.by == io();
     }
@@ -79,7 +85,7 @@ service cloud.firestore {
     // (senza cambiare o togliere quelle che ci sono) e cambiano solo il proprio voto.
     match /proposte/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.by == io()
+      allow create: if membro() && idSicuro(id) && request.resource.data.by == io()
         && request.resource.data.opzioni is map && request.resource.data.voti is map;
       allow update: if membro() && (resource.data.by == io() && request.resource.data.by == io()
         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['opzioni', 'voti'])
@@ -99,7 +105,8 @@ service cloud.firestore {
     }
 
     match /spesa/{id} {
-      allow read, create, update, delete: if membro();
+      allow read, update, delete: if membro();
+      allow create: if membro() && idSicuro(id);
     }
 
     // Ricette di famiglia: una pagina aperta, tutti scrivono e correggono; chi l'ha scritta resta segnato.
@@ -107,7 +114,7 @@ service cloud.firestore {
       function ok() { return request.resource.data.t is string && request.resource.data.t.size() <= 60
         && (!('ingr' in request.resource.data) || (request.resource.data.ingr is list && request.resource.data.ingr.size() <= 60)); }
       allow read, delete: if membro();
-      allow create: if membro() && request.resource.data.by == io() && ok();
+      allow create: if membro() && idSicuro(id) && request.resource.data.by == io() && ok();
       allow update: if membro() && request.resource.data.by == resource.data.by && ok();
     }
 
@@ -126,7 +133,7 @@ service cloud.firestore {
       // Le legge chi le ha scritte e chi ha la copia della sua sezione di scuola (scuola/<persona>.copie, scelta di Sasha 02/11/2026).
       allow read: if membro() && (resource.data.per == io() || vedeCopia(resource.data.per)
         || (resource.data.tipo in ['interrogazione', 'verifica'] && vedeProve(resource.data.per)));
-      allow create: if membro() && ok();
+      allow create: if membro() && idSicuro(id) && ok();
       allow update: if membro() && resource.data.per == io() && ok();
       allow delete: if membro() && resource.data.per == io();
     }
@@ -143,7 +150,7 @@ service cloud.firestore {
         && request.resource.data.get('p', 100) is number && request.resource.data.get('p', 100) >= 0 && request.resource.data.get('p', 100) <= 100
         && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 200; }
       allow read: if membro() && (resource.data.per == io() || vedeCopia(resource.data.per));
-      allow create: if membro() && ok();
+      allow create: if membro() && idSicuro(id) && ok();
       allow update: if membro() && resource.data.per == io() && ok();
       allow delete: if membro() && resource.data.per == io();
     }
@@ -159,7 +166,7 @@ service cloud.firestore {
         && request.resource.data.get('x', '') is string && request.resource.data.get('x', '').size() <= 300; }
       // p1 le legge anche degli altri, per controllare che la sezione funzioni (02/11/2026), ma mai gli appuntamenti fissi.
       allow read: if membro() && (resource.data.per == io() || (io() == 'p1' && resource.data.k in ['prom', 'scad', 'lista', 'mostra', 'autore']));
-      allow create: if membro() && ok();
+      allow create: if membro() && idSicuro(id) && ok();
       allow update: if membro() && resource.data.per == io() && ok();
       allow delete: if membro() && resource.data.per == io();
     }
@@ -196,7 +203,7 @@ service cloud.firestore {
     // Film e serie aggiunti a mano: tutti li vedono, solo chi li ha aggiunti li toglie.
     match /filmextra/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.by == io()
+      allow create: if membro() && idSicuro(id) && request.resource.data.by == io()
         && request.resource.data.keys().hasOnly(['t', 'tipo', 'dove', 'by', 'creato'])
         && request.resource.data.t is string && request.resource.data.t.size() <= 90
         && request.resource.data.tipo in ['film', 'serie']
@@ -207,7 +214,7 @@ service cloud.firestore {
     // Liste dei regali: ognuno scrive solo la sua lista, tutti la leggono.
     match /regali/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.per == io();
+      allow create: if membro() && idSicuro(id) && request.resource.data.per == io();
       allow update: if membro() && resource.data.per == io() && request.resource.data.per == io();
       allow delete: if membro() && resource.data.per == io();
     }
@@ -232,7 +239,7 @@ service cloud.firestore {
     // Viaggi: tutti li vedono e li completano; li cancella solo chi li ha creati.
     match /viaggi/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.creatoDa == io();
+      allow create: if membro() && idSicuro(id) && request.resource.data.creatoDa == io();
       allow update: if membro() && request.resource.data.creatoDa == resource.data.creatoDa;
       allow delete: if membro() && resource.data.creatoDa == io();
     }
@@ -240,7 +247,7 @@ service cloud.firestore {
     // Foto dei viaggi: ognuno carica e toglie solo le sue; i cuori li mettono tutti.
     match /foto/{id} {
       allow read: if membro();
-      allow create: if membro() && request.resource.data.by == io();
+      allow create: if membro() && idSicuro(id) && request.resource.data.by == io();
       allow update: if membro() && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cuori'])
         // chi ha caricato un video può rifarne l'anteprima
         || (resource.data.by == io() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prev', 'pathP', 'prevOk'])));
