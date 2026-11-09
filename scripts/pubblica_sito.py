@@ -100,6 +100,34 @@ def _ok(r, cosa):
     return r
 
 
+CARICAMENTI_INSIEME = 12
+
+
+def _carica_tutti(s, url, servono, per_hash):
+    """Carica i file mancanti in parallelo (09/11/2026): uno alla volta, 258 file di Viatrix superavano i 9 minuti
+    della funzione. Ogni file ha 2 tentativi; al primo errore vero si ferma tutto."""
+    if not servono:
+        return
+    from concurrent.futures import ThreadPoolExecutor
+    from requests.adapters import HTTPAdapter
+    s.mount(url, HTTPAdapter(pool_connections=1, pool_maxsize=CARICAMENTI_INSIEME))
+
+    def carica(h):
+        for prova in (1, 2):
+            try:
+                r = s.post(f"{url}/{h}", data=per_hash[h], headers={"Content-Type": "application/octet-stream"}, timeout=120)
+            except requests.RequestException:
+                if prova == 2:
+                    raise
+                continue
+            if r.ok or prova == 2 or (r.status_code < 500 and r.status_code != 429):
+                return _ok(r, "caricamento")
+
+    with ThreadPoolExecutor(max_workers=min(CARICAMENTI_INSIEME, len(servono))) as gruppo:
+        for _ in gruppo.map(carica, servono):
+            pass
+
+
 def pubblica_sito(s, sito_id, file_sito, canale="prova", titolo="", intestazioni=None):
     """s = sessione autorizzata (google.auth). Ritorna un riassunto con l'indirizzo."""
     if not CANALE.fullmatch(canale):
@@ -112,8 +140,7 @@ def pubblica_sito(s, sito_id, file_sito, canale="prova", titolo="", intestazioni
     nome = v["name"]
     req = _ok(s.post(f"{API}/{nome}:populateFiles", json={"files": hash_di}), "elenco file").json()
     servono = list(dict.fromkeys(req.get("uploadRequiredHashes") or []))  # ogni file una volta sola
-    for h in servono:
-        _ok(s.post(f"{req['uploadUrl']}/{h}", data=per_hash[h], headers={"Content-Type": "application/octet-stream"}), "caricamento")
+    _carica_tutti(s, req["uploadUrl"], servono, per_hash)
     _ok(s.patch(f"{API}/{nome}", params={"update_mask": "status"}, json={"status": "FINALIZED"}), "chiusura versione")
     messaggio = (titolo or "")[:200]
     if canale == "live":
